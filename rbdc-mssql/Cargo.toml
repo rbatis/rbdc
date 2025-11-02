@@ -23,7 +23,7 @@ tiberius = { version = "0.12", default-features = false, features = ["chrono", "
 tokio = { version = "1", default-features = false ,features = ["net"] }
 tokio-util = { version = "0.7.1", features = ["compat"] }
 futures-core = { version = "0.3.19", default-features = false }
-chrono = "0.4.19"
+chrono = "0.4.42"
 fastdate = { version = "0.3" }
 url = "2.5"
 percent-encoding = "2.3"

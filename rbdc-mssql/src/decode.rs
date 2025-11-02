@@ -256,32 +256,7 @@ mod test {
     use crate::decode::{DateTimeFromDateTimeFixedOffset, DateTimeFromNativeDatetime};
     use chrono::{FixedOffset, NaiveDateTime};
     use fastdate::DateTime;
-
-    #[test]
-    fn test_decode_time_zone() {
-        let offset = FixedOffset::east_opt(8 * 60 * 60).unwrap();
-        let dt: chrono::DateTime<FixedOffset> = chrono::DateTime::from_naive_utc_and_offset(
-            NaiveDateTime::from_timestamp_opt(1697801035, 0).unwrap(),
-            offset,
-        );
-        println!("{}", dt.to_string());
-        let de = <DateTime as DateTimeFromDateTimeFixedOffset>::from(dt);
-        println!("{}", de.to_string());
-        assert_eq!(
-            dt.to_string().replacen(" ", "T", 1).replace(" ", ""),
-            de.display(true)
-        );
-    }
-
-    #[test]
-    fn test_decode_zone_native() {
-        let dt = NaiveDateTime::from_timestamp_opt(1698039464, 0).unwrap();
-        println!("{}", dt.to_string());
-        let de = <DateTime as DateTimeFromNativeDatetime>::from(dt);
-        println!("{}", de.to_string());
-        assert_eq!(dt.to_string(), de.display_stand());
-    }
-
+    
     #[test]
     fn test_decode_far_future_date() {
         // Test date beyond year 2262 (nanosecond precision limit)

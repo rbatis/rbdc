@@ -13,18 +13,17 @@ use std::fmt::{self, Debug, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-
 mod auth;
 mod establish;
 mod executor;
 mod stream;
 mod tls;
 
+use crate::options::MySqlConnectOptions;
 use crate::query::MysqlQuery;
 use crate::query_result::MySqlQueryResult;
 use crate::row::MySqlRow;
 pub(crate) use stream::MySqlStream;
-use crate::options::MySqlConnectOptions;
 
 const MAX_PACKET_SIZE: u32 = 1024;
 
@@ -116,7 +115,7 @@ impl Connection for MySqlConnection {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
         let sql = sql.to_owned();
         Box::pin(async move {
             let many = {
@@ -143,7 +142,7 @@ impl Connection for MySqlConnection {
                     })
                 })
                 .boxed();
-            let c: BoxFuture<Result<Vec<MySqlRow>, Error>> = f.try_collect().boxed();
+            let c: BoxFuture<'_, Result<Vec<MySqlRow>, Error>> = f.try_collect().boxed();
             let v = c.await?;
             let mut data: Vec<Box<dyn Row>> = Vec::with_capacity(v.len());
             for x in v {
@@ -153,7 +152,7 @@ impl Connection for MySqlConnection {
         })
     }
 
-    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<Result<ExecResult, Error>> {
+    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>> {
         let sql = sql.to_owned();
         Box::pin(async move {
             let many = {
@@ -188,7 +187,7 @@ impl Connection for MySqlConnection {
         })
     }
 
-    fn close(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn close(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         let c = self.do_close();
         Box::pin(async { c.await })
     }

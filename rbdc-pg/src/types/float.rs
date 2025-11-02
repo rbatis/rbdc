@@ -48,7 +48,6 @@ impl Encode for f32 {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use crate::type_info::PgTypeInfo;
@@ -62,7 +61,8 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::FLOAT4,
             format: PgValueFormat::Binary,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(r, 3.0);
     }
 
@@ -74,7 +74,8 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::FLOAT4,
             format: PgValueFormat::Binary,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(r, 3.0);
     }
 }

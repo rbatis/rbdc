@@ -6,7 +6,7 @@ use rbdc::error::Error;
 use std::str::FromStr;
 
 impl ConnectOptions for PgConnectOptions {
-    fn connect(&self) -> BoxFuture<Result<Box<dyn Connection>, Error>> {
+    fn connect(&self) -> BoxFuture<'_, Result<Box<dyn Connection>, Error>> {
         Box::pin(async move {
             let v = PgConnection::establish(self)
                 .await

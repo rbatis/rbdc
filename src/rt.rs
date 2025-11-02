@@ -29,4 +29,4 @@ pub use tokio::net::UnixStream;
 pub use tokio_native_tls::{TlsConnector, TlsStream};
 
 #[cfg(feature = "tls-rustls")]
-pub use tokio_rustls::{client::TlsStream, TlsConnector};
+pub use tokio_rustls::{TlsConnector, client::TlsStream};

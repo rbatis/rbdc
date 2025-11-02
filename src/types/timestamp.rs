@@ -85,16 +85,15 @@ impl Into<DateTime> for Timestamp {
 
 #[cfg(test)]
 mod test {
+    use crate::DateTime;
     use crate::timestamp::Timestamp;
     use rbs::Value;
-    use crate::DateTime;
-
 
     #[test]
     fn test_from_timestamp() {
         let v = Timestamp::utc();
-        let dt:DateTime  = v.into();
-        println!("{}",dt);
+        let dt: DateTime = v.into();
+        println!("{}", dt);
     }
 
     #[test]

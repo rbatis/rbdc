@@ -1,5 +1,5 @@
-use crate::rt::AsyncWrite;
 use crate::Error;
+use crate::rt::AsyncWrite;
 use futures_core::Future;
 use futures_util::ready;
 use std::io::{BufRead, Cursor};

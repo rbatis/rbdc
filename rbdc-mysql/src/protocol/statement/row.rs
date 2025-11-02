@@ -80,7 +80,11 @@ impl<'de> Decode<'de, &'de [MySqlColumn]> for BinaryRow {
                 | ColumnType::Date
                 | ColumnType::Datetime => {
                     // The size of this type is important for decoding
-                    if buf.is_empty() { return Err(err_protocol!("binary row: expected temporal length byte, found empty buffer")); }
+                    if buf.is_empty() {
+                        return Err(err_protocol!(
+                            "binary row: expected temporal length byte, found empty buffer"
+                        ));
+                    }
                     buf[0] as usize + 1
                 }
 

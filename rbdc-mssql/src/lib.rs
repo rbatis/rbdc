@@ -13,6 +13,7 @@ use crate::decode::Decode;
 use crate::encode::Encode;
 use futures_core::future::BoxFuture;
 use futures_core::Stream;
+use percent_encoding::percent_decode_str;
 use rbdc::db::{ConnectOptions, Connection, ExecResult, MetaData, Placeholder, Row};
 use rbdc::Error;
 use rbs::Value;
@@ -21,7 +22,6 @@ use tiberius::{AuthMethod, Client, Column, ColumnData, Config, EncryptionLevel, 
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncWriteCompatExt};
 use url::Url;
-use percent_encoding::percent_decode_str;
 
 pub struct MssqlConnection {
     inner: Option<Client<Compat<TcpStream>>>,
@@ -46,7 +46,7 @@ impl MssqlConnection {
 pub struct MssqlConnectOptions(pub Config);
 
 impl ConnectOptions for MssqlConnectOptions {
-    fn connect(&self) -> BoxFuture<Result<Box<dyn Connection>, Error>> {
+    fn connect(&self) -> BoxFuture<'_, Result<Box<dyn Connection>, Error>> {
         Box::pin(async move {
             let v = MssqlConnection::establish(&self.0)
                 .await
@@ -57,7 +57,8 @@ impl ConnectOptions for MssqlConnectOptions {
 
     fn set_uri(&mut self, url: &str) -> Result<(), Error> {
         if url.contains("jdbc") {
-            let mut config = Config::from_jdbc_string(url).map_err(|e| Error::from(e.to_string()))?;
+            let mut config =
+                Config::from_jdbc_string(url).map_err(|e| Error::from(e.to_string()))?;
             config.trust_cert();
             *self = MssqlConnectOptions(config);
         } else if url.starts_with("mssql://") || url.starts_with("sqlserver://") {
@@ -65,7 +66,8 @@ impl ConnectOptions for MssqlConnectOptions {
             config.trust_cert();
             *self = MssqlConnectOptions(config);
         } else {
-            let mut config = Config::from_ado_string(url).map_err(|e| Error::from(e.to_string()))?;
+            let mut config =
+                Config::from_ado_string(url).map_err(|e| Error::from(e.to_string()))?;
             config.trust_cert();
             *self = MssqlConnectOptions(config);
         }
@@ -130,24 +132,22 @@ fn parse_url_connection_string(url: &str) -> Result<Config, Error> {
             "application_name" | "applicationname" => {
                 config.application_name(&*value);
             }
-            "encrypt" | "encryption" => {
-                match value.to_lowercase().as_str() {
-                    "true" | "yes" => {
-                        #[cfg(any(feature = "tls-rustls", feature = "tls-native-tls"))]
-                        config.encryption(EncryptionLevel::Required);
-                    }
-                    "false" | "no" => {
-                        #[cfg(any(feature = "tls-rustls", feature = "tls-native-tls"))]
-                        config.encryption(EncryptionLevel::Off);
-                    }
-                    "danger_plaintext" => {
-                        config.encryption(EncryptionLevel::NotSupported);
-                    }
-                    _ => {
-                        return Err(Error::from(format!("Invalid encryption value: {}", value)));
-                    }
+            "encrypt" | "encryption" => match value.to_lowercase().as_str() {
+                "true" | "yes" => {
+                    #[cfg(any(feature = "tls-rustls", feature = "tls-native-tls"))]
+                    config.encryption(EncryptionLevel::Required);
                 }
-            }
+                "false" | "no" => {
+                    #[cfg(any(feature = "tls-rustls", feature = "tls-native-tls"))]
+                    config.encryption(EncryptionLevel::Off);
+                }
+                "danger_plaintext" => {
+                    config.encryption(EncryptionLevel::NotSupported);
+                }
+                _ => {
+                    return Err(Error::from(format!("Invalid encryption value: {}", value)));
+                }
+            },
             "trust_cert" | "trustservercertificate" => {
                 match value.to_lowercase().as_str() {
                     "true" | "yes" => {
@@ -161,19 +161,17 @@ fn parse_url_connection_string(url: &str) -> Result<Config, Error> {
                     }
                 }
             }
-            "readonly" | "applicationintent" => {
-                match value.to_lowercase().as_str() {
-                    "true" | "yes" | "readonly" => {
-                        config.readonly(true);
-                    }
-                    "false" | "no" | "readwrite" => {
-                        config.readonly(false);
-                    }
-                    _ => {
-                        return Err(Error::from(format!("Invalid readonly value: {}", value)));
-                    }
+            "readonly" | "applicationintent" => match value.to_lowercase().as_str() {
+                "true" | "yes" | "readonly" => {
+                    config.readonly(true);
                 }
-            }
+                "false" | "no" | "readwrite" => {
+                    config.readonly(false);
+                }
+                _ => {
+                    return Err(Error::from(format!("Invalid readonly value: {}", value)));
+                }
+            },
             _ => {
                 // Ignore unknown parameters
             }
@@ -221,7 +219,7 @@ impl Connection for MssqlConnection {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
         let sql = MssqlDriver {}.exchange(sql);
         Box::pin(async move {
             let mut q = Query::new(sql);
@@ -262,7 +260,7 @@ impl Connection for MssqlConnection {
         })
     }
 
-    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<Result<ExecResult, Error>> {
+    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>> {
         let sql = MssqlDriver {}.exchange(sql);
         Box::pin(async move {
             let mut q = Query::new(sql);
@@ -290,7 +288,7 @@ impl Connection for MssqlConnection {
         })
     }
 
-    fn close(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn close(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             //inner must be Option,so we can take owner and call close(self) method.
             if let Some(v) = self.inner.take() {
@@ -300,7 +298,7 @@ impl Connection for MssqlConnection {
         })
     }
 
-    fn ping(&mut self) -> BoxFuture<Result<(), rbdc::Error>> {
+    fn ping(&mut self) -> BoxFuture<'_, Result<(), rbdc::Error>> {
         //TODO While 'select 1' can temporarily solve the problem of checking that the connection is valid, it looks ugly.Better replace it with something better way
         Box::pin(async move {
             self.inner
@@ -313,7 +311,7 @@ impl Connection for MssqlConnection {
         })
     }
 
-    fn begin(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn begin(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             self.inner
                 .as_mut()
@@ -325,7 +323,7 @@ impl Connection for MssqlConnection {
         })
     }
 
-    fn commit(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn commit(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             self.inner
                 .as_mut()
@@ -337,7 +335,7 @@ impl Connection for MssqlConnection {
         })
     }
 
-    fn rollback(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn rollback(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             self.inner
                 .as_mut()
@@ -352,8 +350,8 @@ impl Connection for MssqlConnection {
 
 #[cfg(test)]
 mod test {
-    use crate::{MssqlConnectOptions, parse_url_connection_string};
-    use rbdc::db::{ConnectOptions};
+    use crate::{parse_url_connection_string, MssqlConnectOptions};
+    use rbdc::db::ConnectOptions;
     use tiberius::Config;
 
     #[test]
@@ -362,7 +360,8 @@ mod test {
     #[test]
     fn test_connection_string_parsing() {
         // 测试 JDBC 格式
-        let jdbc_uri = "jdbc:sqlserver://localhost:1433;User=SA;Password={TestPass!123456};Database=master;";
+        let jdbc_uri =
+            "jdbc:sqlserver://localhost:1433;User=SA;Password={TestPass!123456};Database=master;";
         let mut options = MssqlConnectOptions(Config::new());
         let result = options.set_uri(jdbc_uri);
         assert!(result.is_ok(), "JDBC format should be supported");
@@ -371,13 +370,21 @@ mod test {
         let mssql_uri = "mssql://SA:TestPass!123456@localhost:1433/master";
         let mut options = MssqlConnectOptions(Config::new());
         let result = options.set_uri(mssql_uri);
-        assert!(result.is_ok(), "mssql:// format should be supported: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "mssql:// format should be supported: {:?}",
+            result
+        );
 
         // 测试 sqlserver:// 格式
         let sqlserver_uri = "sqlserver://SA:TestPass!123456@localhost:1433/master";
         let mut options = MssqlConnectOptions(Config::new());
         let result = options.set_uri(sqlserver_uri);
-        assert!(result.is_ok(), "sqlserver:// format should be supported: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "sqlserver:// format should be supported: {:?}",
+            result
+        );
 
         // 测试 ADO 格式
         let ado_uri = "Server=localhost,1433;User Id=SA;Password=TestPass!123456;Database=master;";
@@ -389,7 +396,9 @@ mod test {
     #[test]
     fn test_url_parsing_details() {
         // 测试详细的 URL 解析
-        let config = parse_url_connection_string("mssql://testuser:testpass@example.com:1433/testdb").unwrap();
+        let config =
+            parse_url_connection_string("mssql://testuser:testpass@example.com:1433/testdb")
+                .unwrap();
         assert_eq!(config.get_addr(), "example.com:1433");
 
         // 测试没有密码的情况
@@ -397,11 +406,13 @@ mod test {
         assert_eq!(config.get_addr(), "localhost:1433");
 
         // 测试没有数据库的情况
-        let config = parse_url_connection_string("mssql://testuser:testpass@localhost:1433").unwrap();
+        let config =
+            parse_url_connection_string("mssql://testuser:testpass@localhost:1433").unwrap();
         assert_eq!(config.get_addr(), "localhost:1433");
 
         // 测试默认端口
-        let config = parse_url_connection_string("mssql://testuser:testpass@localhost/testdb").unwrap();
+        let config =
+            parse_url_connection_string("mssql://testuser:testpass@localhost/testdb").unwrap();
         assert_eq!(config.get_addr(), "localhost:1433");
     }
 
@@ -415,20 +426,18 @@ mod test {
 
         // 测试部分查询参数
         let config = parse_url_connection_string(
-            "sqlserver://user:pass@server:1433/db?application_name=TestApp&encrypt=false"
-        ).unwrap();
+            "sqlserver://user:pass@server:1433/db?application_name=TestApp&encrypt=false",
+        )
+        .unwrap();
         assert_eq!(config.get_addr(), "server:1433");
 
         // 测试无效的加密值应该返回错误
-        let result = parse_url_connection_string(
-            "mssql://user:pass@localhost/db?encrypt=invalid"
-        );
+        let result = parse_url_connection_string("mssql://user:pass@localhost/db?encrypt=invalid");
         assert!(result.is_err());
 
         // 测试无效的 trust_cert 值应该返回错误
-        let result = parse_url_connection_string(
-            "mssql://user:pass@localhost/db?trust_cert=invalid"
-        );
+        let result =
+            parse_url_connection_string("mssql://user:pass@localhost/db?trust_cert=invalid");
         assert!(result.is_err());
     }
 }

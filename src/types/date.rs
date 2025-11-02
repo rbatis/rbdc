@@ -30,7 +30,9 @@ impl FromStr for Date {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Date(fastdate::Date::from_str(s).map_err(|e|Error::from(e.to_string()))?))
+        Ok(Date(
+            fastdate::Date::from_str(s).map_err(|e| Error::from(e.to_string()))?,
+        ))
     }
 }
 

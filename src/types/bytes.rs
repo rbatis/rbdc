@@ -41,8 +41,8 @@ impl Debug for Bytes {
 }
 
 impl<Rhs> PartialEq<Rhs> for Bytes
-    where
-        Rhs: ?Sized + AsRef<[u8]>,
+where
+    Rhs: ?Sized + AsRef<[u8]>,
 {
     fn eq(&self, other: &Rhs) -> bool {
         self.as_ref().eq(other.as_ref())
@@ -50,8 +50,8 @@ impl<Rhs> PartialEq<Rhs> for Bytes
 }
 
 impl<Rhs> PartialOrd<Rhs> for Bytes
-    where
-        Rhs: ?Sized + AsRef<[u8]>,
+where
+    Rhs: ?Sized + AsRef<[u8]>,
 {
     fn partial_cmp(&self, other: &Rhs) -> Option<Ordering> {
         self.as_ref().partial_cmp(other.as_ref())
@@ -123,8 +123,8 @@ impl<'a> IntoIterator for &'a mut Bytes {
 
 impl Serialize for Bytes {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         let inner = serde_bytes::Bytes::new(&self.0);
         inner.serialize(serializer)
@@ -133,14 +133,13 @@ impl Serialize for Bytes {
 
 impl<'de> Deserialize<'de> for Bytes {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         let buf = serde_bytes::ByteBuf::deserialize(deserializer)?;
         Ok(Self(buf.into_vec()))
     }
 }
-
 
 #[derive(Debug, Eq, Clone, Copy, PartialEq, PartialOrd)]
 pub struct BytesSize(pub i64);
@@ -163,13 +162,19 @@ impl BytesSize {
 }
 
 impl Serialize for BytesSize {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
         self.0.serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for BytesSize {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
         let v = i64::deserialize(deserializer)?;
         Ok(BytesSize(v))
     }
@@ -186,7 +191,6 @@ impl Default for BytesSize {
         BytesSize(0)
     }
 }
-
 
 impl Display for BytesSize {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
@@ -212,22 +216,40 @@ impl FromStr for BytesSize {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.ends_with("EB") {
-            let v: f64 = s.trim_end_matches("EB").parse().map_err(|e| io::Error::new(ErrorKind::Other, e))?;
+            let v: f64 = s
+                .trim_end_matches("EB")
+                .parse()
+                .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
             Ok(BytesSize((v * EB.0 as f64) as i64))
         } else if s.ends_with("TB") {
-            let v: f64 = s.trim_end_matches("TB").parse().map_err(|e| io::Error::new(ErrorKind::Other, e))?;
+            let v: f64 = s
+                .trim_end_matches("TB")
+                .parse()
+                .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
             Ok(BytesSize((v * TB.0 as f64) as i64))
         } else if s.ends_with("GB") {
-            let v: f64 = s.trim_end_matches("GB").parse().map_err(|e| io::Error::new(ErrorKind::Other, e))?;
+            let v: f64 = s
+                .trim_end_matches("GB")
+                .parse()
+                .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
             Ok(BytesSize((v * GB.0 as f64) as i64))
         } else if s.ends_with("MB") {
-            let v: f64 = s.trim_end_matches("MB").parse().map_err(|e| io::Error::new(ErrorKind::Other, e))?;
+            let v: f64 = s
+                .trim_end_matches("MB")
+                .parse()
+                .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
             Ok(BytesSize((v * MB.0 as f64) as i64))
         } else if s.ends_with("KB") {
-            let v: f64 = s.trim_end_matches("KB").parse().map_err(|e| io::Error::new(ErrorKind::Other, e))?;
+            let v: f64 = s
+                .trim_end_matches("KB")
+                .parse()
+                .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
             Ok(BytesSize((v * KB.0 as f64) as i64))
         } else {
-            let v: f64 = s.trim_end_matches("B").parse().map_err(|e| io::Error::new(ErrorKind::Other, e))?;
+            let v: f64 = s
+                .trim_end_matches("B")
+                .parse()
+                .map_err(|e| io::Error::new(ErrorKind::Other, e))?;
             Ok(BytesSize((v * B.0 as f64) as i64))
         }
     }

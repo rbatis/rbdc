@@ -54,7 +54,7 @@ impl Connection for SqliteConnection {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
         let sql = sql.to_owned();
         Box::pin(async move {
             let many = {
@@ -81,7 +81,7 @@ impl Connection for SqliteConnection {
                     })
                 })
                 .boxed();
-            let c: BoxFuture<Result<Vec<SqliteRow>, Error>> = f.try_collect().boxed();
+            let c: BoxFuture<'_, Result<Vec<SqliteRow>, Error>> = f.try_collect().boxed();
             let v = c.await?;
             let mut data: Vec<Box<dyn Row>> = Vec::with_capacity(v.len());
             for x in v {
@@ -91,7 +91,7 @@ impl Connection for SqliteConnection {
         })
     }
 
-    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<Result<ExecResult, Error>> {
+    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>> {
         let sql = sql.to_owned();
         Box::pin(async move {
             let many = {
@@ -130,11 +130,11 @@ impl Connection for SqliteConnection {
         })
     }
 
-    fn close(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn close(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async { self.do_close().await })
     }
 
-    fn ping(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn ping(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
             self.worker
                 .oneshot_cmd(|tx| crate::connection::Command::Ping { tx })

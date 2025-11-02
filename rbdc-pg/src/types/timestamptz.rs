@@ -2,7 +2,6 @@ use rbdc::DateTime;
 
 pub type Timestamptz = DateTime;
 
-
 #[cfg(test)]
 mod test {
     use crate::types::timestamptz::Timestamptz;

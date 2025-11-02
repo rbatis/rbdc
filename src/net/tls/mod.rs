@@ -9,8 +9,8 @@ use std::task::{Context, Poll};
 use crate::rt::{AsyncRead, AsyncWrite, TlsStream};
 
 use crate::Error;
-use std::mem::replace;
 use rbs::err_protocol;
+use std::mem::replace;
 
 /// X.509 Certificate input, either a file path or a PEM encoded inline certificate(s).
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -108,7 +108,12 @@ where
         let host = tokio_rustls::rustls::pki_types::ServerName::try_from(host.to_string())
             .map_err(|err| Error::from(err.to_string()))?;
 
-        *self = MaybeTlsStream::Tls(connector.connect(host, stream).await.map_err(|err| err_protocol!("{}", err))?);
+        *self = MaybeTlsStream::Tls(
+            connector
+                .connect(host, stream)
+                .await
+                .map_err(|err| err_protocol!("{}", err))?,
+        );
 
         Ok(())
     }
@@ -135,7 +140,10 @@ async fn configure_tls_connector(
             builder.add_root_certificate(cert);
         }
     }
-    let connector = builder.build().map_err(|err| err_protocol!("{}", err))?.into();
+    let connector = builder
+        .build()
+        .map_err(|err| err_protocol!("{}", err))?
+        .into();
 
     Ok(connector)
 }

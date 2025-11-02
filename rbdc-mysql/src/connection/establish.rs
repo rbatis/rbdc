@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::connection::{tls, DropBox, MySqlConnection, MySqlStream, MAX_PACKET_SIZE};
 use crate::options::{MySqlConnectOptions, MySqlSslMode};
 use crate::protocol::auth::AuthPlugin;
@@ -9,6 +8,7 @@ use crate::protocol::Capabilities;
 use bytes::buf::Buf;
 use bytes::Bytes;
 use rbdc::{err_protocol, Error};
+use std::sync::Arc;
 
 impl MySqlConnection {
     pub(crate) async fn establish(options: &MySqlConnectOptions) -> Result<Self, Error> {

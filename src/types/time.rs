@@ -29,7 +29,9 @@ impl FromStr for Time {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Time(fastdate::Time::from_str(s).map_err(|e|Error::from(e.to_string()))?))
+        Ok(Time(
+            fastdate::Time::from_str(s).map_err(|e| Error::from(e.to_string()))?,
+        ))
     }
 }
 

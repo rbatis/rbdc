@@ -6,7 +6,7 @@ use crate::Error;
 use futures_channel::mpsc;
 use futures_core::future::BoxFuture;
 use futures_core::stream::Stream;
-use futures_util::{pin_mut, FutureExt, SinkExt};
+use futures_util::{FutureExt, SinkExt, pin_mut};
 
 pub struct TryAsyncStream<'a, T> {
     receiver: mpsc::Receiver<Result<T, Error>>,

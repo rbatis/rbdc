@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 #![allow(mismatched_lifetime_syntaxes)]
 
-
 pub mod driver;
 pub mod meta_data;
 pub mod result_set;

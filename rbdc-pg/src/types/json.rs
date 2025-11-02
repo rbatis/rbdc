@@ -72,10 +72,8 @@ pub fn decode_json(value: PgValue) -> Result<Value, Error> {
         );
         buf.remove(0);
     }
-    Ok(
-        serde_json::from_str(&String::from_utf8_lossy(&buf))
-            .map_err(|e| Error::from(e.to_string()))?,
-    )
+    Ok(serde_json::from_str(&String::from_utf8_lossy(&buf))
+        .map_err(|e| Error::from(e.to_string()))?)
 }
 
 pub fn encode_json(v: Value, buf: &mut PgArgumentBuffer) -> Result<IsNull, Error> {

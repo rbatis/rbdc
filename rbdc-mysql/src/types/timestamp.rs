@@ -43,15 +43,17 @@ impl Encode for Timestamp {
 impl Decode for Timestamp {
     fn decode(value: MySqlValue) -> Result<Self, Error> {
         Ok(match value.format() {
-            MySqlValueFormat::Text => {
-                Self(fastdate::DateTime::from_str(value.as_str()?).map_err(|e|Error::from(e.to_string()))?.unix_timestamp_millis())
-            }
+            MySqlValueFormat::Text => Self(
+                fastdate::DateTime::from_str(value.as_str()?)
+                    .map_err(|e| Error::from(e.to_string()))?
+                    .unix_timestamp_millis(),
+            ),
             MySqlValueFormat::Binary => {
                 let buf = value.as_bytes()?;
                 let len = buf[0];
                 let date = decode_date_buf(&buf[1..])?;
                 let time = if len > 4 {
-                    decode_time( &buf[5..])
+                    decode_time(&buf[5..])
                 } else {
                     fastdate::Time {
                         nano: 0,

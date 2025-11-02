@@ -1,6 +1,6 @@
+use crate::Error;
 use crate::date::Date;
 use crate::types::time::Time;
-use crate::Error;
 use rbs::Value;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp;
@@ -308,13 +308,13 @@ impl From<Time> for DateTime {
 
 impl From<(Date, Time)> for DateTime {
     fn from(arg: (Date, Time)) -> Self {
-        Self(fastdate::DateTime::from((arg.0 .0, arg.1 .0)))
+        Self(fastdate::DateTime::from((arg.0.0, arg.1.0)))
     }
 }
 
 impl From<(Date, Time, i32)> for DateTime {
     fn from(arg: (Date, Time, i32)) -> Self {
-        Self(fastdate::DateTime::from((arg.0 .0, arg.1 .0, arg.2)))
+        Self(fastdate::DateTime::from((arg.0.0, arg.1.0, arg.2)))
     }
 }
 

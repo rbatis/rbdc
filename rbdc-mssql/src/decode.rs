@@ -169,18 +169,25 @@ impl Decode for Value {
                             Some(v) => {
                                 // Handle dates beyond nanosecond precision range (year 2262+)
                                 let dt = match v.timestamp_nanos_opt() {
-                                    Some(nanos) => {
-                                        DateTime(fastdate::DateTime::from_timestamp_nano(
-                                            nanos as i128 - (v.offset().utc_minus_local() * 60) as i128
-                                        ).set_offset(v.offset().utc_minus_local() * 60))
-                                    }
+                                    Some(nanos) => DateTime(
+                                        fastdate::DateTime::from_timestamp_nano(
+                                            nanos as i128
+                                                - (v.offset().utc_minus_local() * 60) as i128,
+                                        )
+                                        .set_offset(v.offset().utc_minus_local() * 60),
+                                    ),
                                     None => {
                                         // Fallback to second precision for dates beyond nanosecond range
                                         let timestamp_secs = v.timestamp();
                                         let subsec_nanos = v.nanosecond();
-                                        DateTime(fastdate::DateTime::from_timestamp_nano(
-                                            (timestamp_secs as i128) * 1_000_000_000 + (subsec_nanos as i128) - (v.offset().utc_minus_local() * 60) as i128
-                                        ).set_offset(v.offset().utc_minus_local() * 60))
+                                        DateTime(
+                                            fastdate::DateTime::from_timestamp_nano(
+                                                (timestamp_secs as i128) * 1_000_000_000
+                                                    + (subsec_nanos as i128)
+                                                    - (v.offset().utc_minus_local() * 60) as i128,
+                                            )
+                                            .set_offset(v.offset().utc_minus_local() * 60),
+                                        )
                                     }
                                 };
                                 value!(dt)
@@ -208,17 +215,15 @@ impl DateTimeFromNativeDatetime for fastdate::DateTime {
     fn from(arg: NaiveDateTime) -> Self {
         // Handle dates beyond nanosecond precision range (year 2262+)
         match arg.and_utc().timestamp_nanos_opt() {
-            Some(nanos) => {
-                fastdate::DateTime::from_timestamp_nano(nanos as i128)
-                    .set_offset(offset_sec())
-                    .add_sub_sec(-offset_sec() as i64)
-            }
+            Some(nanos) => fastdate::DateTime::from_timestamp_nano(nanos as i128)
+                .set_offset(offset_sec())
+                .add_sub_sec(-offset_sec() as i64),
             None => {
                 // Fallback to second precision for dates beyond nanosecond range
                 let timestamp_secs = arg.and_utc().timestamp();
                 let subsec_nanos = arg.nanosecond();
                 fastdate::DateTime::from_timestamp_nano(
-                    (timestamp_secs as i128) * 1_000_000_000 + (subsec_nanos as i128)
+                    (timestamp_secs as i128) * 1_000_000_000 + (subsec_nanos as i128),
                 )
                 .set_offset(offset_sec())
                 .add_sub_sec(-offset_sec() as i64)
@@ -231,16 +236,14 @@ impl DateTimeFromDateTimeFixedOffset for fastdate::DateTime {
     fn from(arg: chrono::DateTime<FixedOffset>) -> Self {
         // Handle dates beyond nanosecond precision range (year 2262+)
         match arg.timestamp_nanos_opt() {
-            Some(nanos) => {
-                fastdate::DateTime::from_timestamp_nano(nanos as i128)
-                    .set_offset(arg.offset().local_minus_utc())
-            }
+            Some(nanos) => fastdate::DateTime::from_timestamp_nano(nanos as i128)
+                .set_offset(arg.offset().local_minus_utc()),
             None => {
                 // Fallback to second precision for dates beyond nanosecond range
                 let timestamp_secs = arg.timestamp();
                 let subsec_nanos = arg.nanosecond();
                 fastdate::DateTime::from_timestamp_nano(
-                    (timestamp_secs as i128) * 1_000_000_000 + (subsec_nanos as i128)
+                    (timestamp_secs as i128) * 1_000_000_000 + (subsec_nanos as i128),
                 )
                 .set_offset(arg.offset().local_minus_utc())
             }

@@ -367,7 +367,7 @@ impl SqliteConnectOptions {
 }
 
 impl ConnectOptions for SqliteConnectOptions {
-    fn connect(&self) -> BoxFuture<Result<Box<dyn Connection>, Error>> {
+    fn connect(&self) -> BoxFuture<'_, Result<Box<dyn Connection>, Error>> {
         Box::pin(async move {
             let c = self.connect().await?;
             Ok(Box::new(c) as Box<dyn Connection>)

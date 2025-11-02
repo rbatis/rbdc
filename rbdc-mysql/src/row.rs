@@ -1,4 +1,5 @@
 use crate::meta_data::MysqlMetaData;
+use crate::options::MySqlConnectOptions;
 use crate::protocol;
 use crate::result_set::{MySqlColumn, MySqlTypeInfo};
 use crate::types::Decode;
@@ -9,7 +10,6 @@ use rbdc::Error;
 use rbs::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::options::MySqlConnectOptions;
 
 /// Implementation of [`Row`] for MySQL.
 #[derive(Debug)]

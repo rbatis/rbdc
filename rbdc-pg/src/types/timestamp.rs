@@ -47,7 +47,11 @@ impl Decode for Timestamp {
             PgValueFormat::Text => {
                 //2023-11-08 16:38:06.157
                 let s = value.as_str()?;
-                Timestamp(fastdate::DateTime::from_str(&format!("{}Z", s)).map_err(|e|Error::from(e.to_string()))?.unix_timestamp_millis())
+                Timestamp(
+                    fastdate::DateTime::from_str(&format!("{}Z", s))
+                        .map_err(|e| Error::from(e.to_string()))?
+                        .unix_timestamp_millis(),
+                )
             }
         })
     }

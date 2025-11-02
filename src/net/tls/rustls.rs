@@ -1,9 +1,9 @@
 use crate::net::CertificateInput;
 
 use crate::Error;
+use rustls::client::WebPkiServerVerifier as WebPkiVerifier;
 use rustls::client::danger::HandshakeSignatureValid;
 use rustls::client::danger::ServerCertVerifier;
-use rustls::client::WebPkiServerVerifier as WebPkiVerifier;
 use rustls::crypto::{verify_tls12_signature, verify_tls13_signature};
 use rustls::pki_types::ServerName;
 use rustls::pki_types::{CertificateDer, TrustAnchor, UnixTime};
@@ -139,7 +139,7 @@ impl ServerCertVerifier for NoHostnameTlsVerifier {
                         }
                     }
                     _ => Err(e),
-                }
+                };
             }
         }
     }

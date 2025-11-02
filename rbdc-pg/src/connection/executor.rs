@@ -16,9 +16,9 @@ use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
 use futures_core::Stream;
 use futures_util::{pin_mut, TryStreamExt};
+use rbdc::io::Nothing;
 use rbdc::{err_protocol, try_stream, Error};
 use std::sync::Arc;
-use rbdc::io::Nothing;
 
 async fn prepare(
     conn: &mut PgConnection,
@@ -199,7 +199,7 @@ impl PgConnection {
         limit: u8,
         persistent: bool,
         metadata_opt: Option<Arc<PgStatementMetadata>>,
-    ) -> Result<impl Stream<Item=Result<Either<PgQueryResult, PgRow>, Error>> + 'e, Error> {
+    ) -> Result<impl Stream<Item = Result<Either<PgQueryResult, PgRow>, Error>> + 'e, Error> {
         // before we continue, wait until we are "ready" to accept more queries
         self.wait_until_ready().await?;
 

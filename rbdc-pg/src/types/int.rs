@@ -28,7 +28,7 @@ impl Decode for u32 {
                 } else {
                     return Err(Error::from("error u32 bytes len"));
                 }
-            },
+            }
             PgValueFormat::Text => value.as_str()?.parse()?,
         })
     }
@@ -48,7 +48,7 @@ impl Decode for u16 {
                 } else {
                     return Err(Error::from("error u16 bytes len"));
                 }
-            },
+            }
             PgValueFormat::Text => value.as_str()?.parse()?,
         })
     }
@@ -79,10 +79,10 @@ impl Decode for i32 {
                     BigEndian::read_i64(bytes) as i32
                 } else if bytes.len() == 4 {
                     BigEndian::read_i32(bytes)
-                }else {
+                } else {
                     return Err(Error::from("error i32 bytes len"));
                 }
-            },
+            }
             PgValueFormat::Text => value.as_str()?.parse()?,
         })
     }
@@ -102,7 +102,7 @@ impl Decode for i16 {
                 } else {
                     return Err(Error::from("error i16 bytes len"));
                 }
-            },
+            }
             PgValueFormat::Text => value.as_str()?.parse()?,
         })
     }
@@ -188,8 +188,6 @@ impl TypeInfo for i8 {
     }
 }
 
-
-
 #[cfg(test)]
 mod test {
     use crate::type_info::PgTypeInfo;
@@ -203,7 +201,8 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(r, 3);
     }
 
@@ -215,7 +214,8 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(r, 3);
     }
 
@@ -227,10 +227,10 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(r, 3);
     }
-
 
     #[test]
     fn test_decode_i32() {
@@ -239,7 +239,8 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(r, 3);
     }
 
@@ -251,7 +252,8 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(r, 3);
     }
 
@@ -263,7 +265,8 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(r, 3);
     }
 }

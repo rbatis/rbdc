@@ -125,9 +125,7 @@ impl<'de> serde::Deserialize<'de> for Decimal {
         use serde::de::Error;
         let v = Value::deserialize(deserializer)?;
         let string = match v {
-            Value::String(v)=>{
-                v
-            }
+            Value::String(v) => v,
             Value::Ext(_, inner_value) => inner_value.to_string(),
             _ => v.to_string(),
         };

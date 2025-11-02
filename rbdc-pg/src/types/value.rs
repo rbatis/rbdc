@@ -109,7 +109,7 @@ impl Decode for Value {
         }
         Ok(match arg.type_info().0 {
             PgType::Bool => Value::Bool(Decode::decode(arg)?),
-            PgType::Bytea => Value::Binary(Vec::<u8>::decode(arg)?),//Vec<u8> is Bytea
+            PgType::Bytea => Value::Binary(Vec::<u8>::decode(arg)?), //Vec<u8> is Bytea
             PgType::Char => Value::String(Decode::decode(arg)?),
             PgType::Name => Value::String(Decode::decode(arg)?),
             PgType::Int8 => Value::I64(Decode::decode(arg)?),
@@ -459,20 +459,23 @@ impl Encode for Value {
                         .unwrap_or_default()
                         .encode(buf)?,
                     //Date = "1993-02-06"
-                    "Date" => Date(fastdate::Date::from_str(
-                        &v.into_string().unwrap_or_default(),
-                    ).map_err(|e|Error::from(e.to_string()))?)
+                    "Date" => Date(
+                        fastdate::Date::from_str(&v.into_string().unwrap_or_default())
+                            .map_err(|e| Error::from(e.to_string()))?,
+                    )
                     .encode(buf)?,
                     //RFC3339NanoTime = "15:04:05.999999999"
-                    "Time" => Time(fastdate::Time::from_str(
-                        &v.into_string().unwrap_or_default(),
-                    ).map_err(|e|Error::from(e.to_string()))?)
+                    "Time" => Time(
+                        fastdate::Time::from_str(&v.into_string().unwrap_or_default())
+                            .map_err(|e| Error::from(e.to_string()))?,
+                    )
                     .encode(buf)?,
                     //RFC3339 = "2006-01-02 15:04:05.999999"
                     "Timestamp" => Timestamp(v.as_i64().unwrap_or_default()).encode(buf)?,
-                    "DateTime" => DateTime(fastdate::DateTime::from_str(
-                        &v.into_string().unwrap_or_default(),
-                    ).map_err(|e|Error::from(e.to_string()))?)
+                    "DateTime" => DateTime(
+                        fastdate::DateTime::from_str(&v.into_string().unwrap_or_default())
+                            .map_err(|e| Error::from(e.to_string()))?,
+                    )
                     .encode(buf)?,
                     "Bytea" => v.as_slice().unwrap_or_default().encode(buf)?,
                     "Char" => v.into_string().unwrap_or_default().encode(buf)?,

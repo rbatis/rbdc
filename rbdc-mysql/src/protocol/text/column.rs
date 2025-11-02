@@ -63,7 +63,7 @@ bitflags! {
 
 // https://dev.mysql.com/doc/internals/en/com-query-response.html#column-type
 
-#[derive(Debug, Copy, Clone, PartialEq, serde::Serialize, serde::Deserialize,Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, serde::Serialize, serde::Deserialize, Eq)]
 #[repr(u8)]
 pub enum ColumnType {
     Decimal = 0x00,

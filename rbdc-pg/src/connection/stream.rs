@@ -8,12 +8,12 @@ use futures_util::SinkExt;
 use log::Level;
 use rbdc::err_protocol;
 
+use crate::error::PgDatabaseError;
 use crate::message::*;
 use crate::options::PgConnectOptions;
 use rbdc::error::Error;
 use rbdc::io::{BufStream, Decode, Encode};
 use rbdc::net::{MaybeTlsStream, Socket};
-use crate::error::PgDatabaseError;
 // the stream is a separate type from the connection to uphold the invariant where an instantiated
 // [PgConnection] is a **valid** connection to postgres
 

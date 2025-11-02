@@ -2,8 +2,8 @@ use rbs::Value;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// support deserialize JsonStruct or json string
 /// for example:
@@ -64,7 +64,11 @@ impl<'de> serde::Deserialize<'de> for Json {
     where
         D: Deserializer<'de>,
     {
-        Ok(Json(serde_json::Value::deserialize(deserializer).map_err(|e| Error::custom(e))?.to_string()))
+        Ok(Json(
+            serde_json::Value::deserialize(deserializer)
+                .map_err(|e| Error::custom(e))?
+                .to_string(),
+        ))
     }
 }
 
@@ -206,7 +210,6 @@ impl<'de, T: Serialize + serde::de::DeserializeOwned> Deserialize<'de> for JsonV
     }
 }
 
-
 impl<T: Serialize + serde::de::DeserializeOwned + Display> Display for JsonV<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.0, f)
@@ -215,8 +218,8 @@ impl<T: Serialize + serde::de::DeserializeOwned + Display> Display for JsonV<T> 
 
 #[cfg(test)]
 mod test {
-    use crate::json::Json;
     use crate::JsonV;
+    use crate::json::Json;
     use rbs::value::map::ValueMap;
 
     #[test]

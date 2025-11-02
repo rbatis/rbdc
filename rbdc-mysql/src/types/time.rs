@@ -84,8 +84,8 @@ fn encode_time(time: &fastdate::Time, include_micros: bool, buf: &mut Vec<u8>) {
     buf.push(time.get_sec());
 
     if include_micros {
-         let micro=time.get_nano() / 1000;
-         buf.extend(&micro.to_le_bytes());
+        let micro = time.get_nano() / 1000;
+        buf.extend(&micro.to_le_bytes());
     }
 }
 

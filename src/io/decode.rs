@@ -2,7 +2,7 @@ use bytes::Bytes;
 
 use crate::Error;
 
-pub struct Nothing{}
+pub struct Nothing {}
 
 pub trait Decode<'de, Context = ()>
 where
@@ -26,6 +26,6 @@ impl Decode<'_> for Bytes {
 
 impl Decode<'_> for Nothing {
     fn decode_with(_: Bytes, _: ()) -> Result<Self, Error> {
-        Ok(Nothing{})
+        Ok(Nothing {})
     }
 }

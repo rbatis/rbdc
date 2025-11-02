@@ -12,7 +12,7 @@ impl Driver for MssqlDriver {
         "mssql"
     }
 
-    fn connect(&self, url: &str) -> BoxFuture<Result<Box<dyn Connection>, Error>> {
+    fn connect(&self, url: &str) -> BoxFuture<'_, Result<Box<dyn Connection>, Error>> {
         let url = url.to_owned();
         Box::pin(async move {
             let mut opt = self.default_option();

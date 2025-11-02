@@ -159,7 +159,7 @@ impl PgConnection {
     }
 }
 impl PgConnection {
-    fn do_close(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn do_close(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         // The normal, graceful termination procedure is that the frontend sends a Terminate
         // message and immediately closes the connection.
 
@@ -175,7 +175,7 @@ impl PgConnection {
 }
 
 impl Connection for PgConnection {
-    fn close(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn close(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async { self.do_close().await })
     }
 
@@ -188,7 +188,7 @@ impl Connection for PgConnection {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
         let sql = PgDriver {}.exchange(sql);
         Box::pin(async move {
             let many = {
@@ -219,7 +219,7 @@ impl Connection for PgConnection {
                     })
                 })
                 .boxed();
-            let c: BoxFuture<Result<Vec<PgRow>, Error>> = f.try_collect().boxed();
+            let c: BoxFuture<'_, Result<Vec<PgRow>, Error>> = f.try_collect().boxed();
             let v = c.await?;
             let mut data: Vec<Box<dyn Row>> = Vec::with_capacity(v.len());
             for x in v {
@@ -229,7 +229,7 @@ impl Connection for PgConnection {
         })
     }
 
-    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<Result<ExecResult, Error>> {
+    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>> {
         let sql = PgDriver {}.exchange(sql);
         Box::pin(async move {
             let many = {

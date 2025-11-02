@@ -140,7 +140,7 @@ impl Connection for ConnManagerProxy {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }
@@ -151,47 +151,47 @@ impl Connection for ConnManagerProxy {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<Result<Vec<Value>, Error>> {
+    ) -> BoxFuture<'_, Result<Vec<Value>, Error>> {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }
         self.conn.as_mut().unwrap().get_values(sql, params)
     }
 
-    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<Result<ExecResult, Error>> {
+    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>> {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }
         self.conn.as_mut().unwrap().exec(sql, params)
     }
 
-    fn ping(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn ping(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }
         self.conn.as_mut().unwrap().ping()
     }
 
-    fn close(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn close(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }
         self.conn.as_mut().unwrap().close()
     }
 
-    fn begin(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn begin(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }
         self.conn.as_mut().unwrap().begin()
     }
-    fn commit(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn commit(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }
         self.conn.as_mut().unwrap().commit()
     }
-    fn rollback(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn rollback(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }
@@ -211,7 +211,7 @@ mod test {
     #[derive(Debug)]
     pub struct Opt {}
     impl ConnectOptions for Opt {
-        fn connect(&self) -> BoxFuture<Result<Box<dyn Connection>, Error>> {
+        fn connect(&self) -> BoxFuture<'_, Result<Box<dyn Connection>, Error>> {
             Box::pin(async { Ok(Box::new(Conn {}) as Box<dyn Connection>) })
         }
 
@@ -228,7 +228,7 @@ mod test {
             &mut self,
             _sql: &str,
             _params: Vec<Value>,
-        ) -> BoxFuture<Result<Vec<Box<dyn Row>>, Error>> {
+        ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
             Box::pin(async { Ok(vec![]) })
         }
 
@@ -236,15 +236,15 @@ mod test {
             &mut self,
             _sql: &str,
             _params: Vec<Value>,
-        ) -> BoxFuture<Result<ExecResult, Error>> {
+        ) -> BoxFuture<'_, Result<ExecResult, Error>> {
             Box::pin(async { Ok(ExecResult::default()) })
         }
 
-        fn ping(&mut self) -> BoxFuture<Result<(), Error>> {
+        fn ping(&mut self) -> BoxFuture<'_, Result<(), Error>> {
             Box::pin(async { Ok(()) })
         }
 
-        fn close(&mut self) -> BoxFuture<Result<(), Error>> {
+        fn close(&mut self) -> BoxFuture<'_, Result<(), Error>> {
             Box::pin(async { Ok(()) })
         }
     }
@@ -256,7 +256,7 @@ mod test {
             "d"
         }
 
-        fn connect(&self, _url: &str) -> BoxFuture<Result<Box<dyn Connection>, Error>> {
+        fn connect(&self, _url: &str) -> BoxFuture<'_, Result<Box<dyn Connection>, Error>> {
             Box::pin(async { Ok(Box::new(Conn {}) as Box<dyn Connection>) })
         }
 

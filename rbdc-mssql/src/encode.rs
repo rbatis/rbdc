@@ -55,12 +55,12 @@ impl Encode for Value {
                 //json
                 q.bind(self.to_string().into_bytes());
                 Ok(())
-            },
+            }
             Value::Map(_) => {
                 //json
                 q.bind(self.to_string().into_bytes());
                 Ok(())
-            },
+            }
             Value::Ext(t, v) => match t {
                 "Date" => {
                     q.bind(
@@ -70,7 +70,8 @@ impl Encode for Value {
                     Ok(())
                 }
                 "DateTime" => {
-                    let date = fastdate::DateTime::from_str(&v.as_str().unwrap_or_default()).map_err(|e|Error::from(e.to_string()))?;
+                    let date = fastdate::DateTime::from_str(&v.as_str().unwrap_or_default())
+                        .map_err(|e| Error::from(e.to_string()))?;
                     q.bind(
                         chrono::NaiveDateTime::from_str(&date.display(false))
                             .map_err(|e| Error::from(e.to_string()))?,

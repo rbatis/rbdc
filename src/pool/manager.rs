@@ -1,6 +1,6 @@
+use crate::Error;
 use crate::db::{ConnectOptions, Driver};
 use crate::pool::guard::ConnectionGuard;
-use crate::Error;
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -32,7 +32,10 @@ impl ConnectionManager {
             option: Arc::new(option),
         })
     }
-    pub fn new_option<D: Driver + 'static, Option: ConnectOptions>(driver: D, option: Option) -> Self {
+    pub fn new_option<D: Driver + 'static, Option: ConnectOptions>(
+        driver: D,
+        option: Option,
+    ) -> Self {
         Self {
             driver: Arc::new(Box::new(driver)),
             option: Arc::new(Box::new(option)),

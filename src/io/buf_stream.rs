@@ -3,10 +3,10 @@
 use std::io;
 use std::ops::{Deref, DerefMut};
 
+use crate::Error;
 use crate::io::write_and_flush::WriteAndFlush;
 use crate::io::{decode::Decode, encode::Encode};
 use crate::rt::{AsyncRead, AsyncReadExt, AsyncWrite};
-use crate::Error;
 use bytes::BytesMut;
 use std::io::Cursor;
 

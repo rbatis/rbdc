@@ -1,17 +1,17 @@
-use std::io::Cursor;
-use std::str::FromStr;
-use byteorder::{BigEndian, ReadBytesExt};
 use crate::arguments::PgArgumentBuffer;
+use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
+use crate::value::{PgValue, PgValueFormat};
+use byteorder::{BigEndian, ReadBytesExt};
 use rbdc::datetime::DateTime;
 use rbdc::Error;
-use crate::types::decode::Decode;
-use crate::value::{PgValue, PgValueFormat};
+use std::io::Cursor;
+use std::str::FromStr;
 
 /// Encode to Timestamptz
 impl Encode for DateTime {
     fn encode(self, buf: &mut PgArgumentBuffer) -> Result<IsNull, Error> {
-        let millis= self.unix_timestamp_millis();
+        let millis = self.unix_timestamp_millis();
         let epoch = fastdate::DateTime::from(fastdate::Date {
             day: 1,
             mon: 1,
@@ -48,11 +48,14 @@ impl Decode for DateTime {
                         epoch + std::time::Duration::from_micros(us as u64)
                     }
                 };
-                DateTime(fastdate::DateTime::from_timestamp_millis(v.unix_timestamp_millis()))
+                DateTime(fastdate::DateTime::from_timestamp_millis(
+                    v.unix_timestamp_millis(),
+                ))
             }
             PgValueFormat::Text => {
                 let s = value.as_str()?;
-                let date = fastdate::DateTime::from_str(s).map_err(|e|Error::from(e.to_string()))?;
+                let date =
+                    fastdate::DateTime::from_str(s).map_err(|e| Error::from(e.to_string()))?;
                 DateTime(date)
             }
         })

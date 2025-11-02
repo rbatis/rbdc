@@ -1,7 +1,7 @@
 use crate::Error;
 use futures_core::future::BoxFuture;
-use rbs::value::map::ValueMap;
 use rbs::Value;
+use rbs::value::map::ValueMap;
 use std::any::Any;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
@@ -12,7 +12,7 @@ pub trait Driver: Debug + Sync + Send {
     fn name(&self) -> &str;
     /// Create a connection to the database. Note that connections are intended to be used
     /// in a single thread since most database connections are not thread-safe
-    fn connect(&self, url: &str) -> BoxFuture<Result<Box<dyn Connection>, Error>>;
+    fn connect(&self, url: &str) -> BoxFuture<'_, Result<Box<dyn Connection>, Error>>;
 
     fn connect_opt<'a>(
         &'a self,
@@ -28,7 +28,7 @@ impl Driver for Box<dyn Driver> {
         self.deref().name()
     }
 
-    fn connect(&self, url: &str) -> BoxFuture<Result<Box<dyn Connection>, Error>> {
+    fn connect(&self, url: &str) -> BoxFuture<'_, Result<Box<dyn Connection>, Error>> {
         self.deref().connect(url)
     }
 
@@ -82,20 +82,20 @@ impl From<(u64, Value)> for ExecResult {
 }
 
 /// Represents a connection to a database
-pub trait Connection: Send+Sync {
+pub trait Connection: Send + Sync {
     /// Execute a query that is expected to return a result set, such as a `SELECT` statement
     fn get_rows(
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<Result<Vec<Box<dyn Row>>, Error>>;
+    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>>;
 
     /// Execute a query that is expected to return a result set, such as a `SELECT` statement
     fn get_values(
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<Result<Vec<Value>, Error>> {
+    ) -> BoxFuture<'_, Result<Vec<Value>, Error>> {
         let v = self.get_rows(sql, params);
         Box::pin(async move {
             let v = v.await?;
@@ -115,10 +115,10 @@ pub trait Connection: Send+Sync {
     }
 
     /// Execute a query that is expected to update some rows.
-    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<Result<ExecResult, Error>>;
+    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>>;
 
     /// ping
-    fn ping(&mut self) -> BoxFuture<Result<(), Error>>;
+    fn ping(&mut self) -> BoxFuture<'_, Result<(), Error>>;
 
     /// close connection
     /// Normally conn is dropped when the link is dropped,
@@ -126,10 +126,10 @@ pub trait Connection: Send+Sync {
     /// If &mut self is not satisfied close, when you need mut self,
     /// It is recommended to use Option<DataBaseConnection>
     /// and then call take to take ownership and then if let Some(v) = self.inner.take() {v.lose ().await; }
-    fn close(&mut self) -> BoxFuture<Result<(), Error>>;
+    fn close(&mut self) -> BoxFuture<'_, Result<(), Error>>;
 
     /// an translation impl begin
-    fn begin(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn begin(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async {
             _ = self.exec("begin", vec![]).await?;
             Ok(())
@@ -137,7 +137,7 @@ pub trait Connection: Send+Sync {
     }
 
     /// an translation impl commit
-    fn commit(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn commit(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async {
             _ = self.exec("commit", vec![]).await?;
             Ok(())
@@ -145,7 +145,7 @@ pub trait Connection: Send+Sync {
     }
 
     /// an translation impl rollback
-    fn rollback(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn rollback(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async {
             _ = self.exec("rollback", vec![]).await?;
             Ok(())
@@ -158,7 +158,7 @@ impl Connection for Box<dyn Connection> {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
         self.deref_mut().get_rows(sql, params)
     }
 
@@ -166,29 +166,29 @@ impl Connection for Box<dyn Connection> {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<Result<Vec<Value>, Error>> {
+    ) -> BoxFuture<'_, Result<Vec<Value>, Error>> {
         self.deref_mut().get_values(sql, params)
     }
 
-    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<Result<ExecResult, Error>> {
+    fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>> {
         self.deref_mut().exec(sql, params)
     }
 
-    fn ping(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn ping(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         self.deref_mut().ping()
     }
 
-    fn close(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn close(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         self.deref_mut().close()
     }
 
-    fn begin(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn begin(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         self.deref_mut().begin()
     }
-    fn rollback(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn rollback(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         self.deref_mut().rollback()
     }
-    fn commit(&mut self) -> BoxFuture<Result<(), Error>> {
+    fn commit(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         self.deref_mut().commit()
     }
 }
@@ -212,7 +212,7 @@ pub trait MetaData: Debug {
 /// connect option
 pub trait ConnectOptions: Any + Send + Sync + Debug + 'static {
     /// Establish a new database connection with the options specified by `self`.
-    fn connect(&self) -> BoxFuture<Result<Box<dyn Connection>, Error>>;
+    fn connect(&self) -> BoxFuture<'_, Result<Box<dyn Connection>, Error>>;
 
     ///set option
     ///

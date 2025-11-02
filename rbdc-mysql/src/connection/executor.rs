@@ -280,7 +280,7 @@ impl MySqlConnection {
     }
 
     // #[doc(hidden)]
-    // pub fn describe<'e, 'q: 'e>(mut self, sql: &'q str) -> BoxFuture<'e, Result<Describe, Error>> {
+    // pub fn describe<'e, 'q: 'e>(mut self, sql: &'q str) -> BoxFuture<'_,'e, Result<Describe, Error>> {
     //     Box::pin(async move {
     //         self.stream.wait_until_ready().await?;
     //

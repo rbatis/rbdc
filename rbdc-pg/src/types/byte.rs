@@ -25,9 +25,7 @@ impl Encode for Bytea {
 impl Decode for Bytea {
     fn decode(value: PgValue) -> Result<Self, Error> {
         // note: in the TEXT encoding, a value of "0" here is encoded as an empty string
-        Ok(Self(
-            Vec::<u8>::decode(value)?
-        ))
+        Ok(Self(Vec::<u8>::decode(value)?))
     }
 }
 
@@ -61,7 +59,6 @@ impl Decode for Vec<u8> {
         }
     }
 }
-
 
 fn text_hex_decode_input(value: &PgValue) -> Result<&[u8], Error> {
     // BYTEA is formatted as \x followed by hex characters

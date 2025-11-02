@@ -3,8 +3,8 @@ mod manager;
 pub use guard::ConnectionGuard;
 pub use manager::ConnectionManager;
 
-use crate::db::Connection;
 use crate::Error;
+use crate::db::Connection;
 use async_trait::async_trait;
 use rbs::Value;
 use std::fmt::Debug;

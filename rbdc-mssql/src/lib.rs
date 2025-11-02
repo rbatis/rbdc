@@ -352,9 +352,8 @@ impl Connection for MssqlConnection {
 
 #[cfg(test)]
 mod test {
-    use crate::driver::MssqlDriver;
     use crate::{MssqlConnectOptions, parse_url_connection_string};
-    use rbdc::db::{Driver, ConnectOptions};
+    use rbdc::db::{ConnectOptions};
     use tiberius::Config;
 
     #[test]

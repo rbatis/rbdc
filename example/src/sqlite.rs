@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use rbdc::Error;
 use rbdc::db::Connection;
 use rbdc::pool::ConnectionManager;
@@ -11,6 +13,9 @@ async fn main() -> Result<(), Error> {
         SqliteDriver {},
         "sqlite://target/test.db",
     )?)?;
+
+    pool.set_conn_max_lifetime(Some(Duration::from_secs(10))).await;
+
     let mut conn = pool.get().await?;
     let v = conn
         .get_values("select * from sqlite_master", vec![])

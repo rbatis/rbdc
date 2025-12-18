@@ -1,8 +1,9 @@
 #![allow(mismatched_lifetime_syntaxes)]
 
 use dark_std::sync::AtomicDuration;
+use fast_pool::plugin::{CheckMode, DurationManager};
 use futures_core::future::BoxFuture;
-use log::info;
+use log::error;
 use rbdc::db::{Connection, ExecResult, Row};
 use rbdc::pool::ConnectionGuard;
 use rbdc::pool::ConnectionManager;
@@ -15,21 +16,33 @@ use std::time::Duration;
 #[derive(Debug)]
 pub struct FastPool {
     pub manager: ConnManagerProxy,
-    pub inner: fast_pool::Pool<ConnManagerProxy>,
+    pub inner: fast_pool::Pool<DurationManager<ConnManagerProxy>>,
     pub timeout: AtomicDuration,
 }
 
 #[derive(Debug)]
 pub struct ConnManagerProxy {
+     inner: ConnectionManager,
+}
+
+impl ConnManagerProxy{
+    pub fn new(inner: ConnectionManager) -> Self {
+        Self {
+            inner,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ConnProxy {
     inner: ConnectionManager,
-    conn: Option<fast_pool::ConnectionGuard<ConnManagerProxy>>,
+    conn: Option<fast_pool::ConnectionGuard<DurationManager<ConnManagerProxy>>>,
 }
 
 impl From<ConnectionManager> for ConnManagerProxy {
     fn from(value: ConnectionManager) -> Self {
         ConnManagerProxy {
-            inner: value,
-            conn: None,
+            inner: value
         }
     }
 }
@@ -42,7 +55,7 @@ impl Pool for FastPool {
     {
         Ok(Self {
             manager: manager.clone().into(),
-            inner: fast_pool::Pool::new(manager.into()),
+            inner: fast_pool::Pool::new(DurationManager::new(ConnManagerProxy::new(manager),CheckMode::NoLimit)),
             timeout: AtomicDuration::new(None),
         })
     }
@@ -53,7 +66,7 @@ impl Pool for FastPool {
             .get_timeout(self.timeout.get())
             .await
             .map_err(|e| Error::from(e.to_string()))?;
-        let proxy = ConnManagerProxy {
+        let proxy = ConnProxy {
             inner: v.manager_proxy.clone(),
             conn: Some(v),
         };
@@ -74,7 +87,7 @@ impl Pool for FastPool {
             .get_timeout(Some(d))
             .await
             .map_err(|e| Error::from(e.to_string()))?;
-        let proxy = ConnManagerProxy {
+        let proxy = ConnProxy {
             inner: v.manager_proxy.clone(),
             conn: Some(v),
         };
@@ -85,12 +98,21 @@ impl Pool for FastPool {
         self.timeout.store(timeout);
     }
 
-    async fn set_conn_max_lifetime(&self, _max_lifetime: Option<Duration>) {
-        info!("FastPool not support method set_conn_max_lifetime");
+    async fn set_conn_max_lifetime(&self, max_lifetime: Option<Duration>) {
+        let manager = self.inner.downcast_manager::<DurationManager<ConnManagerProxy>>();
+        if let Some(manager) = manager {
+            if let Some(max_lifetime) = max_lifetime {
+                manager.mode.set_mode(CheckMode::MaxLifetime(max_lifetime));
+            }else{
+                manager.mode.set_mode(CheckMode::NoLimit);
+            }
+        }else{
+           error!("FastPool method set_conn_max_lifetime need use DurationManager to init");
+        }
     }
 
-    async fn set_max_idle_conns(&self, _n: u64) {
-        info!("FastPool not support method set_max_idle_conns");
+    async fn set_max_idle_conns(&self, n: u64) {
+        self.inner.set_max_idle_conns(n);
     }
 
     async fn set_max_open_conns(&self, n: u64) {
@@ -135,7 +157,7 @@ impl fast_pool::Manager for ConnManagerProxy {
     }
 }
 
-impl Connection for ConnManagerProxy {
+impl Connection for ConnProxy {
     fn get_rows(
         &mut self,
         sql: &str,

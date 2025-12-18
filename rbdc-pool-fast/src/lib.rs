@@ -35,7 +35,6 @@ impl ConnManagerProxy{
 
 #[derive(Debug)]
 pub struct ConnProxy {
-    inner: ConnectionManager,
     conn: Option<fast_pool::ConnectionGuard<DurationManager<ConnManagerProxy>>>,
 }
 
@@ -67,7 +66,6 @@ impl Pool for FastPool {
             .await
             .map_err(|e| Error::from(e.to_string()))?;
         let proxy = ConnProxy {
-            inner: v.manager_proxy.clone(),
             conn: Some(v),
         };
         Ok(Box::new(proxy))
@@ -88,7 +86,6 @@ impl Pool for FastPool {
             .await
             .map_err(|e| Error::from(e.to_string()))?;
         let proxy = ConnProxy {
-            inner: v.manager_proxy.clone(),
             conn: Some(v),
         };
         Ok(Box::new(proxy))

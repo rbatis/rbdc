@@ -50,13 +50,30 @@ Implement these 6 traits:
 use rbdc::db::{Driver, MetaData, Row, Connection, ConnectOptions, Placeholder};
 
 impl Driver for YourDriver {}
-impl MetaData for YourMetaData {}
-impl Row for YourRow {}
-impl Connection for YourConnection {}
-impl ConnectOptions for YourConnectOptions {}
-impl Placeholder for YourPlaceholder {}
-
-//TODO ....
+impl MetaData for YourMetaData {
+     //TODO imple methods
+}
+impl Row for YourRow {
+     //TODO imple methods
+}
+impl Connection for YourConnection {
+     //TODO imple methods
+}
+impl ConnectOptions for YourConnectOptions {
+     //TODO imple methods
+}
+impl Placeholder for YourPlaceholder {
+     //TODO imple methods
+}
+/// use your driver
+#[tokio::main]
+async fn main() -> Result<(), rbdc::Error> {
+    let uri = "YourDriver://****";
+    let pool = FastPool::new_url(YourDriver{}, uri)?;
+    let mut conn = pool.get().await?;
+    let v = conn.get_values("SELECT 1", vec![]).await?;
+    println!("{}", v);
+}
 ```
 
 For databases with blocking APIs, refer to `rbdc-sqlite` which uses the `flume` channel library.

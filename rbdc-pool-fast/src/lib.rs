@@ -12,12 +12,29 @@ use rbdc::Error;
 use rbs::value::map::ValueMap;
 use rbs::Value;
 use std::time::Duration;
+use rbdc::db::{ConnectOptions, Driver};
 
 #[derive(Debug)]
 pub struct FastPool {
     pub manager: ConnManagerProxy,
     pub inner: fast_pool::Pool<DurationManager<ConnManagerProxy>>,
     pub timeout: AtomicDuration,
+}
+
+impl FastPool{
+    pub fn new_url<D: Driver + 'static>(driver: D, url: &str) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
+        Self::new(ConnectionManager::new(driver,url)?)
+    }
+
+    pub fn new_option<D: Driver + 'static, Options: ConnectOptions>(driver: D, options: Options) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
+        Self::new(ConnectionManager::new_options(driver,options))
+    }
 }
 
 #[derive(Debug)]

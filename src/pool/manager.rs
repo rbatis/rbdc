@@ -32,9 +32,9 @@ impl ConnectionManager {
             option: Arc::new(option),
         })
     }
-    pub fn new_option<D: Driver + 'static, Option: ConnectOptions>(
+    pub fn new_options<D: Driver + 'static, Options: ConnectOptions>(
         driver: D,
-        option: Option,
+        option: Options,
     ) -> Self {
         Self {
             driver: Arc::new(Box::new(driver)),

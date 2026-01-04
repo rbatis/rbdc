@@ -61,6 +61,7 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::FLOAT4,
             format: PgValueFormat::Binary,
+            timezone_sec: None,
         })
         .unwrap();
         assert_eq!(r, 3.0);
@@ -74,6 +75,7 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::FLOAT4,
             format: PgValueFormat::Binary,
+            timezone_sec: None,
         })
         .unwrap();
         assert_eq!(r, 3.0);

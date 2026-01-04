@@ -21,3 +21,6 @@ pub mod value;
 pub use driver::PgDriver;
 pub use driver::PgDriver as PostgresDriver;
 pub use driver::PgDriver as Driver;
+
+// Export commonly used types
+pub use types::{Point, TsVector, TsQuery};

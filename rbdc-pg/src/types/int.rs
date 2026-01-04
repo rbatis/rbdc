@@ -201,6 +201,7 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
+            timezone_sec: None,
         })
         .unwrap();
         assert_eq!(r, 3);
@@ -214,6 +215,7 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
+            timezone_sec: None,
         })
         .unwrap();
         assert_eq!(r, 3);
@@ -227,6 +229,7 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
+            timezone_sec: None,
         })
         .unwrap();
         assert_eq!(r, 3);
@@ -239,6 +242,7 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
+            timezone_sec: None,
         })
         .unwrap();
         assert_eq!(r, 3);
@@ -252,6 +256,7 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
+            timezone_sec: None,
         })
         .unwrap();
         assert_eq!(r, 3);
@@ -265,6 +270,7 @@ mod test {
             value: Some(bytes.to_vec()),
             type_info: PgTypeInfo::INT8,
             format: PgValueFormat::Binary,
+            timezone_sec: None,
         })
         .unwrap();
         assert_eq!(r, 3);

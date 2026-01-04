@@ -1,6 +1,6 @@
 /// impl exchange - optimized single pass without pre-scanning
 pub fn impl_exchange(start_str: &str, start_num: usize, sql: &str) -> String {
-    let mut result = String::with_capacity(sql.len() * 2);
+    let mut result = String::with_capacity(sql.len() * 3 / 2);
     let mut placeholder_idx = start_num;
     let mut chars = sql.chars().peekable();
 

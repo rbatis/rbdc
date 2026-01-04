@@ -12,7 +12,7 @@ async fn main() -> Result<(), Error> {
         "postgres://postgres:123456@localhost:5432/postgres",
     )?)?;
     let mut conn = pool.get().await?;
-    let v = conn.get_values("select * from user", vec![]).await?;
+    let v = conn.get_values("select * from public.user", vec![]).await?;
     println!("{}", rbs::Value::Array(v));
     Ok(())
 }

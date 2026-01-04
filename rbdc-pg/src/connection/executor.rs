@@ -307,6 +307,7 @@ impl PgConnection {
                             data,
                             format,
                             metadata: Arc::clone(&metadata),
+                            timezone_sec: self.timezone_sec,
                         };
 
                         r#yield!(Either::Right(row));
@@ -340,8 +341,9 @@ impl PgConnection {
         let sql = query.sql().to_string();
         let metadata = query.statement().map(|s| Arc::clone(&s.metadata));
         let persistent = query.persistent();
+        let timezone_sec = self.timezone_sec;
         Box::pin(try_stream! {
-            let arguments = query.take_arguments()?;
+            let arguments = query.take_arguments(timezone_sec)?;
             let s = self.run(&sql, arguments, 0, persistent, metadata).await?;
             pin_mut!(s);
 
@@ -360,8 +362,9 @@ impl PgConnection {
         let sql = query.sql().to_string();
         let metadata = query.statement().map(|s| Arc::clone(&s.metadata));
         let persistent = query.persistent();
+        let timezone_sec = self.timezone_sec;
         Box::pin(async move {
-            let arguments = query.take_arguments()?;
+            let arguments = query.take_arguments(timezone_sec)?;
             let s = self.run(&sql, arguments, 1, persistent, metadata).await?;
             pin_mut!(s);
             while let Some(s) = s.try_next().await? {

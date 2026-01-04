@@ -36,6 +36,27 @@ pub use ssl_mode::PgSslMode;
 /// | `port` | `5432` | Port number to connect to at the server host, or socket file name extension for Unix-domain connections. |
 /// | `dbname` | `None` | The database name. |
 /// | `options` | `None` | The runtime parameters to send to the server at connection start. |
+/// | `timezone_sec` | `None` | Timezone offset in seconds from UTC for TIMESTAMPTZ handling. e.g. `28800` for UTC+08:00 (Beijing/Shanghai), `-14400` for UTC-04:00. |
+///
+/// ## Timezone Handling
+///
+/// The `timezone_sec` parameter sets the session timezone for TIMESTAMPTZ (timestamp with timezone) columns.
+/// This affects how DateTime values are encoded and decoded:
+///
+/// - **Encoding**: DateTime values are adjusted to the specified timezone before being sent to PostgreSQL
+/// - **Decoding**: Binary format results include the timezone offset, Text format results preserve PostgreSQL's timezone string
+///
+/// Common timezone offsets:
+/// - `28800` (UTC+08:00) - Beijing, Shanghai, Singapore, Perth
+/// - `3600` (UTC+01:00) - Berlin, Paris, Rome
+/// - `0` (UTC+00:00) - London, Dublin, Lisbon
+/// - `-18000` (UTC-05:00) - New York, Toronto
+/// - `-28800` (UTC-08:00) - Los Angeles, Vancouver
+///
+/// ```text
+/// postgresql://localhost?timezone_sec=28800
+/// postgresql://user:pass@localhost/mydb?timezone_sec=28800&sslmode=require
+/// ```
 ///
 /// The URI scheme designator can be either `postgresql://` or `postgres://`.
 /// Each of the URI parts is optional.
@@ -48,6 +69,9 @@ pub use ssl_mode::PgSslMode;
 /// postgresql://user@localhost
 /// postgresql://user:secret@localhost
 /// postgresql://localhost?dbname=mydb&user=postgres&password=postgres
+/// postgresql://localhost?timezone_sec=28800
+/// postgresql://localhost:5432/mydb?timezone_sec=28800&sslmode=require
+/// postgresql://user:pass@localhost/mydb?timezone_sec=-18000
 /// ```
 #[derive(Debug, Clone)]
 pub struct PgConnectOptions {
@@ -63,6 +87,8 @@ pub struct PgConnectOptions {
     pub(crate) application_name: Option<String>,
     pub(crate) extra_float_digits: Option<Cow<'static, str>>,
     pub(crate) options: Option<String>,
+    /// Timezone offset in seconds from UTC. e.g. 28800 for UTC+08:00
+    pub(crate) timezone_sec: Option<i32>,
 }
 
 impl Default for PgConnectOptions {
@@ -119,6 +145,7 @@ impl PgConnectOptions {
             application_name: var("PGAPPNAME").ok(),
             extra_float_digits: Some("3".into()),
             options: var("PGOPTIONS").ok(),
+            timezone_sec: None,
         }
     }
 
@@ -383,6 +410,31 @@ impl PgConnectOptions {
 
             write!(options_str, "-c {}={}", k, v).expect("failed to write an option to the string");
         }
+        self
+    }
+
+    /// Sets the time zone offset for the session in seconds from UTC.
+    ///
+    /// This affects how `TIMESTAMPTZ` values are decoded.
+    /// For example, `28800` represents `UTC+08:00` (8 hours ahead of UTC).
+    /// `-14400` represents `UTC-04:00` (4 hours behind UTC).
+    ///
+    /// Defaults to `0` (UTC).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use rbdc_pg::options::PgConnectOptions;
+    /// // UTC+08:00
+    /// let options = PgConnectOptions::new()
+    ///     .timezone_sec(28800);
+    ///
+    /// // Use local system timezone
+    /// let options = PgConnectOptions::new()
+    ///     .timezone_sec(fastdate::offset_sec() as i32);
+    /// ```
+    pub fn timezone_sec(mut self, offset_sec: i32) -> Self {
+        self.timezone_sec = Some(offset_sec);
         self
     }
 

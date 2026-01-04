@@ -9,6 +9,42 @@ use rbdc::io::Decode;
 use rbdc::{err_protocol, Error};
 use std::collections::HashMap;
 
+/// Converts timezone offset in seconds to PostgreSQL timezone format.
+/// e.g., 28800 (UTC+08:00) -> "-08:00", -14400 (UTC-05:00) -> "+05:00", 0 -> "UTC"
+/// Note: PostgreSQL uses POSIX-style signs where "+" means west of UTC.
+fn format_timezone_offset(offset_sec: i32) -> String {
+    if offset_sec == 0 {
+        return "UTC".to_string();
+    }
+
+    // PostgreSQL uses POSIX-style timezone: + means west (behind UTC), - means east (ahead of UTC)
+    // So for UTC+08:00 (28800 seconds), we need "-08:00"
+    let sign = if offset_sec < 0 { '+' } else { '-' };
+    let abs_sec = offset_sec.abs();
+    let hours = abs_sec / 3600;
+    let minutes = (abs_sec % 3600) / 60;
+
+    format!("{}{:02}:{:02}", sign, hours, minutes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_timezone_offset() {
+        assert_eq!(format_timezone_offset(0), "UTC");
+        // UTC+08:00 -> PostgreSQL "-08:00" (east of UTC)
+        assert_eq!(format_timezone_offset(28800), "-08:00");
+        // UTC-05:00 -> PostgreSQL "+05:00" (west of UTC)
+        assert_eq!(format_timezone_offset(-18000), "+05:00");
+        // UTC+01:00 -> "-01:00"
+        assert_eq!(format_timezone_offset(3600), "-01:00");
+        // UTC-00:30 -> "+00:30"
+        assert_eq!(format_timezone_offset(-1800), "+00:30");
+    }
+}
+
 // https://www.postgresql.org/docs/current/protocol-flow.html#id-1.10.5.7.3
 // https://www.postgresql.org/docs/current/protocol-flow.html#id-1.10.5.7.11
 
@@ -22,6 +58,11 @@ impl PgConnection {
         // To begin a session, a frontend opens a connection to the server
         // and sends a startup message.
 
+        let timezone = options
+            .timezone_sec
+            .map(|sec| format_timezone_offset(sec))
+            .unwrap_or_else(|| "UTC".to_string());
+
         let mut params = vec![
             // Sets the display format for date and time values,
             // as well as the rules for interpreting ambiguous date input values.
@@ -30,7 +71,7 @@ impl PgConnection {
             // <https://www.postgresql.org/docs/devel/multibyte.html#MULTIBYTE-CHARSET-SUPPORTED>
             ("client_encoding", "UTF8"),
             // Sets the time zone for displaying and interpreting time stamps.
-            ("TimeZone", "UTC"),
+            ("TimeZone", timezone.as_str()),
         ];
 
         if let Some(ref extra_float_digits) = options.extra_float_digits {
@@ -145,6 +186,7 @@ impl PgConnection {
             cache_statement: StatementCache::new(options.statement_cache_capacity),
             cache_type_oid: HashMap::with_capacity(10),
             cache_type_info: HashMap::with_capacity(10),
+            timezone_sec: options.timezone_sec,
         })
     }
 }

@@ -103,6 +103,14 @@ impl FromStr for PgConnectOptions {
 
                 "application_name" => options = options.application_name(&*value),
 
+                "timezone_sec" => {
+                    options = options.timezone_sec(
+                        value
+                            .parse()
+                            .map_err(|e: ParseIntError| Error::from(e.to_string()))?,
+                    )
+                }
+
                 "options" => {
                     if let Some(options) = options.options.as_mut() {
                         options.push(' ');
@@ -266,5 +274,19 @@ mod test {
         let uri = "postgres:///?port=1234";
         let opts = PgConnectOptions::from_str(uri).unwrap();
         assert_eq!(PgSslMode::Disable, opts.ssl_mode);
+    }
+
+    #[test]
+    fn it_parses_timezone_sec() {
+        let uri = "postgres:///?timezone_sec=28800";
+        let opts = PgConnectOptions::from_str(uri).unwrap();
+        assert_eq!(Some(28800), opts.timezone_sec);
+    }
+
+    #[test]
+    fn it_parses_timezone_sec_negative() {
+        let uri = "postgres:///?timezone_sec=-14400";
+        let opts = PgConnectOptions::from_str(uri).unwrap();
+        assert_eq!(Some(-14400), opts.timezone_sec);
     }
 }

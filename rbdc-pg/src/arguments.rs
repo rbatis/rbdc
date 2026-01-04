@@ -25,6 +25,10 @@ pub struct PgArgumentBuffer {
     // Number of arguments
     count: usize,
 
+    // Session timezone offset in seconds from UTC
+    // Used for encoding DateTime to TIMESTAMPTZ
+    pub(crate) timezone_sec: Option<i32>,
+
     // Whenever an `Encode` impl needs to defer some work until after we resolve parameter types
     // it can use `patch`.
     //

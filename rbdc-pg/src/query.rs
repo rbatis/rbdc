@@ -28,11 +28,11 @@ impl PgQuery {
     }
 
     #[inline]
-    pub fn take_arguments(self) -> Result<Option<PgArguments>, Error> {
+    pub fn take_arguments(self, timezone_sec: Option<i32>) -> Result<Option<PgArguments>, Error> {
         if self.arguments.is_empty() {
             return Ok(None);
         }
-        return Ok(Some(PgArguments::from_args(self.arguments)?));
+        return Ok(Some(PgArguments::from_args(self.arguments, timezone_sec)?));
     }
 
     #[inline]

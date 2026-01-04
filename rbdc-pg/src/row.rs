@@ -15,6 +15,8 @@ pub struct PgRow {
     pub(crate) data: DataRow,
     pub(crate) format: PgValueFormat,
     pub(crate) metadata: Arc<PgStatementMetadata>,
+    /// Session timezone offset in seconds from UTC, used for TIMESTAMPTZ decoding
+    pub(crate) timezone_sec: Option<i32>,
 }
 
 impl PgRow {
@@ -31,6 +33,7 @@ impl PgRow {
             format: self.format,
             type_info: column.type_info.clone(),
             value,
+            timezone_sec: self.timezone_sec,
         })
     }
 
@@ -44,6 +47,7 @@ impl PgRow {
             value: value,
             type_info: column.type_info.clone(),
             format: self.format,
+            timezone_sec: self.timezone_sec,
         })
     }
 }

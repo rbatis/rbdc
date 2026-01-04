@@ -64,6 +64,10 @@ pub struct PgConnection {
 
     // current transaction status
     transaction_status: TransactionStatus,
+
+    // session timezone offset in seconds from UTC
+    // used for encoding DateTime to TIMESTAMPTZ
+    pub(crate) timezone_sec: Option<i32>,
 }
 
 impl PgConnection {

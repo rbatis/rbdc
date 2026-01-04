@@ -63,6 +63,7 @@ impl<T: Decode + TypeInfo> Decode for Vec<T> {
                         &mut buf,
                         format,
                         element_type_info.clone(),
+                        value.timezone_sec,
                     ))?)
                 }
 
@@ -106,6 +107,8 @@ impl<T: Decode + TypeInfo> Decode for Vec<T> {
                 let mut done = false;
                 let mut in_quotes = false;
                 let mut in_escape = false;
+                // Save timezone_sec from the outer PgValue before we shadow it
+                let timezone_sec = value.timezone_sec;
                 let mut value = String::with_capacity(10);
                 let mut chars = s.chars();
                 let mut elements = Vec::with_capacity(4);
@@ -152,6 +155,7 @@ impl<T: Decode + TypeInfo> Decode for Vec<T> {
                         value: value_opt,
                         type_info: element_type_info.clone(),
                         format,
+                        timezone_sec,
                     })?);
 
                     value.clear();

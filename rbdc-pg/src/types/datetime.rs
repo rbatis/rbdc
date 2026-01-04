@@ -7,11 +7,16 @@ use rbdc::datetime::DateTime;
 use rbdc::Error;
 use std::io::Cursor;
 use std::str::FromStr;
+use std::time::Duration;
 
 /// Encode to Timestamptz
 impl Encode for DateTime {
     fn encode(self, buf: &mut PgArgumentBuffer) -> Result<IsNull, Error> {
-        let millis = self.unix_timestamp_millis();
+        let mut millis = self.unix_timestamp_millis();
+        // Add session timezone offset to compensate for PostgreSQL's timezone conversion
+        if let Some(tz_sec) = buf.timezone_sec {
+            millis = millis + Duration::from_secs(tz_sec as u64).as_millis() as i64;
+        }
         let epoch = fastdate::DateTime::from(fastdate::Date {
             day: 1,
             mon: 1,
@@ -33,9 +38,7 @@ impl Decode for DateTime {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 let mut buf = Cursor::new(value.as_bytes()?);
-                // TIME is encoded as the microseconds since midnight
                 let us = buf.read_i64::<BigEndian>()?;
-                // TIMESTAMP is encoded as the microseconds since the epoch
                 let epoch = fastdate::DateTime::from(fastdate::Date {
                     day: 1,
                     mon: 1,
@@ -48,9 +51,14 @@ impl Decode for DateTime {
                         epoch + std::time::Duration::from_micros(us as u64)
                     }
                 };
-                DateTime(fastdate::DateTime::from_timestamp_millis(
+                let mut dt = DateTime(fastdate::DateTime::from_timestamp_millis(
                     v.unix_timestamp_millis(),
-                ))
+                ));
+                // Apply session timezone offset if available
+                if let Some(tz_sec) = value.timezone_sec {
+                    dt = dt.set_offset(tz_sec);
+                }
+                dt
             }
             PgValueFormat::Text => {
                 let s = value.as_str()?;

@@ -17,6 +17,8 @@ pub struct PgValueRef<'r> {
     pub(crate) value: Option<&'r [u8]>,
     pub(crate) type_info: PgTypeInfo,
     pub(crate) format: PgValueFormat,
+    /// Session timezone offset in seconds from UTC, used for TIMESTAMPTZ decoding
+    pub(crate) timezone_sec: Option<i32>,
 }
 
 /// Implementation of [`Value`] for PostgreSQL.
@@ -25,10 +27,12 @@ pub struct PgValue {
     pub(crate) value: Option<Vec<u8>>,
     pub(crate) type_info: PgTypeInfo,
     pub(crate) format: PgValueFormat,
+    /// Session timezone offset in seconds from UTC, used for TIMESTAMPTZ decoding
+    pub(crate) timezone_sec: Option<i32>,
 }
 
 impl<'r> PgValueRef<'r> {
-    pub(crate) fn get(buf: &mut &'r [u8], format: PgValueFormat, ty: PgTypeInfo) -> Self {
+    pub(crate) fn get(buf: &mut &'r [u8], format: PgValueFormat, ty: PgTypeInfo, timezone_sec: Option<i32>) -> Self {
         let mut element_len = buf.get_i32();
 
         let element_val = if element_len == -1 {
@@ -44,6 +48,7 @@ impl<'r> PgValueRef<'r> {
             value: element_val,
             type_info: ty,
             format,
+            timezone_sec,
         }
     }
 
@@ -64,7 +69,7 @@ impl<'r> PgValueRef<'r> {
 }
 
 impl PgValue {
-    pub fn get(buf: &mut &[u8], format: PgValueFormat, ty: PgTypeInfo) -> Self {
+    pub fn get(buf: &mut &[u8], format: PgValueFormat, ty: PgTypeInfo, timezone_sec: Option<i32>) -> Self {
         let mut element_len = buf.get_i32();
 
         let element_val = if element_len == -1 {
@@ -80,6 +85,7 @@ impl PgValue {
             value: element_val,
             type_info: ty,
             format,
+            timezone_sec,
         }
     }
 
@@ -89,6 +95,7 @@ impl PgValue {
             value: self.value.as_deref(),
             type_info: self.type_info.clone(),
             format: self.format,
+            timezone_sec: self.timezone_sec,
         }
     }
 
@@ -132,6 +139,7 @@ impl<'r> PgValueRef<'r> {
             value: value,
             format: self.format,
             type_info: self.type_info.clone(),
+            timezone_sec: self.timezone_sec,
         }
     }
 

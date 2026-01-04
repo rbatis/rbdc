@@ -13,6 +13,6 @@ async fn main() -> Result<(), Error> {
     )?)?;
     let mut conn = pool.get().await?;
     let v = conn.get_values("select * from user", vec![]).await?;
-    println!("{}", rbs::Value::Array(v));
+    println!("{}", v);
     Ok(())
 }

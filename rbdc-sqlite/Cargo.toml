@@ -1,6 +1,6 @@
 [package]
 name = "rbdc-sqlite"
-version = "4.6.5"
+version = "4.7.0"
 edition = "2021"
 description = "The Rust SQL Toolkit and ORM Library. An async, pure Rust SQL crate featuring compile-time Dynamic SQL"
 readme = "Readme.md"
@@ -31,8 +31,8 @@ sqlite-session = ["libsqlite3-sys/session"]
 bundled-sqlcipher = ["libsqlite3-sys/bundled-sqlcipher"]
 
 [dependencies]
-rbs = { version = "4.6"}
-rbdc = { version = "4.6",path = "../", default-features = false, optional = true }
+rbs = { version = "4"}
+rbdc = { version = "4.7",path = "../", default-features = false, optional = true }
 serde = "1.0"
 serde_json = "1.0"
 log = "0.4"

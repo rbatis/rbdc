@@ -20,6 +20,6 @@ async fn main() -> Result<(), Error> {
     let v = conn
         .get_values("select * from sqlite_master", vec![])
         .await?;
-    println!("{}", rbs::Value::Array(v));
+    println!("{}", v);
     Ok(())
 }

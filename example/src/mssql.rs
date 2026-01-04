@@ -11,5 +11,5 @@ async fn main() {
     let pool = FastPool::new(ConnectionManager::new(MssqlDriver {}, uri).unwrap()).unwrap();
     let mut conn = pool.get().await.unwrap();
     let v = conn.get_values("SELECT 1", vec![]).await.unwrap();
-    println!("{}", rbs::Value::Array(v));
+    println!("{}", v);
 }

@@ -170,7 +170,7 @@ impl Connection for ConnProxy {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<Value>, Error>> {
+    ) -> BoxFuture<'_, Result<Value, Error>> {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }

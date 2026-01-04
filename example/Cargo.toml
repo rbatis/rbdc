@@ -19,12 +19,12 @@ path = "src/mysql.rs"
 name = "pg"
 path = "src/pg.rs"
 [dependencies]
-rbs = "4.6"
-rbdc = {version = "4.6",path = "../"}
-rbdc-sqlite = {version = "4.6",path = "../rbdc-sqlite"}
-rbdc-mssql = {version = "4.6",path = "../rbdc-mssql"}
-rbdc-mysql = {version = "4.6",path = "../rbdc-mysql"}
-rbdc-pg = {version = "4.6",path = "../rbdc-pg"}
-rbdc-pool-fast = {version = "4.6",path = "../rbdc-pool-fast"}
+rbs = "4"
+rbdc = {version = "4.7",path = "../"}
+rbdc-sqlite = {version = "4.7",path = "../rbdc-sqlite"}
+rbdc-mssql = {version = "4.7",path = "../rbdc-mssql"}
+rbdc-mysql = {version = "4.7",path = "../rbdc-mysql"}
+rbdc-pg = {version = "4.7",path = "../rbdc-pg"}
+rbdc-pool-fast = {version = "4.7",path = "../rbdc-pool-fast"}
 tokio = { version = "1", features = ["sync", "fs", "net", "rt", "rt-multi-thread", "time", "io-util", "macros"] }
 

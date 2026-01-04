@@ -41,21 +41,7 @@ impl ConnectionManager {
             option: Arc::new(Box::new(option)),
         }
     }
-
-    pub fn new_opt_box(driver: Box<dyn Driver>, option: Box<dyn ConnectOptions>) -> Self {
-        Self {
-            driver: Arc::new(driver),
-            option: Arc::new(option),
-        }
-    }
-
-    pub fn new_arc(driver: Arc<Box<dyn Driver>>, option: Arc<Box<dyn ConnectOptions>>) -> Self {
-        Self {
-            driver: driver,
-            option: option,
-        }
-    }
-
+    
     pub fn driver_type(&self) -> &str {
         self.driver.name()
     }

@@ -1,104 +1,68 @@
-RBDC driver abstract
+# rbdc
 
-* `rbdc` is safe code(`#![forbid(unsafe_code)]`)
-* an database driver abstract for `rbatis`
-* supported database drivers see [rbatis](https://github.com/rbatis/rbatis)
+[![Crates.io](https://img.shields.io/crates/v/rbdc)](https://crates.io/crates/rbdc)
+[![Documentation](https://docs.rs/rbdc/badge.svg)](https://docs.rs/rbdc)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-### how to define my driver to support rbdc driver?
-just only impl this traits(6)
-```rust
-use rbdc::db::{Driver, MetaData, Row, Connection, ConnectOptions, Placeholder};
+Database driver abstraction layer for Rust, providing a unified interface for [rbatis](https://github.com/rbatis/rbatis).
 
-pub struct YourDriver{}
-impl Driver for YourDriver{}
+## Features
 
-pub struct YourMetaData{}
-impl MetaData for YourMetaData{}
+- **Safe**: `#![forbid(unsafe_code)]` - 100% safe Rust
+- **Async**: Native async support based on Tokio
+- **Extensible**: Simple trait definitions for easy driver implementation
 
-pub struct YourRow{}
-impl Row for YourRow{}
+## Supported Databases
 
-pub struct YourConnection{}
-impl Connection for YourConnection{}
+| Database | Driver |
+|----------|--------|
+| MySQL | [rbdc-mysql](https://crates.io/crates/rbdc-mysql) |
+| PostgreSQL | [rbdc-pg](https://crates.io/crates/rbdc-pg) |
+| SQLite | [rbdc-sqlite](https://crates.io/crates/rbdc-sqlite) |
+| MSSQL | [rbdc-mssql](https://crates.io/crates/rbdc-mssql) |
 
-pub struct YourConnectOptions{}
-impl ConnectOptions for YourConnectOptions{}
+## Quick Start
 
-pub struct YourPlaceholder{}
-impl Placeholder for YourPlaceholder{}
-```
-
-### how to use my driver?
-* more [examples](example)
-* for sqlite example
 ```rust
 use rbdc_sqlite::SqliteDriver;
-use rbdc::db::{Connection};
-use rbdc::Error;
 use rbdc::pool::ConnManager;
-use rbdc::pool::Pool;
 use rbdc_pool_fast::FastPool;
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
-    let pool = FastPool::new(ConnManager::new(SqliteDriver {}, "sqlite://target/test.db")?)?;
+async fn main() -> Result<(), rbdc::Error> {
+    let pool = FastPool::new(ConnManager::new(
+        SqliteDriver {},
+        "sqlite://target/test.db"
+    )?)?;
     let mut conn = pool.get().await?;
-    // select
-    let v = conn.get_values("select * from sqlite_master", vec![]).await?;
+
+    let v = conn.get_values("SELECT * FROM sqlite_master", vec![]).await?;
     println!("{}", rbs::Value::Array(v));
-    // update/delete
-    let r = conn.exec("update table set name='a' where id = 1", vec![]).await?;
-    println!("{}", r);
     Ok(())
 }
-
 ```
 
+## Implement Custom Driver
 
-### FAQ
-
-#### How should I implement a driver for databases with blocking APIs?
-
-For database drivers with blocking APIs, follow the pattern in `rbdc-sqlite` using the `flume` channel library:
+Implement these 6 traits:
 
 ```rust
-// Key components:
-// 1. Dedicated worker thread per connection
-// 2. Command channels for communication
+use rbdc::db::{Driver, MetaData, Row, Connection, ConnectOptions, Placeholder};
 
-pub struct YourConnection {
-    worker: ConnectionWorker,
-}
+impl Driver for YourDriver {}
+impl MetaData for YourMetaData {}
+impl Row for YourRow {}
+impl Connection for YourConnection {}
+impl ConnectOptions for YourConnectOptions {}
+impl Placeholder for YourPlaceholder {}
 
-struct ConnectionWorker {
-    command_tx: flume::Sender<Command>,
-}
-
-enum Command {
-    Execute { /* ... */ },
-    Query { /* ... */ },
-}
+//TODO ....
 ```
 
-Benefits:
-- Prevents blocking the async runtime
-- Provides thread safety
-- Maintains a clean async interface
+For databases with blocking APIs, refer to `rbdc-sqlite` which uses the `flume` channel library.
 
-#### Why does `Connection` require both `Send` and `Sync`?
+See [examples](./examples) for more.
 
-`Connection: Send + Sync` is required because:
+## License
 
-1. **Thread Safety**: Connections may be shared across tasks on different threads when using Tokio
-2. **Pool Implementation**: Connection pools need thread-safe access to connections
-
-When implementing for non-thread-safe databases:
-
-```rust
-// SAFETY: YourConnection is thread-safe because:
-// 1. Database operations run on a dedicated worker thread
-// 2. Communication uses thread-safe channels
-unsafe impl Sync for YourConnection {}
-```
-
-Improper implementation can cause data races and undefined behavior.
+MIT

@@ -11,14 +11,15 @@ use rbdc::pool::Pool;
 use rbdc::Error;
 use rbs::value::map::ValueMap;
 use rbs::Value;
+use std::sync::Arc;
 use std::time::Duration;
 use rbdc::db::{ConnectOptions, Driver};
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct FastPool {
-    pub manager: ConnManagerProxy,
+    pub manager: Arc<ConnectionManager>,
     pub inner: fast_pool::Pool<DurationManager<ConnManagerProxy>>,
-    pub timeout: AtomicDuration,
+    pub timeout: Arc<AtomicDuration>,
 }
 
 impl FastPool{
@@ -72,7 +73,7 @@ impl Pool for FastPool {
         Ok(Self {
             manager: manager.clone().into(),
             inner: fast_pool::Pool::new(DurationManager::new(ConnManagerProxy::new(manager),CheckMode::NoLimit)),
-            timeout: AtomicDuration::new(None),
+            timeout: Arc::new(AtomicDuration::new(None)),
         })
     }
 
@@ -134,7 +135,7 @@ impl Pool for FastPool {
     }
 
     fn driver_type(&self) -> &str {
-        self.manager.inner.driver_type()
+        self.manager.driver_type()
     }
 
     async fn state(&self) -> Value {

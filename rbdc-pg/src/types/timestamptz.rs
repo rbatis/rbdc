@@ -1,5 +1,6 @@
 use rbdc::DateTime;
 
+///Timestamptz  = DateTime = DateTime(pub fastdate::DateTime)
 pub type Timestamptz = DateTime;
 
 #[cfg(test)]

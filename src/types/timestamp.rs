@@ -4,19 +4,19 @@ use serde::Deserializer;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
-/// Timestamp(timestamp_millis:u64)
+/// Timestamp wrapper around DateTime
 #[derive(serde::Serialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename = "Timestamp")]
-pub struct Timestamp(pub i64);
+pub struct Timestamp(pub DateTime);
 
 impl Timestamp {
     #[deprecated(note = "please use utc()")]
     pub fn now() -> Self {
-        Self(fastdate::DateTime::utc().unix_timestamp_millis())
+        Self(DateTime::utc())
     }
     /// utc time
     pub fn utc() -> Self {
-        Self(fastdate::DateTime::utc().unix_timestamp_millis())
+        Self(DateTime::utc())
     }
 }
 
@@ -26,9 +26,24 @@ impl<'de> serde::Deserialize<'de> for Timestamp {
         D: Deserializer<'de>,
     {
         use serde::de::Error;
-        match Value::deserialize(deserializer)?.as_i64() {
-            None => Err(Error::custom("warn type decode Json")),
-            Some(v) => Ok(Self(v)),
+        match Value::deserialize(deserializer) {
+            Ok(v) => {
+                // Try to extract timestamp from Value
+                match &v {
+                    Value::I64(i) => Ok(Timestamp(DateTime::from_timestamp_millis(*i))),
+                    Value::U64(u) => Ok(Timestamp(DateTime::from_timestamp_millis(*u as i64))),
+                    Value::I32(i) => Ok(Timestamp(DateTime::from_timestamp_millis(*i as i64))),
+                    Value::U32(u) => Ok(Timestamp(DateTime::from_timestamp_millis(*u as i64))),
+                    Value::Ext("Timestamp", inner) => {
+                        match inner.as_i64() {
+                            Some(i) => Ok(Timestamp(DateTime::from_timestamp_millis(i))),
+                            None => Err(Error::custom("warn type decode Json")),
+                        }
+                    }
+                    _ => Err(Error::custom("warn type decode Json")),
+                }
+            }
+            Err(e) => Err(e),
         }
     }
 }
@@ -47,7 +62,7 @@ impl Debug for Timestamp {
 
 impl From<Timestamp> for Value {
     fn from(arg: Timestamp) -> Self {
-        Value::Ext("Timestamp", Box::new(Value::I64(arg.0)))
+        Value::Ext("Timestamp", Box::new(Value::I64(arg.0.unix_timestamp_millis())))
     }
 }
 
@@ -55,31 +70,31 @@ impl FromStr for Timestamp {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Timestamp(i64::from_str(s)?))
+        Ok(Timestamp(DateTime::from_str(s)?))
     }
 }
 
 impl From<Timestamp> for fastdate::DateTime {
     fn from(value: Timestamp) -> Self {
-        fastdate::DateTime::from_timestamp_millis(value.0 as i64)
+        value.0 .0
     }
 }
 
 impl Default for Timestamp {
     fn default() -> Self {
-        Timestamp(0)
+        Timestamp(DateTime::default())
     }
 }
 
 impl From<DateTime> for Timestamp {
     fn from(value: DateTime) -> Self {
-        Self(value.unix_timestamp_millis())
+        Self(value)
     }
 }
 
-impl Into<DateTime> for Timestamp {
-    fn into(self) -> DateTime {
-        DateTime::from_timestamp_millis(self.0)
+impl From<Timestamp> for DateTime {
+    fn from(value: Timestamp) -> Self {
+        value.0
     }
 }
 
@@ -106,14 +121,13 @@ mod test {
 
     #[test]
     fn test_decode_timestamp_u64() {
-        assert_eq!(Timestamp(1), rbs::from_value(Value::U64(1)).unwrap());
+        let result: Timestamp = rbs::from_value(Value::U64(1)).unwrap();
+        assert_eq!(result.0.unix_timestamp_millis(), 1);
     }
 
     #[test]
     fn test_decode_timestamp_ext() {
-        assert_eq!(
-            Timestamp(1),
-            rbs::from_value(Value::Ext("Timestamp", Box::new(Value::U64(1)))).unwrap()
-        );
+        let result: Timestamp = rbs::from_value(Value::Ext("Timestamp", Box::new(Value::U64(1)))).unwrap();
+        assert_eq!(result.0.unix_timestamp_millis(), 1);
     }
 }

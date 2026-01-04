@@ -60,6 +60,9 @@ impl TypeInfo for Value {
                     "Oid" => PgTypeInfo::OID,
                     "Json" => PgTypeInfo::JSON,
                     "Point" => PgTypeInfo::POINT,
+                    "TsVector" => PgTypeInfo::UNKNOWN,
+                    "TsQuery" => PgTypeInfo::UNKNOWN,
+                    "Hstore" => PgTypeInfo::UNKNOWN,
                     "Lseg" => PgTypeInfo::LSEG,
                     "Path" => PgTypeInfo::PATH,
                     "Box" => PgTypeInfo::BOX,
@@ -121,15 +124,10 @@ impl Decode for Value {
             PgType::Text => Value::String(Decode::decode(arg)?),
             PgType::Oid => Value::Ext("Oid", Box::new(Value::U32(Decode::decode(arg)?))),
             PgType::Json => decode_json(arg)?,
-            PgType::Point => Value::Ext(
-                "Point",
-                Box::new(Value::Binary({
-                    match arg.format() {
-                        PgValueFormat::Binary => arg.as_bytes()?.to_owned(),
-                        PgValueFormat::Text => arg.as_str()?.as_bytes().to_vec(),
-                    }
-                })),
-            ),
+            PgType::Point => {
+                use crate::types::point::Point;
+                Point::decode(arg)?.into()
+            }
             PgType::Lseg => Value::Ext(
                 "Lseg",
                 Box::new(Value::Binary({
@@ -186,7 +184,7 @@ impl Decode for Value {
             ),
 
             PgType::Float4 => Value::F32(Decode::decode(arg)?),
-            PgType::Float8 => Value::F32(Decode::decode(arg)?),
+            PgType::Float8 => Value::F64(Decode::decode(arg)?),
             PgType::Unknown => Value::Null,
             PgType::Circle => Value::Ext(
                 "Circle",
@@ -281,6 +279,19 @@ impl Decode for Value {
             ),
             PgType::Uuid => Uuid::decode(arg)?.into(),
             PgType::Jsonb => decode_json(arg)?,
+            PgType::Tsvector => {
+                use crate::types::tsvector::TsVector;
+                TsVector::decode(arg)?.into()
+            }
+            PgType::Tsquery => {
+                use crate::types::tsquery::TsQuery;
+                TsQuery::decode(arg)?.into()
+            }
+            PgType::Hstore => {
+                use crate::types::hstore::Hstore;
+                Hstore::decode(arg)?.into()
+            }
+            PgType::HstoreArray => Value::Array(Decode::decode(arg)?),
             PgType::Int4Range => Value::Ext(
                 "Int4Range",
                 Box::new(Value::Binary({
@@ -486,7 +497,6 @@ impl Encode for Value {
                     "Text" => v.into_string().unwrap_or_default().encode(buf)?,
                     "Oid" => Oid::from(v.as_u64().unwrap_or_default() as u32).encode(buf)?,
                     "Json" => Json(v.into_string().unwrap_or_default()).encode(buf)?,
-                    "Point" => v.into_bytes().unwrap_or_default().encode(buf)?,
                     "Lseg" => v.into_bytes().unwrap_or_default().encode(buf)?,
                     "Path" => v.into_bytes().unwrap_or_default().encode(buf)?,
                     "Box" => v.into_bytes().unwrap_or_default().encode(buf)?,
@@ -527,6 +537,48 @@ impl Encode for Value {
                     "Jsonpath" => v.into_bytes().unwrap_or_default().encode(buf)?,
                     "Money" => Money(v.as_i64().unwrap_or_default()).encode(buf)?,
                     "Void" => v.into_bytes().unwrap_or_default().encode(buf)?,
+                    "TsVector" => {
+                        use crate::types::tsvector::TsVector;
+                        let s = v.as_str().unwrap_or_default();
+                        TsVector(s.to_string()).encode(buf)?
+                    }
+                    "TsQuery" => {
+                        use crate::types::tsquery::TsQuery;
+                        let s = v.as_str().unwrap_or_default();
+                        TsQuery(s.to_string()).encode(buf)?
+                    }
+                    "Hstore" => {
+                        use crate::types::hstore::Hstore;
+                        let s = v.as_str().unwrap_or_default();
+                        // Parse hstore text format: "key1=>value1, key2=>value2"
+                        let mut map = std::collections::HashMap::new();
+                        for pair in s.split(',') {
+                            let pair = pair.trim();
+                            if let Some(pos) = pair.find("=>") {
+                                let key = pair[..pos].trim().to_string();
+                                let value = pair[pos + 2..].trim().to_string();
+                                map.insert(key, value);
+                            }
+                        }
+                        Hstore(map).encode(buf)?
+                    }
+                    "Point" => {
+                        use crate::types::point::Point;
+                        let s = v.as_str().unwrap_or_default();
+                        // Parse POINT(x y) format
+                        if let Some(start) = s.find('(') {
+                            if let Some(end) = s.find(')') {
+                                let coords = &s[start + 1..end];
+                                let parts: Vec<&str> = coords.split_whitespace().collect();
+                                if parts.len() == 2 {
+                                    let x = parts[0].parse::<f64>().unwrap_or(0.0);
+                                    let y = parts[1].parse::<f64>().unwrap_or(0.0);
+                                    Point { x, y }.encode(buf)?;
+                                }
+                            }
+                        }
+                        return Err(Error::from("Invalid POINT format"));
+                    }
                     "Custom" => v.into_bytes().unwrap_or_default().encode(buf)?,
                     "DeclareWithName" => v.into_bytes().unwrap_or_default().encode(buf)?,
                     "DeclareWithOid" => v.into_bytes().unwrap_or_default().encode(buf)?,

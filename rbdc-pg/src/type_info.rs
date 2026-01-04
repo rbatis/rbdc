@@ -113,6 +113,10 @@ pub enum PgType {
     JsonpathArray,
     Money,
     MoneyArray,
+    Hstore,
+    HstoreArray,
+    Tsvector,
+    Tsquery,
 
     // https://www.postgresql.org/docs/9.3/datatype-pseudo.html
     Void,
@@ -323,6 +327,10 @@ impl PgType {
             3927 => PgType::Int8RangeArray,
             4072 => PgType::Jsonpath,
             4073 => PgType::JsonpathArray,
+            3361 => PgType::Hstore,
+            3362 => PgType::HstoreArray,
+            3614 => PgType::Tsvector,
+            3615 => PgType::Tsquery,
 
             _ => {
                 return None;
@@ -368,6 +376,10 @@ impl PgType {
             PgType::Macaddr8Array => Oid(775),
             PgType::Money => Oid(790),
             PgType::MoneyArray => Oid(791),
+            PgType::Hstore => Oid(3361),
+            PgType::HstoreArray => Oid(3362),
+            PgType::Tsvector => Oid(3614),
+            PgType::Tsquery => Oid(3615),
             PgType::Macaddr => Oid(829),
             PgType::Inet => Oid(869),
             PgType::BoolArray => Oid(1000),
@@ -533,6 +545,10 @@ impl PgType {
             PgType::JsonpathArray => "JSONPATH[]",
             PgType::Money => "MONEY",
             PgType::MoneyArray => "MONEY[]",
+            PgType::Hstore => "HSTORE",
+            PgType::HstoreArray => "HSTORE[]",
+            PgType::Tsvector => "TSVECTOR",
+            PgType::Tsquery => "TSQUERY",
             PgType::Void => "VOID",
             PgType::Custom(ty) => &*ty.name,
             PgType::DeclareWithOid(_) => "?",
@@ -633,6 +649,10 @@ impl PgType {
             PgType::JsonpathArray => "_jsonpath",
             PgType::Money => "money",
             PgType::MoneyArray => "_money",
+            PgType::Hstore => "hstore",
+            PgType::HstoreArray => "_hstore",
+            PgType::Tsvector => "tsvector",
+            PgType::Tsquery => "tsquery",
             PgType::Void => "void",
             PgType::Custom(ty) => &*ty.name,
             PgType::DeclareWithOid(_) => "?",
@@ -733,6 +753,10 @@ impl PgType {
             PgType::JsonpathArray => &PgTypeKind::Array(PgTypeInfo(PgType::Jsonpath)),
             PgType::Money => &PgTypeKind::Simple,
             PgType::MoneyArray => &PgTypeKind::Array(PgTypeInfo(PgType::Money)),
+            PgType::Hstore => &PgTypeKind::Simple,
+            PgType::HstoreArray => &PgTypeKind::Array(PgTypeInfo(PgType::Hstore)),
+            PgType::Tsvector => &PgTypeKind::Simple,
+            PgType::Tsquery => &PgTypeKind::Simple,
 
             PgType::Void => &PgTypeKind::Pseudo,
 
@@ -798,6 +822,10 @@ impl PgType {
             PgType::Macaddr8Array => Some(Cow::Owned(PgTypeInfo(PgType::Macaddr8))),
             PgType::Money => None,
             PgType::MoneyArray => Some(Cow::Owned(PgTypeInfo(PgType::Money))),
+            PgType::Hstore => None,
+            PgType::HstoreArray => Some(Cow::Owned(PgTypeInfo(PgType::Hstore))),
+            PgType::Tsvector => None,
+            PgType::Tsquery => None,
             PgType::Macaddr => None,
             PgType::MacaddrArray => Some(Cow::Owned(PgTypeInfo(PgType::Macaddr))),
             PgType::Inet => None,
@@ -917,6 +945,10 @@ impl PgType {
             PgType::Macaddr8 => Some(PgTypeInfo(PgType::Macaddr8)),
             PgType::MoneyArray => None,
             PgType::Money => Some(PgTypeInfo(PgType::Money)),
+            PgType::HstoreArray => None,
+            PgType::Hstore => Some(PgTypeInfo(PgType::Hstore)),
+            PgType::Tsvector => None,
+            PgType::Tsquery => None,
             PgType::MacaddrArray => None,
             PgType::Macaddr => Some(PgTypeInfo(PgType::Macaddr)),
             PgType::InetArray => None,
@@ -1021,6 +1053,10 @@ impl PgType {
             PgType::Macaddr8 => Some(PgTypeInfo(PgType::Macaddr8Array)),
             PgType::MoneyArray => None,
             PgType::Money => Some(PgTypeInfo(PgType::MoneyArray)),
+            PgType::HstoreArray => None,
+            PgType::Hstore => Some(PgTypeInfo(PgType::HstoreArray)),
+            PgType::Tsvector => None,
+            PgType::Tsquery => None,
             PgType::MacaddrArray => None,
             PgType::Macaddr => Some(PgTypeInfo(PgType::MacaddrArray)),
             PgType::InetArray => None,
@@ -1210,6 +1246,14 @@ impl PgTypeInfo {
     // user-specified precision, exact
     pub(crate) const MONEY: Self = Self(PgType::Money);
     pub(crate) const MONEY_ARRAY: Self = Self(PgType::MoneyArray);
+
+    // key-value store data type (hstore extension)
+    pub(crate) const HSTORE: Self = Self(PgType::Hstore);
+    pub(crate) const HSTORE_ARRAY: Self = Self(PgType::HstoreArray);
+
+    // full-text search types
+    pub(crate) const TSVECTOR: Self = Self(PgType::Tsvector);
+    pub(crate) const TSQUERY: Self = Self(PgType::Tsquery);
 
     //
     // date/time types

@@ -27,6 +27,8 @@ pub use tsquery::TsQuery;
 pub mod point;
 pub use point::Point;
 pub mod uuid;
+pub mod hstore;
+pub use hstore::Hstore;
 pub mod value;
 use crate::type_info::PgTypeInfo;
 

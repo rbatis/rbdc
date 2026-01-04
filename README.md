@@ -35,9 +35,9 @@ async fn main() -> Result<(), rbdc::Error> {
         "sqlite://target/test.db"
     )?)?;
     let mut conn = pool.get().await?;
-
     let v = conn.get_values("SELECT * FROM sqlite_master", vec![]).await?;
     println!("{}", v);
+    //if need decode use `let result:Vec<Table> = rbs::from_value(v)?;`
     Ok(())
 }
 ```

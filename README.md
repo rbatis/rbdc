@@ -25,15 +25,11 @@ Database driver abstraction layer for Rust, providing a unified interface for [r
 
 ```rust
 use rbdc_sqlite::SqliteDriver;
-use rbdc::pool::ConnManager;
 use rbdc_pool_fast::FastPool;
 
 #[tokio::main]
 async fn main() -> Result<(), rbdc::Error> {
-    let pool = FastPool::new(ConnManager::new(
-        SqliteDriver {},
-        "sqlite://target/test.db"
-    )?)?;
+    let pool = FastPool::new_url(SqliteDriver {},"sqlite://target/test.db")?;
     let mut conn = pool.get().await?;
     let v = conn.get_values("SELECT * FROM sqlite_master", vec![]).await?;
     println!("{}", v);

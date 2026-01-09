@@ -22,7 +22,7 @@ bytes = "1.1.0"
 rbdc = { version = "4.7", path = "../", default-features = false, optional = true }
 serde = "1"
 bitflags = "2.0.2"
-digest = { version = "0.10.0", default-features = false, features = ["std"] }
+digest = { version = "0.10.7", default-features = false, features = ["std"] }
 futures-core = { version = "0.3.19", default-features = false }
 futures-util = { version = "0.3.21", features = ["alloc", "sink"] }
 rsa = { version = "0.9" }

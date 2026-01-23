@@ -99,11 +99,13 @@ impl<T: Decode + TypeInfo> Decode for Vec<T> {
 
                 // NOTE: Nearly *all* types use ',' as the sequence delimiter. Yes, there is one
                 //       that does not. The BOX (not PostGIS) type uses ';' as a delimiter.
+                //       We detect the element type and use the appropriate delimiter.
 
-                // TODO: When we add support for BOX we need to figure out some way to make the
-                //       delimiter selection
-
-                let delimiter = ',';
+                let delimiter = if element_type_info.0 == crate::type_info::PgType::Box {
+                    ';'
+                } else {
+                    ','
+                };
                 let mut done = false;
                 let mut in_quotes = false;
                 let mut in_escape = false;

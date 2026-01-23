@@ -299,7 +299,9 @@ impl Connection for MssqlConnection {
     }
 
     fn ping(&mut self) -> BoxFuture<'_, Result<(), rbdc::Error>> {
-        //TODO While 'select 1' can temporarily solve the problem of checking that the connection is valid, it looks ugly.Better replace it with something better way
+        // Check connection validity by executing a simple query.
+        // Using "SELECT 1" is a standard practice for SQL Server ping operations
+        // as TDS protocol doesn't have a dedicated ping command.
         Box::pin(async move {
             self.inner
                 .as_mut()

@@ -117,9 +117,10 @@ impl PgStream {
                 MessageFormat::ParameterStatus => {
                     // informs the frontend about the current (initial)
                     // setting of backend parameters
+                    // These can be accessed via PgConnection::parameter_status(),
+                    // PgConnection::client_encoding(), and PgConnection::date_style()
 
                     let ParameterStatus { name, value } = message.decode()?;
-                    // TODO: support handle `client_encoding`, `DateStyle` change
 
                     match name.as_str() {
                         "server_version" => {

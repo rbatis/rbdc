@@ -76,6 +76,33 @@ impl PgConnection {
         self.stream.server_version_num
     }
 
+    /// Get the value of a parameter status reported by the server.
+    ///
+    /// Common parameters include:
+    /// - `client_encoding`: The client-side character set encoding.
+    /// - `DateStyle`: The date/time display format.
+    /// - `TimeZone`: The time zone for displaying timestamps.
+    /// - `server_version`: The server version string.
+    pub fn parameter_status(&self, name: &str) -> Option<&String> {
+        self.stream.parameter_statuses.get(name)
+    }
+
+    /// Get the client encoding (e.g., "UTF8").
+    pub fn client_encoding(&self) -> Option<&str> {
+        self.stream
+            .parameter_statuses
+            .get("client_encoding")
+            .map(|s| s.as_str())
+    }
+
+    /// Get the date style (e.g., "ISO, MDY").
+    pub fn date_style(&self) -> Option<&str> {
+        self.stream
+            .parameter_statuses
+            .get("DateStyle")
+            .map(|s| s.as_str())
+    }
+
     // will return when the connection is ready for another query
     pub async fn wait_until_ready(&mut self) -> Result<(), Error> {
         if !self.stream.wbuf.is_empty() {

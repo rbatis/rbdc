@@ -28,8 +28,6 @@ pub(crate) enum DataType {
     Text,
     Blob,
 
-    // TODO: Support NUMERIC
-    #[allow(dead_code)]
     Numeric,
 
     // non-standard extensions
@@ -119,6 +117,8 @@ impl FromStr for DataType {
 
             _ if s.contains("real") || s.contains("floa") || s.contains("doub") => DataType::Float,
 
+            _ if s.contains("num") || s.contains("dec") => DataType::Numeric,
+
             _ => {
                 return Err(format!("unknown type: `{}`", s).into());
             }
@@ -178,6 +178,10 @@ fn test_data_type_from_str() -> Result<(), Error> {
     assert_eq!(DataType::Float, "REAL".parse()?);
     assert_eq!(DataType::Float, "FLOAT".parse()?);
     assert_eq!(DataType::Float, "DOUBLE PRECISION".parse()?);
+
+    assert_eq!(DataType::Numeric, "NUMERIC".parse()?);
+    assert_eq!(DataType::Numeric, "DECIMAL".parse()?);
+    assert_eq!(DataType::Numeric, "DECIMAL(10,2)".parse()?);
 
     assert_eq!(DataType::Bool, "BOOLEAN".parse()?);
     assert_eq!(DataType::Bool, "BOOL".parse()?);

@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
 
-use bytes::{Buf, Bytes};
+use bytes::{Buf, Bytes, BytesMut};
 
 use crate::collation::{CharSet, Collation};
 use crate::error::MySqlDatabaseError;
@@ -146,8 +146,35 @@ impl MySqlStream {
 
         let payload: Bytes = self.stream.read(packet_size).await?;
 
-        // TODO: packet compression
-        // TODO: packet joining
+        // Note: Packet compression is not supported.
+        // MySQL/MariaDB support zlib/zstd compression but it adds complexity
+        // and is rarely needed in modern network environments.
+
+        // Packet joining: if payload is max size (0xFFFFFF), there may be more packets
+        // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_packets.html
+        let payload = if payload.len() < 0xFF_FF_FF {
+            payload
+        } else {
+            // Large packet split across multiple packets
+            let mut final_payload = BytesMut::with_capacity(0xFF_FF_FF * 2);
+            final_payload.extend_from_slice(&payload);
+
+            drop(payload); // free the original allocation
+
+            let mut last_read = 0xFF_FF_FF;
+            while last_read == 0xFF_FF_FF {
+                let mut header: Bytes = self.stream.read(4).await?;
+                let packet_size = header.get_uint_le(3) as usize;
+                let sequence_id = header.get_u8();
+
+                self.sequence_id = sequence_id.wrapping_add(1);
+
+                let part: Bytes = self.stream.read(packet_size).await?;
+                last_read = part.len();
+                final_payload.extend_from_slice(&part);
+            }
+            final_payload.into()
+        };
 
         if payload
             .get(0)

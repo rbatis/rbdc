@@ -1,4 +1,3 @@
-use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -12,6 +11,7 @@ use either::Either;
 use futures_channel::oneshot;
 use futures_intrusive::sync::{Mutex, MutexGuard};
 use rbdc::error::Error;
+use crossfire::{spsc, AsyncTx};
 
 // Each SQLite connection has a dedicated thread.
 
@@ -20,7 +20,7 @@ use rbdc::error::Error;
 //       unlikely.
 
 pub(crate) struct ConnectionWorker {
-    command_tx: flume::Sender<Command>,
+    command_tx: AsyncTx<crossfire::spsc::Array<Command>>,
     /// The `sqlite3` pointer. NOTE: access is unsynchronized!
     pub(crate) handle_raw: ConnectionHandleRaw,
     /// Mutex for locking access to the database.
@@ -41,7 +41,7 @@ pub enum Command {
         query: Box<str>,
         arguments: Option<SqliteArguments>,
         persistent: bool,
-        tx: flume::Sender<Result<Either<SqliteQueryResult, SqliteRow>, Error>>,
+        tx: crossfire::Tx<crossfire::spsc::Array<Result<Either<SqliteQueryResult, SqliteRow>, Error>>>,
     },
     CreateCollation {
         create_collation:
@@ -66,7 +66,7 @@ impl ConnectionWorker {
         thread::Builder::new()
             .name(params.thread_name.clone())
             .spawn(move || {
-                let (command_tx, command_rx) = flume::bounded(params.command_channel_size);
+                let (command_tx, command_rx) = spsc::bounded_async_blocking(params.command_channel_size);
 
                 let conn = match params.establish() {
                     Ok(conn) => conn,
@@ -96,7 +96,13 @@ impl ConnectionWorker {
                     return;
                 }
 
-                for cmd in command_rx {
+                // Use blocking receiver in sync thread
+                loop {
+                    let cmd = match command_rx.recv() {
+                        Ok(cmd) => cmd,
+                        Err(_) => break, // channel closed
+                    };
+
                     match cmd {
                         Command::Prepare { query, tx } => {
                             tx.send(prepare(&mut conn, &query).map(|prepared| {
@@ -179,11 +185,11 @@ impl ConnectionWorker {
         args: Option<SqliteArguments>,
         chan_size: usize,
         persistent: bool,
-    ) -> Result<flume::Receiver<Result<Either<SqliteQueryResult, SqliteRow>, Error>>, Error> {
-        let (tx, rx) = flume::bounded(chan_size);
+    ) -> Result<crossfire::AsyncRx<crossfire::spsc::Array<Result<Either<SqliteQueryResult, SqliteRow>, Error>>>, Error> {
+        let (tx, rx) = spsc::bounded_blocking_async(chan_size);
 
         self.command_tx
-            .send_async(Command::Execute {
+            .send(Command::Execute {
                 query: query.into(),
                 arguments: args.map(SqliteArguments::into_static),
                 persistent,
@@ -206,14 +212,14 @@ impl ConnectionWorker {
         let (tx, rx) = oneshot::channel();
 
         self.command_tx
-            .send_async(command(tx))
+            .send(command(tx))
             .await
             .map_err(|_| Error::from("WorkerCrashed"))?;
 
         rx.await.map_err(|_| Error::from("WorkerCrashed"))
     }
 
-    pub fn create_collation(
+    pub async fn create_collation(
         &mut self,
         name: &str,
         compare: impl Fn(&str, &str) -> std::cmp::Ordering + Send + Sync + 'static,
@@ -226,6 +232,7 @@ impl ConnectionWorker {
                     create_collation(&mut conn.handle, &name, compare)
                 }),
             })
+            .await
             .map_err(|_| Error::from("WorkerCrashed"))?;
         Ok(())
     }
@@ -238,7 +245,7 @@ impl ConnectionWorker {
         let (guard, res) = futures_util::future::join(
             // we need to join the wait queue for the lock before we send the message
             self.shared.conn.lock(),
-            self.command_tx.send_async(Command::UnlockDb),
+            self.command_tx.send(Command::UnlockDb),
         )
         .await;
 
@@ -250,20 +257,16 @@ impl ConnectionWorker {
     /// Send a command to the worker to shut down the processing thread.
     ///
     /// A `WorkerCrashed` error may be returned if the thread has already stopped.
-    pub(crate) fn shutdown(&mut self) -> impl Future<Output = Result<(), Error>> {
+    pub(crate) async fn shutdown(&mut self) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
 
-        let send_res = self
-            .command_tx
+        self.command_tx
             .send(Command::Shutdown { tx })
-            .map_err(|_| Error::from("WorkerCrashed"));
+            .await
+            .map_err(|_| Error::from("WorkerCrashed"))?;
 
-        async move {
-            send_res?;
-
-            // wait for the response
-            rx.await.map_err(|_| Error::from("WorkerCrashed"))
-        }
+        // wait for the response
+        rx.await.map_err(|_| Error::from("WorkerCrashed"))
     }
 }
 

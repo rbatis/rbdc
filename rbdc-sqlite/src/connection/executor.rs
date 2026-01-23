@@ -19,7 +19,7 @@ impl SqliteConnection {
             let arguments = query.take_arguments()?;
             let s=self.worker
                 .execute(sql, arguments, self.row_channel_size, persistent)
-                .map_ok(flume::Receiver::into_stream)
+                .map_ok(|rx| rx.into_stream())
                 .try_flatten_stream();
             pin_mut!(s);
             while let Some(v) = s.try_next().await? {
@@ -40,7 +40,7 @@ impl SqliteConnection {
             let stream = self
                 .worker
                 .execute(sql, arguments, self.row_channel_size, persistent)
-                .map_ok(flume::Receiver::into_stream)
+                .map_ok(|rx| rx.into_stream())
                 .try_flatten_stream();
             pin_mut!(stream);
             while let Some(res) = stream.try_next().await? {

@@ -112,12 +112,12 @@ impl SqliteConnection {
     /// Note that this may also block if the worker command channel is currently applying
     /// backpressure.
     #[deprecated(note = "Completes asynchronously. See documentation for details.")]
-    pub fn create_collation(
+    pub async fn create_collation(
         &mut self,
         name: &str,
         compare: impl Fn(&str, &str) -> Ordering + Send + Sync + 'static,
     ) -> Result<(), Error> {
-        self.worker.create_collation(name, compare)
+        self.worker.create_collation(name, compare).await
     }
 
     /// Lock the SQLite database handle out from the worker thread so direct SQLite API calls can

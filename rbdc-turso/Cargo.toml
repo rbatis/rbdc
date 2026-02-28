@@ -1,0 +1,32 @@
+[package]
+name = "rbdc-turso"
+version = "4.7.0"
+edition = "2021"
+description = "Turso/libSQL async database driver for rbdc - drop-in backend alternative to rbdc-sqlite"
+readme = "Readme.md"
+authors = ["ce <zhuxiujia@qq.com>"]
+license = "Apache-2.0"
+categories = ["database"]
+keywords = ["database", "orm", "turso", "libsql", "sqlite"]
+documentation = "https://rbatis.github.io/rbatis.io"
+repository = "https://github.com/rbatis/rbatis"
+homepage = "https://rbatis.github.io/rbatis.io"
+
+[features]
+default = ["tls-rustls"]
+tls-rustls = ["rbdc/tls-rustls"]
+tls-native-tls = ["rbdc/tls-native-tls"]
+
+[dependencies]
+rbs = { version = "4" }
+rbdc = { version = "4.7", path = "../", default-features = false, optional = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+url = { version = "2.2.2", default-features = false }
+libsql = "0.9"
+tokio = { version = "1", features = ["sync", "rt"] }
+futures-core = { version = "0.3.19", default-features = false }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

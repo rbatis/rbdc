@@ -7,6 +7,8 @@
 //! - Proposed deviations are flagged as release-blocking
 //! - Rejected deviations must not exist (should be removed or fixed)
 
+#![allow(dead_code)]
+
 use super::registry::{ApprovalStatus, Deviation, REGISTRY};
 use std::collections::{HashMap, HashSet};
 

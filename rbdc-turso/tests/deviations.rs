@@ -8,10 +8,12 @@
 //! Tests for NotADeviation records confirm parity (no difference).
 //! Tests for Proposed records document current behavior pending governance.
 
-mod deviations;
+#[path = "deviations/registry.rs"]
+mod registry;
+#[path = "deviations/validator.rs"]
+mod validator;
 
-use deviations::registry::{self, ApprovalStatus};
-use deviations::validator;
+use registry::ApprovalStatus;
 use rbdc::db::{Connection, Driver};
 use rbdc_turso::TursoDriver;
 

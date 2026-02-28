@@ -1,22 +1,35 @@
+//! Row and metadata types for the Turso/libSQL adapter.
+//!
+//! Implements the `rbdc::db::Row` and `rbdc::db::MetaData` traits,
+//! matching the SQLite adapter's behavioral contract for value access,
+//! bounds checking, and metadata introspection.
+
+use crate::column::TursoColumn;
+use crate::value::{turso_value_to_rbs, TursoValue};
 use rbdc::db::{MetaData, Row};
 use rbdc::error::Error;
 use rbs::Value;
 use std::sync::Arc;
 
 /// Implementation of [`Row`] for Turso/libSQL.
+///
+/// Stores a vector of `TursoValue` (value + type metadata) and
+/// shared column metadata. Values are removed on access via `get()`,
+/// matching the SQLite adapter's `SqliteRow::try_take` behavior.
 #[derive(Debug)]
 pub struct TursoRow {
-    pub(crate) values: Vec<Value>,
-    pub(crate) column_names: Arc<Vec<String>>,
+    pub(crate) values: Vec<TursoValue>,
+    pub(crate) columns: Arc<Vec<TursoColumn>>,
 }
 
-// rbs::Value is Send, Arc<Vec<String>> is Send
+// TursoValue contains libsql::Value (Send) and TursoDataType (Copy).
+// Arc<Vec<TursoColumn>> is Send.
 unsafe impl Send for TursoRow {}
 
 impl Row for TursoRow {
     fn meta_data(&self) -> Box<dyn MetaData> {
         Box::new(TursoMetaData {
-            column_names: self.column_names.clone(),
+            columns: self.columns.clone(),
         })
     }
 
@@ -28,29 +41,32 @@ impl Row for TursoRow {
                 self.values.len()
             )));
         }
-        // Remove and return value (destructive access per rbdc Row contract)
-        Ok(self.values.remove(i))
+        // Remove and return value, consistent with SQLite adapter's
+        // `SqliteRow::try_take` which uses `self.values.remove(index)`.
+        let tv = self.values.remove(i);
+        Ok(turso_value_to_rbs(&tv))
     }
 }
 
 /// Metadata for a Turso/libSQL result set.
+///
+/// Exposes column count, name, and type APIs matching the
+/// `rbdc::db::MetaData` trait and SQLite adapter behavior.
 #[derive(Debug)]
 pub struct TursoMetaData {
-    pub(crate) column_names: Arc<Vec<String>>,
+    pub(crate) columns: Arc<Vec<TursoColumn>>,
 }
 
 impl MetaData for TursoMetaData {
     fn column_len(&self) -> usize {
-        self.column_names.len()
+        self.columns.len()
     }
 
     fn column_name(&self, i: usize) -> String {
-        self.column_names[i].clone()
+        self.columns[i].name.clone()
     }
 
-    fn column_type(&self, _i: usize) -> String {
-        // Turso does not expose static column type info at the metadata level.
-        // Return an empty string; type is determined dynamically from values.
-        String::new()
+    fn column_type(&self, i: usize) -> String {
+        self.columns[i].type_info.name().to_string()
     }
 }

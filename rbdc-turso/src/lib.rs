@@ -1,14 +1,15 @@
 //! **Turso/libSQL** database driver for rbdc.
 //!
-//! This crate provides a Turso database adapter using the native async API
-//! from the `libsql` SDK. It implements the standard `Driver`, `Connection`,
-//! `Row`, and `ConnectOptions` contracts from `rbdc`.
+//! This crate provides an async Turso/libSQL backend adapter with the same
+//! `Driver`, `Connection`, `Row`, and `ConnectOptions` contract as other
+//! rbdc adapters (e.g., `rbdc-sqlite`).
 //!
 //! ## Backend Selection
 //!
-//! Backend choice is fixed at adapter initialization/startup. Once configured,
-//! the Turso backend is used for all connections with no runtime switching
-//! or automatic fallback.
+//! Backend choice is fixed at adapter initialization/startup. There is:
+//! - **No runtime backend switching** between Turso and SQLite.
+//! - **No automatic fallback** to SQLite if Turso becomes unavailable.
+//! - **No data migration** between SQLite and Turso.
 //!
 //! ## Quick Start
 //!
@@ -24,6 +25,7 @@
 //! # }
 //! ```
 
+pub mod column;
 pub mod connection;
 pub mod driver;
 pub mod error;
@@ -31,8 +33,10 @@ pub mod options;
 pub mod query_result;
 pub mod row;
 pub mod statement;
+pub mod types;
 pub mod value;
 
+pub use column::TursoColumn;
 pub use connection::TursoConnection;
 pub use driver::TursoDriver;
 pub use driver::TursoDriver as Driver;

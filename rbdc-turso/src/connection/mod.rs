@@ -1,5 +1,12 @@
+//! Connection module for the Turso/libSQL adapter.
+//!
+//! Provides the `TursoConnection` type implementing `rbdc::db::Connection`.
+//! Query execution and value conversion logic is delegated to the `executor`
+//! submodule and the `value` module respectively.
+
+pub mod executor;
+
 use crate::error::TursoError;
-use crate::row::TursoRow;
 use futures_core::future::BoxFuture;
 use rbdc::db::{Connection, ExecResult, Row};
 use rbdc::error::Error;
@@ -27,52 +34,6 @@ impl std::fmt::Debug for TursoConnection {
     }
 }
 
-/// Convert an `rbs::Value` parameter to a `libsql::Value` for binding.
-fn value_to_libsql(v: &Value) -> Result<libsql::Value, Error> {
-    match v {
-        Value::Null => Ok(libsql::Value::Null),
-        Value::Bool(b) => Ok(libsql::Value::Integer(if *b { 1 } else { 0 })),
-        Value::I32(n) => Ok(libsql::Value::Integer(*n as i64)),
-        Value::I64(n) => Ok(libsql::Value::Integer(*n)),
-        Value::U32(n) => Ok(libsql::Value::Integer(*n as i64)),
-        Value::U64(n) => Ok(libsql::Value::Integer(*n as i64)),
-        Value::F32(f) => Ok(libsql::Value::Real(*f as f64)),
-        Value::F64(f) => Ok(libsql::Value::Real(*f)),
-        Value::String(s) => Ok(libsql::Value::Text(s.clone())),
-        Value::Binary(b) => Ok(libsql::Value::Blob(b.clone())),
-        Value::Ext(type_tag, val) => {
-            // Handle rbdc extension types by converting to string representation
-            match &**type_tag {
-                // Decimal, Uuid, and date/time types are stored as text
-                _ => match val.as_ref() {
-                    Value::String(s) => Ok(libsql::Value::Text(s.clone())),
-                    Value::I64(n) => Ok(libsql::Value::Integer(*n)),
-                    Value::U64(n) => Ok(libsql::Value::Integer(*n as i64)),
-                    Value::F64(f) => Ok(libsql::Value::Real(*f)),
-                    _ => Ok(libsql::Value::Text(val.to_string())),
-                },
-            }
-        }
-        Value::Array(_) | Value::Map(_) => {
-            // Serialize complex types as JSON text
-            Ok(libsql::Value::Text(
-                serde_json::to_string(v).unwrap_or_default(),
-            ))
-        }
-    }
-}
-
-/// Convert a `libsql::Value` to an `rbs::Value`.
-fn libsql_to_value(v: libsql::Value) -> Value {
-    match v {
-        libsql::Value::Null => Value::Null,
-        libsql::Value::Integer(n) => Value::I64(n),
-        libsql::Value::Real(f) => Value::F64(f),
-        libsql::Value::Text(s) => Value::String(s),
-        libsql::Value::Blob(b) => Value::Binary(b),
-    }
-}
-
 impl Connection for TursoConnection {
     fn get_rows(
         &mut self,
@@ -80,70 +41,12 @@ impl Connection for TursoConnection {
         params: Vec<Value>,
     ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
         let sql = sql.to_owned();
-        Box::pin(async move {
-            let libsql_params: Vec<libsql::Value> = params
-                .iter()
-                .map(value_to_libsql)
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let mut rows_result = self
-                .conn
-                .query(&sql, libsql_params)
-                .await
-                .map_err(|e| TursoError::from(e))?;
-
-            let column_count = rows_result.column_count() as usize;
-            let mut column_names: Vec<String> = Vec::with_capacity(column_count);
-            for i in 0..column_count {
-                let name = rows_result
-                    .column_name(i as i32)
-                    .unwrap_or_default()
-                    .to_string();
-                column_names.push(name);
-            }
-            let column_names = std::sync::Arc::new(column_names);
-
-            let mut data: Vec<Box<dyn Row>> = Vec::new();
-            while let Some(row) = rows_result.next().await.map_err(|e| TursoError::from(e))? {
-                let mut values = Vec::with_capacity(column_count);
-                for i in 0..column_count {
-                    let v = row
-                        .get_value(i as i32)
-                        .map_err(|e| TursoError::from(e))?;
-                    values.push(libsql_to_value(v));
-                }
-                data.push(Box::new(TursoRow {
-                    values,
-                    column_names: column_names.clone(),
-                }));
-            }
-            Ok(data)
-        })
+        Box::pin(async move { self.execute_query(&sql, params).await })
     }
 
     fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>> {
         let sql = sql.to_owned();
-        Box::pin(async move {
-            let libsql_params: Vec<libsql::Value> = params
-                .iter()
-                .map(value_to_libsql)
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let rows_affected = self
-                .conn
-                .execute(&sql, libsql_params)
-                .await
-                .map_err(|e| TursoError::from(e))?;
-
-            // libsql execute returns the number of rows changed.
-            // For last_insert_id we query last_insert_rowid().
-            let last_id = self.conn.last_insert_rowid();
-
-            Ok(ExecResult {
-                rows_affected,
-                last_insert_id: Value::U64(last_id as u64),
-            })
-        })
+        Box::pin(async move { self.execute_exec(&sql, params).await })
     }
 
     fn close(&mut self) -> BoxFuture<'_, Result<(), Error>> {
@@ -154,12 +57,11 @@ impl Connection for TursoConnection {
         Box::pin(async move {
             // Execute a simple query to verify the connection is alive.
             // If the Turso backend is unavailable, this will fail (no fallback).
-            // Use query() instead of execute() because SELECT returns rows.
             let mut rows = self
                 .conn
                 .query("SELECT 1", ())
                 .await
-                .map_err(|e| TursoError::from(e))?;
+                .map_err(TursoError::from)?;
             // Consume the single result row
             let _ = rows.next().await;
             Ok(())

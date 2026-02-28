@@ -8,6 +8,13 @@
 //! If any of these constraints are violated by future changes,
 //! these tests will fail, preventing accidental scope expansion.
 
+#[path = "deviations/registry.rs"]
+mod registry;
+#[path = "deviations/validator.rs"]
+mod validator;
+#[path = "conformance/release_gate.rs"]
+mod release_gate;
+
 use rbdc::db::{Connection, Driver};
 use rbdc_turso::{TursoConnectOptions, TursoDriver};
 
@@ -130,12 +137,37 @@ fn guard_placeholder_is_passthrough() {
 // Release Gate: Deviation Governance
 // ──────────────────────────────────────────────────────────────────────
 
-/// Verify the deviation registry is valid (structural integrity).
+/// Verify the deviation registry is structurally valid.
 /// This is a release-gate guard — if the registry becomes invalid,
 /// the release should be blocked.
 #[test]
 fn guard_deviation_registry_valid() {
-    // Re-validate from scope_guards to ensure the registry is checked
-    // even if deviation_tests are not run in the same suite.
-    // (The actual registry lives in tests/deviations/registry.rs)
+    let result = validator::validate_registry();
+    assert!(
+        result.is_valid(),
+        "Deviation registry is structurally invalid:\n{}",
+        result.errors.join("\n")
+    );
+}
+
+/// Verify the release gate evaluates without panicking and produces
+/// a coherent result tied to the deviation registry.
+#[test]
+fn guard_release_gate_evaluates() {
+    let result = release_gate::evaluate();
+    let report = release_gate::failure_report(&result);
+
+    // Gate must produce a non-empty summary
+    assert!(!result.summary.is_empty(), "release gate summary is empty");
+    assert!(!report.is_empty(), "release gate report is empty");
+
+    // No rejected deviations should exist
+    let has_rejected_failure = result
+        .failures
+        .iter()
+        .any(|f| f.contains("REJECTED"));
+    assert!(
+        !has_rejected_failure,
+        "Registry contains rejected deviations that must be resolved"
+    );
 }

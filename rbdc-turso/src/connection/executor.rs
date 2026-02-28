@@ -30,7 +30,10 @@ impl TursoConnection {
             .conn
             .query(sql, libsql_params)
             .await
-            .map_err(TursoError::from)?;
+            .map_err(|e| {
+                log::warn!("turso: query failed: {}", e);
+                TursoError::from(e)
+            })?;
 
         let column_count = rows_result.column_count() as usize;
 
@@ -86,7 +89,10 @@ impl TursoConnection {
             .conn
             .execute(sql, libsql_params)
             .await
-            .map_err(TursoError::from)?;
+            .map_err(|e| {
+                log::warn!("turso: exec failed: {}", e);
+                TursoError::from(e)
+            })?;
 
         let last_id = self.conn.last_insert_rowid();
 

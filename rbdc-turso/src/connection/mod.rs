@@ -55,14 +55,14 @@ impl Connection for TursoConnection {
 
     fn ping(&mut self) -> BoxFuture<'_, Result<(), Error>> {
         Box::pin(async move {
-            // Execute a simple query to verify the connection is alive.
-            // If the Turso backend is unavailable, this will fail (no fallback).
             let mut rows = self
                 .conn
                 .query("SELECT 1", ())
                 .await
-                .map_err(TursoError::from)?;
-            // Consume the single result row
+                .map_err(|e| {
+                    log::warn!("turso: ping failed — backend may be unavailable: {}", e);
+                    TursoError::from(e)
+                })?;
             let _ = rows.next().await;
             Ok(())
         })

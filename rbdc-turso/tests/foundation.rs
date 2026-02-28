@@ -22,9 +22,10 @@ fn test_parse_in_memory() {
 }
 
 #[test]
-fn test_parse_in_memory_short() {
-    let opts = rbdc_turso::TursoConnectOptions::from_str("turso::memory:").unwrap();
-    assert!(opts.is_in_memory());
+fn test_parse_rejects_turso_colon_without_slashes() {
+    // "turso:" without "//" is now rejected as an invalid scheme
+    let result = rbdc_turso::TursoConnectOptions::from_str("turso::memory:");
+    assert!(result.is_err(), "turso: without // should be rejected");
 }
 
 #[test]
@@ -58,6 +59,36 @@ fn test_parse_remote_without_token_parses_but_validation_fails() {
     assert!(
         err_msg.contains("auth_token"),
         "Error should mention auth_token requirement, got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn test_parse_remote_with_empty_token_validation_fails() {
+    let opts = rbdc_turso::TursoConnectOptions::from_str(
+        "turso://?url=libsql://my-db.turso.io&token=",
+    )
+    .unwrap();
+    assert!(opts.is_remote());
+
+    let result = opts.validate();
+    assert!(result.is_err());
+    let err_msg = format!("{}", result.unwrap_err());
+    assert!(
+        err_msg.contains("must not be empty"),
+        "Error should mention empty auth_token, got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn test_parse_query_without_url_or_path_fails() {
+    let result = rbdc_turso::TursoConnectOptions::from_str("turso://?token=secret");
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("no database URL or path provided"),
+        "Error should mention missing database URL/path, got: {}",
         err_msg
     );
 }
@@ -109,6 +140,15 @@ fn test_validate_remote_with_token_succeeds() {
         .url("libsql://my-db.turso.io")
         .auth_token("my-secret-token");
     assert!(opts.validate().is_ok());
+}
+
+#[test]
+fn test_validate_remote_with_whitespace_token_fails() {
+    let opts = rbdc_turso::TursoConnectOptions::new()
+        .url("libsql://my-db.turso.io")
+        .auth_token("   ");
+    let result = opts.validate();
+    assert!(result.is_err());
 }
 
 #[test]
@@ -267,5 +307,29 @@ async fn test_connect_remote_without_token_fails_at_startup() {
     assert!(
         result.is_err(),
         "Remote connection without token must fail at startup"
+    );
+}
+
+#[tokio::test]
+async fn test_connect_local_with_missing_parent_fails() {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+
+    let mut missing_parent = std::env::temp_dir();
+    missing_parent.push(format!("rbdc_turso_missing_parent_{}_{}", std::process::id(), ts));
+    let _ = std::fs::remove_dir_all(&missing_parent);
+
+    let db_path = missing_parent.join("db.sqlite");
+    let opts =
+        rbdc_turso::TursoConnectOptions::new().url(db_path.to_string_lossy().to_string());
+
+    let result = opts.connect_turso().await;
+    assert!(
+        result.is_err(),
+        "connecting to a local DB file in a missing parent directory should fail"
     );
 }

@@ -45,3 +45,16 @@ impl TursoColumn {
         self.type_info
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_column_accessors() {
+        let col = TursoColumn::new("id".to_string(), 2, TursoDataType::Integer);
+        assert_eq!(col.name(), "id");
+        assert_eq!(col.ordinal(), 2);
+        assert_eq!(col.type_info(), TursoDataType::Integer);
+    }
+}

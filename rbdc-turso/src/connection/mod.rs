@@ -22,11 +22,9 @@ pub struct TursoConnection {
     #[allow(dead_code)]
     pub(crate) db: libsql::Database,
     pub(crate) conn: libsql::Connection,
+    /// Whether to attempt JSON detection on TEXT values.
+    pub(crate) json_detect: bool,
 }
-
-// libsql::Connection is Send+Sync
-unsafe impl Send for TursoConnection {}
-unsafe impl Sync for TursoConnection {}
 
 impl std::fmt::Debug for TursoConnection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -63,7 +61,10 @@ impl Connection for TursoConnection {
                     log::warn!("turso: ping failed — backend may be unavailable: {}", e);
                     TursoError::from(e)
                 })?;
-            let _ = rows.next().await;
+            let _ = rows.next().await.map_err(|e| {
+                log::warn!("turso: ping failed while consuming probe result row: {}", e);
+                TursoError::from(e)
+            })?;
             Ok(())
         })
     }

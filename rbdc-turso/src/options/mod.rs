@@ -41,6 +41,16 @@ pub struct TursoConnectOptions {
 
     /// Whether this is an in-memory database.
     pub(crate) in_memory: bool,
+
+    /// Whether to attempt JSON detection on TEXT values.
+    ///
+    /// When `false` (default), all TEXT values are returned as `Value::String`.
+    /// When `true`, TEXT values that look like JSON (objects, arrays, or the
+    /// literal `"null"`) are parsed and returned as structured `Value` types.
+    ///
+    /// This is opt-in because the heuristic can cause data loss: the TEXT
+    /// string `"null"` becomes indistinguishable from SQL NULL.
+    pub(crate) json_detect: bool,
 }
 
 impl Default for TursoConnectOptions {
@@ -56,6 +66,7 @@ impl TursoConnectOptions {
             url: ":memory:".to_string(),
             auth_token: None,
             in_memory: true,
+            json_detect: false,
         }
     }
 
@@ -85,6 +96,21 @@ impl TursoConnectOptions {
         self.in_memory
     }
 
+    /// Enable or disable automatic JSON detection on TEXT values.
+    ///
+    /// When enabled, TEXT values that look like JSON objects, arrays, or the
+    /// literal `"null"` are parsed into structured `Value` types. Disabled
+    /// by default.
+    pub fn json_detect(mut self, enabled: bool) -> Self {
+        self.json_detect = enabled;
+        self
+    }
+
+    /// Returns whether JSON detection is enabled.
+    pub fn is_json_detect(&self) -> bool {
+        self.json_detect
+    }
+
     /// Returns whether this configuration targets a remote Turso endpoint.
     pub fn is_remote(&self) -> bool {
         self.url.starts_with("libsql://")
@@ -104,10 +130,17 @@ impl TursoConnectOptions {
             ));
         }
 
-        // Remote connections require an auth token
-        if self.is_remote() && self.auth_token.is_none() {
+        // Remote connections require a non-empty auth token
+        let has_auth_token = self
+            .auth_token
+            .as_deref()
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+            .is_some();
+
+        if self.is_remote() && !has_auth_token {
             return Err(TursoError::configuration(
-                "auth_token is required for remote Turso connections (libsql:// or https:// URLs)",
+                "auth_token is required and must not be empty for remote Turso connections (libsql:// or https:// URLs)",
             ));
         }
 
@@ -121,10 +154,17 @@ impl FromStr for TursoConnectOptions {
     fn from_str(uri: &str) -> Result<Self, Self::Err> {
         let mut options = Self::new();
 
-        // Strip scheme prefix
-        let rest = uri
-            .trim_start_matches("turso://")
-            .trim_start_matches("turso:");
+        // Strip scheme prefix with strict validation
+        let rest = if uri.starts_with("turso://") {
+            &uri["turso://".len()..]
+        } else if uri.starts_with("turso:") {
+            return Err(Error::from(
+                "turso configuration: invalid URI scheme `turso:`, expected `turso://`",
+            ));
+        } else {
+            // No turso scheme prefix — treat as bare path/URL
+            uri
+        };
 
         // Check for in-memory
         if rest == ":memory:" || rest.is_empty() {
@@ -141,6 +181,7 @@ impl FromStr for TursoConnectOptions {
         // Parse query parameters
         let mut explicit_url: Option<String> = None;
         let mut token: Option<String> = None;
+        let mut json_detect: Option<bool> = None;
 
         if let Some(params) = query_part {
             for (key, value) in url::form_urlencoded::parse(params.as_bytes()) {
@@ -150,6 +191,9 @@ impl FromStr for TursoConnectOptions {
                     }
                     "token" => {
                         token = Some(value.into_owned());
+                    }
+                    "json_detect" => {
+                        json_detect = Some(matches!(&*value, "true" | "1"));
                     }
                     _ => {
                         return Err(Error::from(format!(
@@ -174,8 +218,117 @@ impl FromStr for TursoConnectOptions {
 
         options.in_memory = options.url == ":memory:";
         options.auth_token = token;
+        options.json_detect = json_detect.unwrap_or(false);
 
         Ok(options)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_turso_scheme_memory() {
+        let opts: TursoConnectOptions = "turso://:memory:".parse().unwrap();
+        assert!(opts.is_in_memory());
+        assert_eq!(opts.url, ":memory:");
+    }
+
+    #[test]
+    fn parse_turso_scheme_empty() {
+        let opts: TursoConnectOptions = "turso://".parse().unwrap();
+        assert!(opts.is_in_memory());
+        assert_eq!(opts.url, ":memory:");
+    }
+
+    #[test]
+    fn parse_bare_memory() {
+        let opts: TursoConnectOptions = ":memory:".parse().unwrap();
+        assert!(opts.is_in_memory());
+    }
+
+    #[test]
+    fn parse_bare_file_path() {
+        let opts: TursoConnectOptions = "/tmp/test.db".parse().unwrap();
+        assert!(!opts.is_in_memory());
+        assert_eq!(opts.url, "/tmp/test.db");
+    }
+
+    #[test]
+    fn parse_turso_scheme_with_url_and_token() {
+        let opts: TursoConnectOptions =
+            "turso://?url=libsql://mydb.turso.io&token=secret".parse().unwrap();
+        assert_eq!(opts.url, "libsql://mydb.turso.io");
+        assert_eq!(opts.auth_token.as_deref(), Some("secret"));
+        assert!(opts.is_remote());
+    }
+
+    #[test]
+    fn parse_turso_scheme_host_path() {
+        let opts: TursoConnectOptions = "turso://myhost:8080".parse().unwrap();
+        assert_eq!(opts.url, "myhost:8080");
+        assert!(!opts.is_in_memory());
+    }
+
+    #[test]
+    fn parse_rejects_turso_colon_without_slashes() {
+        let result: Result<TursoConnectOptions, _> = "turso:some/path".parse();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid URI scheme"), "got: {}", err);
+    }
+
+    #[test]
+    fn parse_rejects_turso_colon_memory() {
+        let result: Result<TursoConnectOptions, _> = "turso::memory:".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_rejects_unknown_query_param() {
+        let result: Result<TursoConnectOptions, _> =
+            "turso://?url=libsql://host&bogus=value".parse();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("unknown query parameter"), "got: {}", err);
+    }
+
+    #[test]
+    fn parse_rejects_empty_url_with_only_query() {
+        // No path and no explicit url param
+        let result: Result<TursoConnectOptions, _> = "turso://?token=secret".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_json_detect_enabled() {
+        let opts: TursoConnectOptions =
+            "turso://:memory:?json_detect=true".parse().unwrap();
+        assert!(opts.is_json_detect());
+        assert!(opts.is_in_memory());
+    }
+
+    #[test]
+    fn parse_json_detect_disabled_explicitly() {
+        let opts: TursoConnectOptions =
+            "turso://:memory:?json_detect=false".parse().unwrap();
+        assert!(!opts.is_json_detect());
+    }
+
+    #[test]
+    fn parse_json_detect_default_off() {
+        let opts: TursoConnectOptions = "turso://:memory:".parse().unwrap();
+        assert!(!opts.is_json_detect());
+    }
+
+    #[test]
+    fn builder_json_detect() {
+        let opts = TursoConnectOptions::new().json_detect(true);
+        assert!(opts.is_json_detect());
+
+        let opts = TursoConnectOptions::new().json_detect(false);
+        assert!(!opts.is_json_detect());
     }
 }
 

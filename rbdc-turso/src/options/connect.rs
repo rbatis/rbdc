@@ -56,6 +56,10 @@ impl TursoConnectOptions {
         })?;
 
         log::debug!("turso: connection established successfully");
-        Ok(TursoConnection { db, conn })
+        Ok(TursoConnection {
+            db,
+            conn,
+            json_detect: self.json_detect,
+        })
     }
 }

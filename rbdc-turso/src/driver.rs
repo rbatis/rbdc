@@ -34,11 +34,13 @@ impl Driver for TursoDriver {
         &'a self,
         opt: &'a dyn ConnectOptions,
     ) -> BoxFuture<'a, Result<Box<dyn Connection>, Error>> {
-        let opt: &TursoConnectOptions = opt.downcast_ref().unwrap();
-        Box::pin(async move {
-            let conn = opt.connect().await?;
-            Ok(conn)
-        })
+        match opt.downcast_ref::<TursoConnectOptions>() {
+            Some(opt) => Box::pin(async move {
+                let conn = opt.connect().await?;
+                Ok(conn)
+            }),
+            None => Box::pin(async move { Err(Error::from("downcast_ref failure")) }),
+        }
     }
 
     fn default_option(&self) -> Box<dyn ConnectOptions> {

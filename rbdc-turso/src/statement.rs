@@ -41,3 +41,15 @@ impl TursoStatement {
         &self.columns
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_statement_new_and_accessors() {
+        let stmt = TursoStatement::new("SELECT 1");
+        assert_eq!(stmt.sql(), "SELECT 1");
+        assert!(stmt.columns().is_empty());
+    }
+}

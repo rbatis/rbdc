@@ -9,14 +9,11 @@ use rbs::Value;
 
 /// Decode a text value from a libsql text string.
 ///
-/// If the string looks like JSON (object, array, or "null"), it is parsed
-/// as JSON and returned as the corresponding `rbs::Value` variant. Otherwise,
-/// it is returned as `Value::String`.
-///
-/// This matches the SQLite adapter's `Decode for Value` behavior for
-/// `DataType::Text`.
-pub fn decode_text(s: &str) -> Value {
-    if is_json_string(s) {
+/// When `json_detect` is `true`, strings that look like JSON (object,
+/// array, or "null") are parsed and returned as structured `Value` types.
+/// When `false`, all text is returned as `Value::String`.
+pub fn decode_text(s: &str, json_detect: bool) -> Value {
+    if json_detect && is_json_string(s) {
         if let Ok(v) = serde_json::from_str::<Value>(s) {
             return v;
         }
@@ -36,36 +33,56 @@ mod tests {
 
     #[test]
     fn test_decode_plain_text() {
-        assert_eq!(decode_text("hello"), Value::String("hello".to_string()));
+        assert_eq!(
+            decode_text("hello", false),
+            Value::String("hello".to_string())
+        );
     }
 
     #[test]
     fn test_decode_empty_string() {
-        assert_eq!(decode_text(""), Value::String(String::new()));
+        assert_eq!(decode_text("", false), Value::String(String::new()));
     }
 
     #[test]
-    fn test_decode_json_object() {
-        let result = decode_text(r#"{"key":"value"}"#);
+    fn test_decode_json_disabled() {
+        // With json_detect=false, JSON-shaped text stays as String
+        assert_eq!(
+            decode_text(r#"{"key":"value"}"#, false),
+            Value::String(r#"{"key":"value"}"#.to_string())
+        );
+        assert_eq!(
+            decode_text("[1,2,3]", false),
+            Value::String("[1,2,3]".to_string())
+        );
+        assert_eq!(
+            decode_text("null", false),
+            Value::String("null".to_string())
+        );
+    }
+
+    #[test]
+    fn test_decode_json_object_when_enabled() {
+        let result = decode_text(r#"{"key":"value"}"#, true);
         assert!(matches!(result, Value::Map(_)));
     }
 
     #[test]
-    fn test_decode_json_array() {
-        let result = decode_text("[1,2,3]");
+    fn test_decode_json_array_when_enabled() {
+        let result = decode_text("[1,2,3]", true);
         assert!(matches!(result, Value::Array(_)));
     }
 
     #[test]
-    fn test_decode_json_null() {
-        let result = decode_text("null");
+    fn test_decode_json_null_when_enabled() {
+        let result = decode_text("null", true);
         assert_eq!(result, Value::Null);
     }
 
     #[test]
     fn test_decode_invalid_json_stays_string() {
-        // Starts with { but is not valid JSON
-        let result = decode_text("{not valid json}");
+        // Starts with { but is not valid JSON — falls back to String even with json_detect
+        let result = decode_text("{not valid json}", true);
         assert_eq!(result, Value::String("{not valid json}".to_string()));
     }
 

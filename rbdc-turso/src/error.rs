@@ -76,3 +76,41 @@ impl From<TursoError> for rbdc::Error {
         Self::from(e.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_configuration_and_connection_helpers() {
+        let cfg = TursoError::configuration("bad config");
+        assert_eq!(cfg.message(), "bad config");
+        assert_eq!(cfg.to_string(), "turso configuration error: bad config");
+        assert!(!cfg.is_unavailable());
+        assert!(StdError::source(&cfg).is_none());
+
+        let conn = TursoError::connection("offline");
+        assert_eq!(conn.message(), "offline");
+        assert_eq!(conn.to_string(), "turso connection error: offline");
+        assert!(conn.is_unavailable());
+        assert!(StdError::source(&conn).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_libsql_variant_source_and_message() {
+        let db = libsql::Builder::new_local(":memory:")
+            .build()
+            .await
+            .unwrap();
+        let conn = db.connect().unwrap();
+
+        let libsql_err = conn.execute("NOT VALID SQL", ()).await.unwrap_err();
+        let err = TursoError::from(libsql_err);
+
+        assert!(matches!(err, TursoError::Libsql(_)));
+        assert!(err.is_unavailable());
+        assert!(err.message().contains("SQL") || err.message().contains("syntax"));
+        assert!(StdError::source(&err).is_some());
+        assert!(err.to_string().starts_with("turso error:"));
+    }
+}

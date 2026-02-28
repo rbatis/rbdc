@@ -75,6 +75,47 @@ async fn test_connect_invalid_remote_fails() {
     );
 }
 
+#[tokio::test]
+async fn test_connect_local_file() {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let mut path = std::env::temp_dir();
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    path.push(format!("rbdc_turso_local_{}_{}.db", std::process::id(), ts));
+
+    let uri = format!("turso://{}", path.display());
+    let driver = TursoDriver {};
+    let mut conn = driver
+        .connect(&uri)
+        .await
+        .expect("local-file connection should succeed");
+
+    conn.exec(
+        "CREATE TABLE local_file_test (id INTEGER PRIMARY KEY, name TEXT)",
+        vec![],
+    )
+    .await
+    .unwrap();
+    conn.exec(
+        "INSERT INTO local_file_test (id, name) VALUES (1, 'local')",
+        vec![],
+    )
+    .await
+    .unwrap();
+
+    let rows = conn
+        .get_rows("SELECT id, name FROM local_file_test", vec![])
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+
+    conn.close().await.unwrap();
+    let _ = std::fs::remove_file(&path);
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Ping
 // ──────────────────────────────────────────────────────────────────────
@@ -144,7 +185,7 @@ async fn test_exec_insert() {
         .expect("INSERT should succeed");
     assert_eq!(result.rows_affected, 1);
     // last_insert_id should be the rowid
-    assert_eq!(result.last_insert_id, rbs::Value::U64(1));
+    assert_eq!(result.last_insert_id, rbs::Value::I64(1));
 }
 
 #[tokio::test]
@@ -161,7 +202,7 @@ async fn test_exec_insert_multiple() {
         .await
         .unwrap();
     assert_eq!(result.rows_affected, 1);
-    assert_eq!(result.last_insert_id, rbs::Value::U64(3));
+    assert_eq!(result.last_insert_id, rbs::Value::I64(3));
 }
 
 #[tokio::test]
@@ -211,7 +252,7 @@ async fn test_exec_with_params() {
         .await
         .expect("parameterized INSERT should succeed");
     assert_eq!(result.rows_affected, 1);
-    assert_eq!(result.last_insert_id, rbs::Value::U64(42));
+    assert_eq!(result.last_insert_id, rbs::Value::I64(42));
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -280,7 +321,7 @@ async fn test_get_rows_values() {
     assert_eq!(rows.len(), 1);
 
     let row = &mut rows[0];
-    // get() is destructive (removes from internal vec), read in reverse order
+    // get() consumes values via Option::take() — any access order works
     let score = row.get(2).unwrap();
     let name = row.get(1).unwrap();
     let id = row.get(0).unwrap();

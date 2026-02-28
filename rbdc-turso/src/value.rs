@@ -125,19 +125,22 @@ impl TursoValue {
 
 /// Convert a `TursoValue` to `rbs::Value`.
 ///
-/// Matches the SQLite adapter's `Decode for Value` behavior:
 /// - Null → `Value::Null`
 /// - Integer → `Value::I64`
 /// - Real → `Value::F64`
-/// - Text → `Value::String` (or deserialized JSON for JSON-shaped strings)
+/// - Text → `Value::String` (or deserialized JSON when `json_detect` is true)
 /// - Blob → `Value::Binary`
-pub fn turso_value_to_rbs(tv: &TursoValue) -> Value {
+///
+/// When `json_detect` is `false` (default), all TEXT values become
+/// `Value::String` unconditionally. When `true`, TEXT values that look
+/// like JSON objects, arrays, or the literal `"null"` are parsed.
+pub fn turso_value_to_rbs(tv: &TursoValue, json_detect: bool) -> Value {
     match &tv.inner {
         libsql::Value::Null => Value::Null,
         libsql::Value::Integer(n) => Value::I64(*n),
         libsql::Value::Real(f) => Value::F64(*f),
         libsql::Value::Text(s) => {
-            if is_json_string(s) {
+            if json_detect && is_json_string(s) {
                 if let Ok(v) = serde_json::from_str::<Value>(s) {
                     v
                 } else {
@@ -152,8 +155,10 @@ pub fn turso_value_to_rbs(tv: &TursoValue) -> Value {
 }
 
 /// Convert `libsql::Value` directly to `rbs::Value` (convenience wrapper).
+///
+/// JSON detection is disabled — TEXT values always become `Value::String`.
 pub fn libsql_to_value(v: libsql::Value) -> Value {
-    turso_value_to_rbs(&TursoValue::new(v))
+    turso_value_to_rbs(&TursoValue::new(v), false)
 }
 
 /// Convert `rbs::Value` to `libsql::Value` for parameter binding.
@@ -214,24 +219,24 @@ mod tests {
         let tv = TursoValue::new(libsql::Value::Null);
         assert!(tv.is_null());
         assert_eq!(tv.data_type(), TursoDataType::Null);
-        assert_eq!(turso_value_to_rbs(&tv), Value::Null);
+        assert_eq!(turso_value_to_rbs(&tv, false), Value::Null);
     }
 
     #[test]
     fn test_integer_roundtrip() {
         let tv = TursoValue::new(libsql::Value::Integer(42));
         assert_eq!(tv.data_type(), TursoDataType::Integer);
-        assert_eq!(turso_value_to_rbs(&tv), Value::I64(42));
+        assert_eq!(turso_value_to_rbs(&tv, false), Value::I64(42));
     }
 
     #[test]
     fn test_i64_extremes() {
         assert_eq!(
-            turso_value_to_rbs(&TursoValue::new(libsql::Value::Integer(i64::MAX))),
+            turso_value_to_rbs(&TursoValue::new(libsql::Value::Integer(i64::MAX)), false),
             Value::I64(i64::MAX)
         );
         assert_eq!(
-            turso_value_to_rbs(&TursoValue::new(libsql::Value::Integer(i64::MIN))),
+            turso_value_to_rbs(&TursoValue::new(libsql::Value::Integer(i64::MIN)), false),
             Value::I64(i64::MIN)
         );
     }
@@ -240,38 +245,60 @@ mod tests {
     fn test_real_roundtrip() {
         let tv = TursoValue::new(libsql::Value::Real(3.14));
         assert_eq!(tv.data_type(), TursoDataType::Real);
-        assert_eq!(turso_value_to_rbs(&tv), Value::F64(3.14));
+        assert_eq!(turso_value_to_rbs(&tv, false), Value::F64(3.14));
     }
 
     #[test]
     fn test_text_plain() {
         let tv = TursoValue::new(libsql::Value::Text("hello".into()));
-        assert_eq!(turso_value_to_rbs(&tv), Value::String("hello".into()));
+        assert_eq!(
+            turso_value_to_rbs(&tv, false),
+            Value::String("hello".into())
+        );
     }
 
     #[test]
-    fn test_text_json_object() {
+    fn test_text_json_disabled_by_default() {
+        // With json_detect=false, JSON-shaped text stays as String
         let tv = TursoValue::new(libsql::Value::Text(r#"{"key":"value"}"#.into()));
-        assert!(matches!(turso_value_to_rbs(&tv), Value::Map(_)));
-    }
+        assert_eq!(
+            turso_value_to_rbs(&tv, false),
+            Value::String(r#"{"key":"value"}"#.into())
+        );
 
-    #[test]
-    fn test_text_json_array() {
         let tv = TursoValue::new(libsql::Value::Text("[1,2,3]".into()));
-        assert!(matches!(turso_value_to_rbs(&tv), Value::Array(_)));
+        assert_eq!(
+            turso_value_to_rbs(&tv, false),
+            Value::String("[1,2,3]".into())
+        );
+
+        let tv = TursoValue::new(libsql::Value::Text("null".into()));
+        assert_eq!(turso_value_to_rbs(&tv, false), Value::String("null".into()));
     }
 
     #[test]
-    fn test_text_json_null() {
+    fn test_text_json_object_when_enabled() {
+        let tv = TursoValue::new(libsql::Value::Text(r#"{"key":"value"}"#.into()));
+        assert!(matches!(turso_value_to_rbs(&tv, true), Value::Map(_)));
+    }
+
+    #[test]
+    fn test_text_json_array_when_enabled() {
+        let tv = TursoValue::new(libsql::Value::Text("[1,2,3]".into()));
+        assert!(matches!(turso_value_to_rbs(&tv, true), Value::Array(_)));
+    }
+
+    #[test]
+    fn test_text_json_null_when_enabled() {
         let tv = TursoValue::new(libsql::Value::Text("null".into()));
-        assert_eq!(turso_value_to_rbs(&tv), Value::Null);
+        assert_eq!(turso_value_to_rbs(&tv, true), Value::Null);
     }
 
     #[test]
     fn test_blob_roundtrip() {
         let data = vec![0xDE, 0xAD, 0xBE, 0xEF];
         let tv = TursoValue::new(libsql::Value::Blob(data.clone()));
-        assert_eq!(turso_value_to_rbs(&tv), Value::Binary(data));
+        assert_eq!(turso_value_to_rbs(&tv, false), Value::Binary(data));
     }
 
     #[test]
@@ -325,5 +352,94 @@ mod tests {
         assert!(is_json_string("[1,2]"));
         assert!(!is_json_string("hello"));
         assert!(!is_json_string(""));
+    }
+
+    #[test]
+    fn test_data_type_display_and_accessors() {
+        assert_eq!(format!("{}", TursoDataType::Null), "NULL");
+
+        let int_v = TursoValue::new(libsql::Value::Integer(42));
+        assert_eq!(int_v.as_integer(), Some(42));
+        assert_eq!(int_v.as_real(), None);
+
+        let real_v = TursoValue::new(libsql::Value::Real(1.5));
+        assert_eq!(real_v.as_real(), Some(1.5));
+        assert_eq!(real_v.as_text(), None);
+
+        let text_v = TursoValue::new(libsql::Value::Text("abc".into()));
+        assert_eq!(text_v.as_text(), Some("abc"));
+
+        let blob_v = TursoValue::new(libsql::Value::Blob(vec![1, 2, 3]));
+        assert_eq!(blob_v.as_blob(), Some(&[1, 2, 3][..]));
+    }
+
+    #[test]
+    fn test_libsql_to_value_wrapper() {
+        assert_eq!(libsql_to_value(libsql::Value::Integer(7)), Value::I64(7));
+    }
+
+    #[test]
+    fn test_value_to_libsql_ext_date_like_tags() {
+        for tag in ["Date", "DateTime", "Time", "Decimal", "Uuid"] {
+            let out = value_to_libsql(&Value::Ext(
+                tag,
+                Box::new(Value::String("2026-01-01".to_string())),
+            ))
+            .unwrap();
+            assert!(matches!(out, libsql::Value::Text(ref s) if s == "2026-01-01"));
+        }
+    }
+
+    #[test]
+    fn test_value_to_libsql_ext_timestamp_and_json() {
+        let ts = value_to_libsql(&Value::Ext("Timestamp", Box::new(Value::I64(123)))).unwrap();
+        assert!(matches!(ts, libsql::Value::Integer(123)));
+
+        let ts_default = value_to_libsql(&Value::Ext(
+            "Timestamp",
+            Box::new(Value::String("x".into())),
+        ))
+        .unwrap();
+        assert!(matches!(ts_default, libsql::Value::Integer(0)));
+
+        let json_binary = value_to_libsql(&Value::Ext(
+            "Json",
+            Box::new(Value::Binary(vec![0xCA, 0xFE])),
+        ))
+        .unwrap();
+        assert!(matches!(json_binary, libsql::Value::Blob(ref b) if b == &vec![0xCA, 0xFE]));
+
+        let json_text = value_to_libsql(&Value::Ext(
+            "Json",
+            Box::new(Value::String("{\"a\":1}".into())),
+        ))
+        .unwrap();
+        assert!(matches!(json_text, libsql::Value::Blob(_)));
+    }
+
+    #[test]
+    fn test_value_to_libsql_ext_unknown_and_collections() {
+        let e1 =
+            value_to_libsql(&Value::Ext("Other", Box::new(Value::String("s".into())))).unwrap();
+        assert!(matches!(e1, libsql::Value::Text(ref s) if s == "s"));
+
+        let e2 = value_to_libsql(&Value::Ext("Other", Box::new(Value::I64(-7)))).unwrap();
+        assert!(matches!(e2, libsql::Value::Integer(-7)));
+
+        let e3 = value_to_libsql(&Value::Ext("Other", Box::new(Value::U64(9)))).unwrap();
+        assert!(matches!(e3, libsql::Value::Integer(9)));
+
+        let e4 = value_to_libsql(&Value::Ext("Other", Box::new(Value::F64(2.5)))).unwrap();
+        assert!(matches!(e4, libsql::Value::Real(f) if (f - 2.5).abs() < f64::EPSILON));
+
+        let e5 = value_to_libsql(&Value::Ext("Other", Box::new(Value::Null))).unwrap();
+        assert!(matches!(e5, libsql::Value::Text(_)));
+
+        let arr = value_to_libsql(&Value::Array(vec![Value::I64(1)])).unwrap();
+        assert!(matches!(arr, libsql::Value::Text(ref s) if s == "[1]"));
+
+        let map: Value = serde_json::from_str(r#"{"k":1}"#).unwrap();
+        let map_out = value_to_libsql(&map).unwrap();
+        assert!(matches!(map_out, libsql::Value::Text(ref s) if s.contains("\"k\"")));
     }
 }

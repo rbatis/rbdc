@@ -64,11 +64,12 @@ impl TursoConnection {
                     libsql::Value::Null => columns[i].type_info,
                     other => TursoDataType::from(other),
                 };
-                values.push(TursoValue::with_type(v, data_type));
+                values.push(Some(TursoValue::with_type(v, data_type)));
             }
             data.push(Box::new(TursoRow {
                 values,
                 columns: columns.clone(),
+                json_detect: self.json_detect,
             }));
         }
         Ok(data)

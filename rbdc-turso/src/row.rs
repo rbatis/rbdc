@@ -13,18 +13,17 @@ use std::sync::Arc;
 
 /// Implementation of [`Row`] for Turso/libSQL.
 ///
-/// Stores a vector of `TursoValue` (value + type metadata) and
-/// shared column metadata. Values are removed on access via `get()`,
-/// matching the SQLite adapter's `SqliteRow::try_take` behavior.
+/// Stores a vector of `Option<TursoValue>` (value + type metadata) and
+/// shared column metadata. Values are consumed on access via `get()`,
+/// using `Option::take()` for index-stable destructive reads (matching
+/// the MySQL and Postgres adapter pattern).
 #[derive(Debug)]
 pub struct TursoRow {
-    pub(crate) values: Vec<TursoValue>,
+    pub(crate) values: Vec<Option<TursoValue>>,
     pub(crate) columns: Arc<Vec<TursoColumn>>,
+    /// Whether to attempt JSON detection on TEXT values.
+    pub(crate) json_detect: bool,
 }
-
-// TursoValue contains libsql::Value (Send) and TursoDataType (Copy).
-// Arc<Vec<TursoColumn>> is Send.
-unsafe impl Send for TursoRow {}
 
 impl Row for TursoRow {
     fn meta_data(&self) -> Box<dyn MetaData> {
@@ -41,10 +40,12 @@ impl Row for TursoRow {
                 self.values.len()
             )));
         }
-        // Remove and return value, consistent with SQLite adapter's
-        // `SqliteRow::try_take` which uses `self.values.remove(index)`.
-        let tv = self.values.remove(i);
-        Ok(turso_value_to_rbs(&tv))
+        // Take the value, leaving None in place. Index-stable unlike
+        // Vec::remove(). Matches the MySQL/Postgres adapter pattern.
+        match self.values[i].take() {
+            Some(tv) => Ok(turso_value_to_rbs(&tv, self.json_detect)),
+            None => Err(Error::from(format!("column index {} already consumed", i))),
+        }
     }
 }
 

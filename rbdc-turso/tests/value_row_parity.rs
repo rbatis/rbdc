@@ -249,11 +249,20 @@ async fn par_005_blob_values() {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// PAR-006: JSON text decoding (parity with SQLite is_json_string)
+// PAR-006: JSON text decoding (default: off, opt-in via json_detect)
 // ────────────────────────────────────────────────────────────────────
 
+/// Helper: create an in-memory Turso connection with json_detect enabled.
+async fn turso_conn_json() -> Box<dyn Connection> {
+    let driver = rbdc_turso::TursoDriver {};
+    driver
+        .connect("turso://:memory:?json_detect=true")
+        .await
+        .unwrap()
+}
+
 #[tokio::test]
-async fn par_006_json_text_decoding() {
+async fn par_006_json_text_default_no_detection() {
     let mut conn = turso_conn().await;
     conn.exec(
         "CREATE TABLE par006 (id INTEGER PRIMARY KEY, val TEXT)",
@@ -263,18 +272,18 @@ async fn par_006_json_text_decoding() {
     .unwrap();
 
     // Store JSON-shaped strings
-    let cases: Vec<(String, bool, &str)> = vec![
-        (r#"{"key":"value"}"#.to_string(), true, "json_object"),
-        ("[1,2,3]".to_string(), true, "json_array"),
-        ("null".to_string(), true, "json_null"),
-        ("plain text".to_string(), false, "plain_text"),
-        ("123".to_string(), false, "numeric_string"),
+    let cases: Vec<&str> = vec![
+        r#"{"key":"value"}"#,
+        "[1,2,3]",
+        "null",
+        "plain text",
+        "123",
     ];
 
-    for (i, (val, _, _)) in cases.iter().enumerate() {
+    for (i, val) in cases.iter().enumerate() {
         conn.exec(
             "INSERT INTO par006 (id, val) VALUES (?, ?)",
-            vec![Value::I64(i as i64 + 1), Value::String(val.clone())],
+            vec![Value::I64(i as i64 + 1), Value::String(val.to_string())],
         )
         .await
         .unwrap();
@@ -286,23 +295,69 @@ async fn par_006_json_text_decoding() {
         .unwrap();
     assert_eq!(rows.len(), cases.len());
 
+    // With json_detect=false (default), ALL text comes back as String
+    for (i, expected) in cases.iter().enumerate() {
+        assert_eq!(
+            rows[i].get(0).unwrap(),
+            Value::String(expected.to_string()),
+            "PAR-006: all text should be String when json_detect is off (index {})",
+            i
+        );
+    }
+
+    conn.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn par_006_json_text_with_detection_enabled() {
+    let mut conn = turso_conn_json().await;
+    conn.exec(
+        "CREATE TABLE par006j (id INTEGER PRIMARY KEY, val TEXT)",
+        vec![],
+    )
+    .await
+    .unwrap();
+
+    let cases: Vec<&str> = vec![
+        r#"{"key":"value"}"#,
+        "[1,2,3]",
+        "null",
+        "plain text",
+        "123",
+    ];
+
+    for (i, val) in cases.iter().enumerate() {
+        conn.exec(
+            "INSERT INTO par006j (id, val) VALUES (?, ?)",
+            vec![Value::I64(i as i64 + 1), Value::String(val.to_string())],
+        )
+        .await
+        .unwrap();
+    }
+
+    let mut rows = conn
+        .get_rows("SELECT val FROM par006j ORDER BY id", vec![])
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), cases.len());
+
     // JSON object → deserialized as Map
-    assert!(matches!(rows[0].get(0).unwrap(), Value::Map(_)), "PAR-006: json_object");
+    assert!(matches!(rows[0].get(0).unwrap(), Value::Map(_)), "PAR-006j: json_object");
     // JSON array → deserialized as Array
-    assert!(matches!(rows[1].get(0).unwrap(), Value::Array(_)), "PAR-006: json_array");
-    // "null" → deserialized as Null
-    assert_eq!(rows[2].get(0).unwrap(), Value::Null, "PAR-006: json_null");
+    assert!(matches!(rows[1].get(0).unwrap(), Value::Array(_)), "PAR-006j: json_array");
+    // "null" → deserialized as Null (known data-loss edge case)
+    assert_eq!(rows[2].get(0).unwrap(), Value::Null, "PAR-006j: json_null");
     // Plain text → String
     assert_eq!(
         rows[3].get(0).unwrap(),
         Value::String("plain text".into()),
-        "PAR-006: plain_text"
+        "PAR-006j: plain_text"
     );
     // Numeric string → String (not parsed as number)
     assert_eq!(
         rows[4].get(0).unwrap(),
         Value::String("123".into()),
-        "PAR-006: numeric_string"
+        "PAR-006j: numeric_string"
     );
 
     conn.close().await.unwrap();
@@ -397,7 +452,7 @@ async fn par_008_metadata_columns() {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// PAR-009: Row access bounds checking
+// PAR-009: Row access bounds checking and consumed-value errors
 // ────────────────────────────────────────────────────────────────────
 
 #[tokio::test]
@@ -419,13 +474,20 @@ async fn par_009_row_access_out_of_bounds() {
         .unwrap();
     assert_eq!(rows.len(), 1);
 
-    // Valid access
-    let _a = rows[0].get(0).unwrap();
-    // After removing index 0, the former index 1 is now at 0
-    let _b = rows[0].get(0).unwrap();
+    // Valid access by index — indices are stable (Option::take pattern)
+    let a = rows[0].get(0).unwrap();
+    assert_eq!(a, Value::I64(1));
+    let b = rows[0].get(1).unwrap();
+    assert_eq!(b, Value::String("x".into()));
 
-    // Out of bounds should error
+    // Accessing an already-consumed index should error
     let result = rows[0].get(0);
+    assert!(result.is_err(), "should error on already-consumed column");
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("already consumed"), "got: {}", err);
+
+    // Out of bounds should also error
+    let result = rows[0].get(99);
     assert!(result.is_err(), "should error on out-of-bounds access");
 
     conn.close().await.unwrap();
@@ -453,10 +515,10 @@ async fn par_010_exec_result_insert() {
         .await
         .unwrap();
     assert_eq!(r1.rows_affected, 1);
-    // last_insert_id should be > 0
+    // last_insert_id should be > 0 (stored as I64 to preserve signed rowid semantics)
     match &r1.last_insert_id {
-        Value::U64(id) => assert!(*id > 0, "last_insert_id should be > 0"),
-        other => panic!("expected U64 for last_insert_id, got: {:?}", other),
+        Value::I64(id) => assert!(*id > 0, "last_insert_id should be > 0"),
+        other => panic!("expected I64 for last_insert_id, got: {:?}", other),
     }
 
     let r2 = conn
@@ -469,7 +531,7 @@ async fn par_010_exec_result_insert() {
     assert_eq!(r2.rows_affected, 1);
     // Second insert should have a higher rowid
     match (&r1.last_insert_id, &r2.last_insert_id) {
-        (Value::U64(id1), Value::U64(id2)) => {
+        (Value::I64(id1), Value::I64(id2)) => {
             assert!(id2 > id1, "rowids should increment: {} > {}", id2, id1);
         }
         _ => panic!("unexpected last_insert_id types"),
@@ -563,8 +625,8 @@ async fn par_012_mixed_types_single_row() {
     let md = rows[0].meta_data();
     assert_eq!(md.column_len(), 5);
 
-    // Values accessed in reverse order (like get_values does) to test
-    // the remove-based access pattern
+    // Values accessed in reverse order (like get_values does) to verify
+    // index-stable access via Option::take pattern
     let n = rows[0].get(4).unwrap();
     assert_eq!(n, Value::Null);
 

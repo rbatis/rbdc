@@ -40,12 +40,12 @@ impl TursoQueryResult {
 
     /// Convert to the `rbdc::db::ExecResult` type used by the `Connection` trait.
     ///
-    /// The `last_insert_id` is stored as `Value::U64` to match the existing
-    /// Turso connection implementation and preserve non-negative rowid semantics.
+    /// The `last_insert_id` is stored as `Value::I64` to faithfully preserve
+    /// the signed rowid semantics of SQLite/libSQL (rowids are i64).
     pub fn to_exec_result(&self) -> ExecResult {
         ExecResult {
             rows_affected: self.changes,
-            last_insert_id: Value::U64(self.last_insert_rowid as u64),
+            last_insert_id: Value::I64(self.last_insert_rowid),
         }
     }
 }
@@ -92,7 +92,7 @@ mod tests {
         let r = TursoQueryResult::new(3, 10);
         let exec = r.to_exec_result();
         assert_eq!(exec.rows_affected, 3);
-        assert_eq!(exec.last_insert_id, Value::U64(10));
+        assert_eq!(exec.last_insert_id, Value::I64(10));
     }
 
     #[test]
@@ -100,7 +100,7 @@ mod tests {
         let r = TursoQueryResult::new(1, 7);
         let exec: ExecResult = r.into();
         assert_eq!(exec.rows_affected, 1);
-        assert_eq!(exec.last_insert_id, Value::U64(7));
+        assert_eq!(exec.last_insert_id, Value::I64(7));
     }
 
     #[test]

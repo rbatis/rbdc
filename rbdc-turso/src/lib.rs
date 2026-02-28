@@ -29,11 +29,17 @@ pub mod connection;
 pub mod driver;
 pub mod error;
 pub mod options;
+pub mod query_result;
 pub mod row;
+pub mod statement;
+pub mod value;
 
+pub use connection::TursoConnection;
 pub use driver::TursoDriver;
 pub use driver::TursoDriver as Driver;
 pub use error::TursoError;
 pub use options::TursoConnectOptions;
-pub use connection::TursoConnection;
+pub use query_result::TursoQueryResult;
 pub use row::{TursoMetaData, TursoRow};
+pub use statement::TursoStatement;
+pub use value::{TursoDataType, TursoValue};

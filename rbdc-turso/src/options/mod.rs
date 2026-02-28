@@ -161,8 +161,14 @@ impl FromStr for TursoConnectOptions {
             return Err(Error::from(
                 "turso configuration: invalid URI scheme `turso:`, expected `turso://`",
             ));
+        } else if uri.starts_with("sqlite://") {
+            // Accept sqlite:// for backward compatibility with rbdc-sqlite URLs
+            &uri["sqlite://".len()..]
+        } else if uri.starts_with("sqlite:") {
+            // Accept sqlite: (without //) for config compatibility (e.g. "sqlite:/path/to/db")
+            &uri["sqlite:".len()..]
         } else {
-            // No turso scheme prefix — treat as bare path/URL
+            // No scheme prefix — treat as bare path/URL
             uri
         };
 
@@ -320,6 +326,27 @@ mod tests {
     fn parse_json_detect_default_off() {
         let opts: TursoConnectOptions = "turso://:memory:".parse().unwrap();
         assert!(!opts.is_json_detect());
+    }
+
+    #[test]
+    fn parse_sqlite_scheme_compat() {
+        let opts: TursoConnectOptions = "sqlite://test.db".parse().unwrap();
+        assert!(!opts.is_in_memory());
+        assert_eq!(opts.url, "test.db");
+    }
+
+    #[test]
+    fn parse_sqlite_colon_compat() {
+        let opts: TursoConnectOptions = "sqlite:/var/lib/hive.db".parse().unwrap();
+        assert!(!opts.is_in_memory());
+        assert_eq!(opts.url, "/var/lib/hive.db");
+    }
+
+    #[test]
+    fn parse_sqlite_memory_compat() {
+        let opts: TursoConnectOptions = "sqlite::memory:".parse().unwrap();
+        assert!(opts.is_in_memory());
+        assert_eq!(opts.url, ":memory:");
     }
 
     #[test]

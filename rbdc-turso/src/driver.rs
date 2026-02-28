@@ -8,6 +8,9 @@ use rbdc::Error;
 /// Implements the `rbdc::db::Driver` trait using Turso's native async API.
 /// Backend selection is fixed at initialization time; once a `TursoDriver`
 /// is wired in, all connections go through Turso/libSQL.
+///
+/// Accepts `turso://`, `sqlite://`, and `sqlite:` URI schemes for backward
+/// compatibility with rbdc-sqlite configurations.
 #[derive(Debug)]
 pub struct TursoDriver {}
 

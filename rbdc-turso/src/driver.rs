@@ -5,11 +5,9 @@ use rbdc::Error;
 
 /// Turso/libSQL database driver.
 ///
-/// This driver provides the same `Driver` trait interface as other rbdc adapters
-/// (e.g., `SqliteDriver`). Backend selection is fixed at initialization time;
-/// once a `TursoDriver` is wired in, all connections go through Turso/libSQL.
-///
-/// There is no runtime switching or automatic fallback to SQLite.
+/// This driver implements the `rbdc::db::Driver` trait. Backend selection is
+/// fixed at initialization time; once a `TursoDriver` is wired in, all
+/// connections go through Turso/libSQL.
 #[derive(Debug)]
 pub struct TursoDriver {}
 
@@ -50,7 +48,7 @@ impl Driver for TursoDriver {
 
 impl Placeholder for TursoDriver {
     fn exchange(&self, sql: &str) -> String {
-        // libSQL/Turso uses positional `?` placeholders, same as SQLite.
+        // Turso uses positional `?` placeholders.
         sql.to_string()
     }
 }

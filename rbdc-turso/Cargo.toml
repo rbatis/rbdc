@@ -2,7 +2,7 @@
 name = "rbdc-turso"
 version = "4.7.0"
 edition = "2021"
-description = "Turso/libSQL async database driver for rbdc - drop-in backend alternative to rbdc-sqlite"
+description = "Turso/libSQL async database driver for rbdc"
 readme = "Readme.md"
 authors = ["ce <zhuxiujia@qq.com>"]
 license = "Apache-2.0"

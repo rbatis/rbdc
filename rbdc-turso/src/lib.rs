@@ -1,15 +1,14 @@
 //! **Turso/libSQL** database driver for rbdc.
 //!
-//! This crate provides an async Turso/libSQL backend adapter with the same
-//! `Driver`, `Connection`, `Row`, and `ConnectOptions` contract as other
-//! rbdc adapters (e.g., `rbdc-sqlite`).
+//! This crate provides an async Turso/libSQL backend adapter implementing the
+//! standard `Driver`, `Connection`, `Row`, and `ConnectOptions` contracts from
+//! the `rbdc` database abstraction layer.
 //!
 //! ## Backend Selection
 //!
-//! Backend choice is fixed at adapter initialization/startup. There is:
-//! - **No runtime backend switching** between Turso and SQLite.
-//! - **No automatic fallback** to SQLite if Turso becomes unavailable.
-//! - **No data migration** between SQLite and Turso.
+//! Backend choice is fixed at adapter initialization/startup. Once configured,
+//! the Turso backend is used for all connections with no runtime switching
+//! or automatic fallback.
 //!
 //! ## Quick Start
 //!

@@ -197,26 +197,25 @@ fn test_placeholder_exchange_preserves_question_marks() {
 
 /// Verify that the API surface does not expose any runtime backend switching
 /// mechanism. The TursoConnectOptions and TursoDriver types are fixed at
-/// construction time and provide no methods to change the underlying backend
-/// to SQLite or any other adapter.
+/// construction time and provide no methods to change the underlying backend.
 ///
 /// This is a design-level test: we verify the absence of switching APIs
 /// rather than testing runtime behavior.
 #[test]
 fn test_no_runtime_switch_api_on_options() {
     // TursoConnectOptions has url() and auth_token() builders but no
-    // "switch_to_sqlite" or "set_backend" method. This is by design.
-    // The type itself encodes that the backend is Turso.
+    // "set_backend" method. This is by design — the type itself encodes
+    // that the backend is Turso.
     let opts = rbdc_turso::TursoConnectOptions::new()
         .url("libsql://db.turso.io")
         .auth_token("tok");
 
-    // The options always identify as remote Turso, never as SQLite
+    // The options always identify as remote Turso
     assert!(opts.is_remote());
 }
 
 /// Verify that a connection established via TursoDriver uses Turso/libSQL
-/// and does not provide any method to fall back to SQLite at runtime.
+/// and that basic operations work through the backend.
 #[tokio::test]
 async fn test_in_memory_connection_is_functional() {
     let driver = rbdc_turso::TursoDriver {};

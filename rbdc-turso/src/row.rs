@@ -28,7 +28,7 @@ impl Row for TursoRow {
                 self.values.len()
             )));
         }
-        // Remove and return value (consistent with SQLite adapter behavior)
+        // Remove and return value (destructive access per rbdc Row contract)
         Ok(self.values.remove(i))
     }
 }
@@ -49,7 +49,7 @@ impl MetaData for TursoMetaData {
     }
 
     fn column_type(&self, _i: usize) -> String {
-        // libsql does not expose column type info in the same way as raw sqlite3.
+        // Turso does not expose static column type info at the metadata level.
         // Return an empty string; type is determined dynamically from values.
         String::new()
     }

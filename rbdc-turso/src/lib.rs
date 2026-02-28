@@ -1,8 +1,8 @@
 //! **Turso/libSQL** database driver for rbdc.
 //!
-//! This crate provides an async Turso/libSQL backend adapter implementing the
-//! standard `Driver`, `Connection`, `Row`, and `ConnectOptions` contracts from
-//! the `rbdc` database abstraction layer.
+//! This crate provides a Turso database adapter using the native async API
+//! from the `libsql` SDK. It implements the standard `Driver`, `Connection`,
+//! `Row`, and `ConnectOptions` contracts from `rbdc`.
 //!
 //! ## Backend Selection
 //!

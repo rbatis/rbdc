@@ -5,15 +5,12 @@ use rbdc::db::{Connection, ExecResult, Row};
 use rbdc::error::Error;
 use rbs::Value;
 
-/// A connection to a Turso/libSQL database.
+/// A connection to a Turso database via the native async libsql API.
 ///
 /// This connection is established at startup/initialization time and remains
-/// bound to the configured backend for its entire lifetime. There is no
-/// support for runtime backend switching or automatic fallback to SQLite.
-///
-/// If the Turso backend becomes unavailable during the lifetime of this
-/// connection, operations will fail rather than falling back to any other
-/// backend.
+/// bound to the configured backend for its entire lifetime. If the Turso
+/// backend becomes unavailable, operations will return errors rather than
+/// falling back to any other backend.
 pub struct TursoConnection {
     #[allow(dead_code)]
     pub(crate) db: libsql::Database,

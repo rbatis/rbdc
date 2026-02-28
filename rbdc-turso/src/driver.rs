@@ -5,9 +5,9 @@ use rbdc::Error;
 
 /// Turso/libSQL database driver.
 ///
-/// This driver implements the `rbdc::db::Driver` trait. Backend selection is
-/// fixed at initialization time; once a `TursoDriver` is wired in, all
-/// connections go through Turso/libSQL.
+/// Implements the `rbdc::db::Driver` trait using Turso's native async API.
+/// Backend selection is fixed at initialization time; once a `TursoDriver`
+/// is wired in, all connections go through Turso/libSQL.
 #[derive(Debug)]
 pub struct TursoDriver {}
 

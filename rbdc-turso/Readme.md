@@ -2,7 +2,7 @@
 
 Turso/libSQL async database driver for the [rbdc](https://github.com/rbatis/rbatis) database abstraction layer.
 
-This crate provides an async Turso database backend for rbdc, using the [libsql](https://crates.io/crates/libsql) Rust SDK as the underlying client library. It supports both remote Turso databases (with auth tokens) and local/in-memory databases.
+This crate provides an async Turso database backend for rbdc, using the [libsql](https://crates.io/crates/libsql) native async API as the underlying client library. It supports both remote Turso databases (with auth tokens) and local/in-memory databases.
 
 ## Backend Selection at Startup
 

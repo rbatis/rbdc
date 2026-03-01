@@ -1,11 +1,11 @@
 [workspace]
-members = ["rbdc-pool-fast","rbdc-sqlite","rbdc-mysql","rbdc-pg","rbdc-mssql", "example"]
+members = ["rbdc-pool-fast","rbdc-sqlite","rbdc-mysql","rbdc-pg","rbdc-mssql","rbdc-turso", "example"]
 [package]
 name = "rbdc"
 version = "4.7.0"
 edition = "2024"
 description = "The Rust SQL Toolkit and ORM Library. An async, pure Rust SQL crate featuring compile-time Dynamic SQL"
-readme = "Readme.md"
+readme = "README.md"
 authors = ["ce <zhuxiujia@qq.com>"]
 license = "Apache-2.0"
 categories = ["database"]

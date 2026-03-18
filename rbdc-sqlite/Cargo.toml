@@ -50,7 +50,7 @@ futures-channel = { version = "0.3.19", default-features = false, features = ["s
 futures-core = { version = "0.3.19", default-features = false }
 futures-intrusive = "0.5.0"
 futures-util = { version = "0.3.19", default-features = false, features = ["alloc", "sink"] }
-crossfire = { version = "3.0", default-features = false }
+crossfire = { version = "3.1", default-features = false }
 libsqlite3-sys = { version = "0.36.0", default-features = false, features = [
     "pkg-config",
     "bundled",

@@ -20,6 +20,7 @@ Database driver abstraction layer for Rust, providing a unified interface for [r
 | PostgreSQL | [rbdc-pg](https://crates.io/crates/rbdc-pg) |
 | SQLite | [rbdc-sqlite](https://crates.io/crates/rbdc-sqlite) |
 | MSSQL | [rbdc-mssql](https://crates.io/crates/rbdc-mssql) |
+| Truso | [rbdc-turso](https://crates.io/crates/rbdc-turso) |
 
 ## Quick Start
 

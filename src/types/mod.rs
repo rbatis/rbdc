@@ -15,11 +15,11 @@ pub mod timestamp;
 /// `00000000-0000-0000-0000-000000000000`
 pub mod uuid;
 
-pub use self::bytes::*;
-pub use self::date::*;
-pub use self::datetime::*;
-pub use self::decimal::*;
-pub use self::json::*;
-pub use self::time::*;
-pub use self::timestamp::*;
-pub use self::uuid::*;
+pub use bytes::*;
+pub use date::*;
+pub use datetime::*;
+pub use decimal::*;
+pub use json::*;
+pub use time::*;
+pub use timestamp::*;
+pub use uuid::*;

@@ -214,8 +214,7 @@ impl PgConnection {
                 vec![oid.0.into()]
             ).await?;
 
-            let vs: Vec<PGType> =
-                rbs::from_value(rows).map_err(|e| Error::from(e.to_string()))?;
+            let vs: Vec<PGType> = rbs::from_value(rows).map_err(|e| Error::from(e.to_string()))?;
 
             if let Some(x) = vs.into_iter().next() {
                 pg_type = x;
@@ -292,8 +291,7 @@ impl PgConnection {
             )
             .await
             .map_err(|_| Error::from("TypeNotFound:".to_string() + name))?;
-        let vs: Vec<V> =
-            rbs::from_value(rows).map_err(|e| Error::from(e.to_string()))?;
+        let vs: Vec<V> = rbs::from_value(rows).map_err(|e| Error::from(e.to_string()))?;
         if let Some(x) = vs.into_iter().next() {
             oid = x.oid;
         }
@@ -338,8 +336,7 @@ WHERE rngtypid = $1
                     vec![oid.0.into()],
                 )
                 .await?;
-            let vs: Vec<V> =
-                rbs::from_value(rows).map_err(|e| Error::from(e.to_string()))?;
+            let vs: Vec<V> = rbs::from_value(rows).map_err(|e| Error::from(e.to_string()))?;
             let mut element_oid = Oid(0);
             if let Some(x) = vs.into_iter().next() {
                 element_oid = x.rngsubtype;
@@ -370,8 +367,7 @@ ORDER BY enumsortorder
                 vec![oid.0.into()],
             )
             .await?;
-        let vs: Vec<V> =
-            rbs::from_value(rows).map_err(|e| Error::from(e.to_string()))?;
+        let vs: Vec<V> = rbs::from_value(rows).map_err(|e| Error::from(e.to_string()))?;
 
         let mut variants = Vec::with_capacity(vs.len());
         for x in vs {

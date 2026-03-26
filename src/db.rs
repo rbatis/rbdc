@@ -92,11 +92,7 @@ pub trait Connection: Send + Sync {
 
     /// Execute a query that is expected to return a result set, such as a `SELECT` statement
     /// return array of [{'column': 'value'}]
-    fn get_values(
-        &mut self,
-        sql: &str,
-        params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Value, Error>> {
+    fn get_values(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
         let v = self.get_rows(sql, params);
         Box::pin(async move {
             let v = v.await?;
@@ -163,11 +159,7 @@ impl Connection for Box<dyn Connection> {
         self.deref_mut().get_rows(sql, params)
     }
 
-    fn get_values(
-        &mut self,
-        sql: &str,
-        params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Value, Error>> {
+    fn get_values(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
         self.deref_mut().get_values(sql, params)
     }
 

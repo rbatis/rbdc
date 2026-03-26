@@ -41,7 +41,7 @@ impl ConnectionManager {
             option: Arc::new(Box::new(option)),
         }
     }
-    
+
     pub fn driver_type(&self) -> &str {
         self.driver.name()
     }

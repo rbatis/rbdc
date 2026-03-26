@@ -7,11 +7,11 @@ use crate::connection::establish::EstablishParams;
 use crate::connection::ConnectionState;
 use crate::connection::{execute, ConnectionHandleRaw};
 use crate::{SqliteArguments, SqliteQueryResult, SqliteRow, SqliteStatement};
+use crossfire::{spsc, AsyncTx};
 use either::Either;
 use futures_channel::oneshot;
 use futures_intrusive::sync::{Mutex, MutexGuard};
 use rbdc::error::Error;
-use crossfire::{spsc, AsyncTx};
 
 // Each SQLite connection has a dedicated thread.
 
@@ -41,7 +41,9 @@ pub enum Command {
         query: Box<str>,
         arguments: Option<SqliteArguments>,
         persistent: bool,
-        tx: crossfire::Tx<crossfire::spsc::Array<Result<Either<SqliteQueryResult, SqliteRow>, Error>>>,
+        tx: crossfire::Tx<
+            crossfire::spsc::Array<Result<Either<SqliteQueryResult, SqliteRow>, Error>>,
+        >,
     },
     CreateCollation {
         create_collation:
@@ -66,7 +68,8 @@ impl ConnectionWorker {
         thread::Builder::new()
             .name(params.thread_name.clone())
             .spawn(move || {
-                let (command_tx, command_rx) = spsc::bounded_async_blocking(params.command_channel_size);
+                let (command_tx, command_rx) =
+                    spsc::bounded_async_blocking(params.command_channel_size);
 
                 let conn = match params.establish() {
                     Ok(conn) => conn,
@@ -185,7 +188,12 @@ impl ConnectionWorker {
         args: Option<SqliteArguments>,
         chan_size: usize,
         persistent: bool,
-    ) -> Result<crossfire::AsyncRx<crossfire::spsc::Array<Result<Either<SqliteQueryResult, SqliteRow>, Error>>>, Error> {
+    ) -> Result<
+        crossfire::AsyncRx<
+            crossfire::spsc::Array<Result<Either<SqliteQueryResult, SqliteRow>, Error>>,
+        >,
+        Error,
+    > {
         let (tx, rx) = spsc::bounded_blocking_async(chan_size);
 
         self.command_tx

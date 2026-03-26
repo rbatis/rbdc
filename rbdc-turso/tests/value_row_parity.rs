@@ -272,13 +272,7 @@ async fn par_006_json_text_default_no_detection() {
     .unwrap();
 
     // Store JSON-shaped strings
-    let cases: Vec<&str> = vec![
-        r#"{"key":"value"}"#,
-        "[1,2,3]",
-        "null",
-        "plain text",
-        "123",
-    ];
+    let cases: Vec<&str> = vec![r#"{"key":"value"}"#, "[1,2,3]", "null", "plain text", "123"];
 
     for (i, val) in cases.iter().enumerate() {
         conn.exec(
@@ -318,13 +312,7 @@ async fn par_006_json_text_with_detection_enabled() {
     .await
     .unwrap();
 
-    let cases: Vec<&str> = vec![
-        r#"{"key":"value"}"#,
-        "[1,2,3]",
-        "null",
-        "plain text",
-        "123",
-    ];
+    let cases: Vec<&str> = vec![r#"{"key":"value"}"#, "[1,2,3]", "null", "plain text", "123"];
 
     for (i, val) in cases.iter().enumerate() {
         conn.exec(
@@ -342,9 +330,15 @@ async fn par_006_json_text_with_detection_enabled() {
     assert_eq!(rows.len(), cases.len());
 
     // JSON object → deserialized as Map
-    assert!(matches!(rows[0].get(0).unwrap(), Value::Map(_)), "PAR-006j: json_object");
+    assert!(
+        matches!(rows[0].get(0).unwrap(), Value::Map(_)),
+        "PAR-006j: json_object"
+    );
     // JSON array → deserialized as Array
-    assert!(matches!(rows[1].get(0).unwrap(), Value::Array(_)), "PAR-006j: json_array");
+    assert!(
+        matches!(rows[1].get(0).unwrap(), Value::Array(_)),
+        "PAR-006j: json_array"
+    );
     // "null" → deserialized as Null (known data-loss edge case)
     assert_eq!(rows[2].get(0).unwrap(), Value::Null, "PAR-006j: json_null");
     // Plain text → String
@@ -443,10 +437,26 @@ async fn par_008_metadata_columns() {
     let data_type = md.column_type(3);
 
     // Types should reflect actual value types (INTEGER, TEXT, REAL, BLOB)
-    assert!(!id_type.is_empty(), "id type should not be empty, got: {}", id_type);
-    assert!(!name_type.is_empty(), "name type should not be empty, got: {}", name_type);
-    assert!(!score_type.is_empty(), "score type should not be empty, got: {}", score_type);
-    assert!(!data_type.is_empty(), "data type should not be empty, got: {}", data_type);
+    assert!(
+        !id_type.is_empty(),
+        "id type should not be empty, got: {}",
+        id_type
+    );
+    assert!(
+        !name_type.is_empty(),
+        "name type should not be empty, got: {}",
+        name_type
+    );
+    assert!(
+        !score_type.is_empty(),
+        "score type should not be empty, got: {}",
+        score_type
+    );
+    assert!(
+        !data_type.is_empty(),
+        "data type should not be empty, got: {}",
+        data_type
+    );
 
     conn.close().await.unwrap();
 }
@@ -461,12 +471,9 @@ async fn par_009_row_access_out_of_bounds() {
     conn.exec("CREATE TABLE par009 (a INTEGER, b TEXT)", vec![])
         .await
         .unwrap();
-    conn.exec(
-        "INSERT INTO par009 VALUES (1, 'x')",
-        vec![],
-    )
-    .await
-    .unwrap();
+    conn.exec("INSERT INTO par009 VALUES (1, 'x')", vec![])
+        .await
+        .unwrap();
 
     let mut rows = conn
         .get_rows("SELECT a, b FROM par009", vec![])
@@ -565,10 +572,7 @@ async fn par_011_exec_result_update_delete() {
 
     // Update 2 rows
     let r = conn
-        .exec(
-            "UPDATE par011 SET val = 'x' WHERE id <= 2",
-            vec![],
-        )
+        .exec("UPDATE par011 SET val = 'x' WHERE id <= 2", vec![])
         .await
         .unwrap();
     assert_eq!(r.rows_affected, 2);
@@ -661,12 +665,9 @@ async fn par_013_get_values() {
     )
     .await
     .unwrap();
-    conn.exec(
-        "INSERT INTO par013 VALUES (1, 'alice'), (2, 'bob')",
-        vec![],
-    )
-    .await
-    .unwrap();
+    conn.exec("INSERT INTO par013 VALUES (1, 'alice'), (2, 'bob')", vec![])
+        .await
+        .unwrap();
 
     let values = conn
         .get_values("SELECT id, name FROM par013 ORDER BY id", vec![])
@@ -695,12 +696,9 @@ async fn par_013_get_values() {
 #[tokio::test]
 async fn par_014_empty_result_set() {
     let mut conn = turso_conn().await;
-    conn.exec(
-        "CREATE TABLE par014 (id INTEGER PRIMARY KEY)",
-        vec![],
-    )
-    .await
-    .unwrap();
+    conn.exec("CREATE TABLE par014 (id INTEGER PRIMARY KEY)", vec![])
+        .await
+        .unwrap();
 
     let rows = conn
         .get_rows("SELECT id FROM par014", vec![])
@@ -730,12 +728,9 @@ async fn par_015_aliased_column_names() {
     )
     .await
     .unwrap();
-    conn.exec(
-        "INSERT INTO par015 VALUES (1, 'test')",
-        vec![],
-    )
-    .await
-    .unwrap();
+    conn.exec("INSERT INTO par015 VALUES (1, 'test')", vec![])
+        .await
+        .unwrap();
 
     let rows = conn
         .get_rows(
@@ -760,20 +755,14 @@ async fn par_015_aliased_column_names() {
 #[tokio::test]
 async fn par_016_multiple_rows() {
     let mut conn = turso_conn().await;
-    conn.exec(
-        "CREATE TABLE par016 (id INTEGER PRIMARY KEY)",
-        vec![],
-    )
-    .await
-    .unwrap();
-
-    for i in 1..=100 {
-        conn.exec(
-            "INSERT INTO par016 VALUES (?)",
-            vec![Value::I64(i)],
-        )
+    conn.exec("CREATE TABLE par016 (id INTEGER PRIMARY KEY)", vec![])
         .await
         .unwrap();
+
+    for i in 1..=100 {
+        conn.exec("INSERT INTO par016 VALUES (?)", vec![Value::I64(i)])
+            .await
+            .unwrap();
     }
 
     let mut rows = conn

@@ -4,6 +4,7 @@ use dark_std::sync::AtomicDuration;
 use fast_pool::plugin::{CheckMode, DurationManager};
 use futures_core::future::BoxFuture;
 use log::error;
+use rbdc::db::{ConnectOptions, Driver};
 use rbdc::db::{Connection, ExecResult, Row};
 use rbdc::pool::ConnectionGuard;
 use rbdc::pool::ConnectionManager;
@@ -13,41 +14,41 @@ use rbs::value::map::ValueMap;
 use rbs::Value;
 use std::sync::Arc;
 use std::time::Duration;
-use rbdc::db::{ConnectOptions, Driver};
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct FastPool {
     pub manager: Arc<ConnectionManager>,
     pub inner: fast_pool::Pool<DurationManager<ConnManagerProxy>>,
     pub timeout: Arc<AtomicDuration>,
 }
 
-impl FastPool{
+impl FastPool {
     pub fn new_url<D: Driver + 'static>(driver: D, url: &str) -> Result<Self, Error>
     where
         Self: Sized,
     {
-        Self::new(ConnectionManager::new(driver,url)?)
+        Self::new(ConnectionManager::new(driver, url)?)
     }
 
-    pub fn new_option<D: Driver + 'static, Options: ConnectOptions>(driver: D, options: Options) -> Result<Self, Error>
+    pub fn new_option<D: Driver + 'static, Options: ConnectOptions>(
+        driver: D,
+        options: Options,
+    ) -> Result<Self, Error>
     where
         Self: Sized,
     {
-        Self::new(ConnectionManager::new_options(driver,options))
+        Self::new(ConnectionManager::new_options(driver, options))
     }
 }
 
 #[derive(Debug)]
 pub struct ConnManagerProxy {
-     inner: ConnectionManager,
+    inner: ConnectionManager,
 }
 
-impl ConnManagerProxy{
+impl ConnManagerProxy {
     pub fn new(inner: ConnectionManager) -> Self {
-        Self {
-            inner,
-        }
+        Self { inner }
     }
 }
 
@@ -58,9 +59,7 @@ pub struct ConnProxy {
 
 impl From<ConnectionManager> for ConnManagerProxy {
     fn from(value: ConnectionManager) -> Self {
-        ConnManagerProxy {
-            inner: value
-        }
+        ConnManagerProxy { inner: value }
     }
 }
 
@@ -72,7 +71,10 @@ impl Pool for FastPool {
     {
         Ok(Self {
             manager: manager.clone().into(),
-            inner: fast_pool::Pool::new(DurationManager::new(ConnManagerProxy::new(manager),CheckMode::NoLimit)),
+            inner: fast_pool::Pool::new(DurationManager::new(
+                ConnManagerProxy::new(manager),
+                CheckMode::NoLimit,
+            )),
             timeout: Arc::new(AtomicDuration::new(None)),
         })
     }
@@ -83,9 +85,7 @@ impl Pool for FastPool {
             .get_timeout(self.timeout.get())
             .await
             .map_err(|e| Error::from(e.to_string()))?;
-        let proxy = ConnProxy {
-            conn: Some(v),
-        };
+        let proxy = ConnProxy { conn: Some(v) };
         Ok(Box::new(proxy))
     }
 
@@ -103,9 +103,7 @@ impl Pool for FastPool {
             .get_timeout(Some(d))
             .await
             .map_err(|e| Error::from(e.to_string()))?;
-        let proxy = ConnProxy {
-            conn: Some(v),
-        };
+        let proxy = ConnProxy { conn: Some(v) };
         Ok(Box::new(proxy))
     }
 
@@ -114,15 +112,17 @@ impl Pool for FastPool {
     }
 
     async fn set_conn_max_lifetime(&self, max_lifetime: Option<Duration>) {
-        let manager = self.inner.downcast_manager::<DurationManager<ConnManagerProxy>>();
+        let manager = self
+            .inner
+            .downcast_manager::<DurationManager<ConnManagerProxy>>();
         if let Some(manager) = manager {
             if let Some(max_lifetime) = max_lifetime {
                 manager.mode.set_mode(CheckMode::MaxLifetime(max_lifetime));
-            }else{
+            } else {
                 manager.mode.set_mode(CheckMode::NoLimit);
             }
-        }else{
-           error!("FastPool method set_conn_max_lifetime need use DurationManager to init");
+        } else {
+            error!("FastPool method set_conn_max_lifetime need use DurationManager to init");
         }
     }
 
@@ -184,11 +184,7 @@ impl Connection for ConnProxy {
         self.conn.as_mut().unwrap().get_rows(sql, params)
     }
 
-    fn get_values(
-        &mut self,
-        sql: &str,
-        params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Value, Error>> {
+    fn get_values(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }

@@ -263,8 +263,9 @@ mod tests {
 
     #[test]
     fn parse_turso_scheme_with_url_and_token() {
-        let opts: TursoConnectOptions =
-            "turso://?url=libsql://mydb.turso.io&token=secret".parse().unwrap();
+        let opts: TursoConnectOptions = "turso://?url=libsql://mydb.turso.io&token=secret"
+            .parse()
+            .unwrap();
         assert_eq!(opts.url, "libsql://mydb.turso.io");
         assert_eq!(opts.auth_token.as_deref(), Some("secret"));
         assert!(opts.is_remote());
@@ -309,16 +310,14 @@ mod tests {
 
     #[test]
     fn parse_json_detect_enabled() {
-        let opts: TursoConnectOptions =
-            "turso://:memory:?json_detect=true".parse().unwrap();
+        let opts: TursoConnectOptions = "turso://:memory:?json_detect=true".parse().unwrap();
         assert!(opts.is_json_detect());
         assert!(opts.is_in_memory());
     }
 
     #[test]
     fn parse_json_detect_disabled_explicitly() {
-        let opts: TursoConnectOptions =
-            "turso://:memory:?json_detect=false".parse().unwrap();
+        let opts: TursoConnectOptions = "turso://:memory:?json_detect=false".parse().unwrap();
         assert!(!opts.is_json_detect());
     }
 

@@ -125,5 +125,3 @@ fn guard_placeholder_is_passthrough() {
     let sql = "SELECT * FROM t WHERE a = ? AND b = ?";
     assert_eq!(driver.exchange(sql), sql);
 }
-
-

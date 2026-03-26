@@ -256,7 +256,7 @@ mod test {
     use crate::decode::{DateTimeFromDateTimeFixedOffset, DateTimeFromNativeDatetime};
     use chrono::{FixedOffset, NaiveDateTime};
     use fastdate::DateTime;
-    
+
     #[test]
     fn test_decode_far_future_date() {
         // Test date beyond year 2262 (nanosecond precision limit)

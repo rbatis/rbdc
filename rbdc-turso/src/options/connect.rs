@@ -41,11 +41,7 @@ impl TursoConnectOptions {
                 .build()
                 .await
                 .map_err(|e| {
-                    log::error!(
-                        "turso: failed to open local database {}: {}",
-                        self.url,
-                        e
-                    );
+                    log::error!("turso: failed to open local database {}: {}", self.url, e);
                     TursoError::from(e)
                 })?
         };

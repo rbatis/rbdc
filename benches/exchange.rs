@@ -1,8 +1,8 @@
 #![feature(test)]
 extern crate test;
 
-use test::Bencher;
 use rbdc::util::impl_exchange;
+use test::Bencher;
 
 // Old implementation (before optimization)
 fn impl_exchange_old(start_str: &str, start_num: usize, sql: &str) -> String {

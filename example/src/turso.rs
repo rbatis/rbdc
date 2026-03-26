@@ -1,9 +1,9 @@
-use std::time::Duration;
 use rbdc::Error;
 use rbdc::db::Connection;
 use rbdc::pool::Pool;
 use rbdc_pool_fast::FastPool;
 use rbdc_turso::TursoDriver;
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -21,7 +21,8 @@ async fn main() -> Result<(), Error> {
     //     &format!("turso://?url={}&token={}", url, token)
     // )?;
 
-    pool.set_conn_max_lifetime(Some(Duration::from_secs(10))).await;
+    pool.set_conn_max_lifetime(Some(Duration::from_secs(10)))
+        .await;
     let mut conn = pool.get().await?;
 
     // Create test table
@@ -38,9 +39,7 @@ async fn main() -> Result<(), Error> {
         .await?;
 
     // Query data
-    let v = conn
-        .get_values("SELECT * FROM users", vec![])
-        .await?;
+    let v = conn.get_values("SELECT * FROM users", vec![]).await?;
     println!("Query result: {}", v);
 
     Ok(())

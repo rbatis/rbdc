@@ -55,7 +55,10 @@ fn test_impl_exchange_different_prefix() {
 fn test_impl_exchange_complex_query() {
     let sql = "INSERT INTO users (id, name, email) VALUES (?, ?, ?) WHERE status = ?";
     let result = impl_exchange("$", 1, sql);
-    assert_eq!(result, "INSERT INTO users (id, name, email) VALUES ($1, $2, $3) WHERE status = $4");
+    assert_eq!(
+        result,
+        "INSERT INTO users (id, name, email) VALUES ($1, $2, $3) WHERE status = $4"
+    );
 }
 
 #[test]

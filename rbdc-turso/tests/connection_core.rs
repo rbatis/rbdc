@@ -123,7 +123,9 @@ async fn test_connect_local_file() {
 #[tokio::test]
 async fn test_ping_succeeds() {
     let mut conn = connect_in_memory().await;
-    conn.ping().await.expect("ping should succeed on live connection");
+    conn.ping()
+        .await
+        .expect("ping should succeed on live connection");
 }
 
 #[tokio::test]
@@ -133,7 +135,9 @@ async fn test_ping_after_operations() {
         .await
         .unwrap();
     // Ping should still work after operations
-    conn.ping().await.expect("ping should succeed after operations");
+    conn.ping()
+        .await
+        .expect("ping should succeed after operations");
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -152,7 +156,9 @@ async fn test_close_after_operations() {
     conn.exec("INSERT INTO test (id, name) VALUES (1, 'alice')", vec![])
         .await
         .unwrap();
-    conn.close().await.expect("close should succeed after operations");
+    conn.close()
+        .await
+        .expect("close should succeed after operations");
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -163,10 +169,7 @@ async fn test_close_after_operations() {
 async fn test_exec_create_table() {
     let mut conn = connect_in_memory().await;
     let result = conn
-        .exec(
-            "CREATE TABLE t (id INTEGER PRIMARY KEY, val TEXT)",
-            vec![],
-        )
+        .exec("CREATE TABLE t (id INTEGER PRIMARY KEY, val TEXT)", vec![])
         .await
         .expect("CREATE TABLE should succeed");
     // DDL typically affects 0 rows
@@ -272,12 +275,18 @@ async fn test_get_rows_empty() {
 #[tokio::test]
 async fn test_get_rows_with_data() {
     let mut conn = connect_with_table().await;
-    conn.exec("INSERT INTO test (id, name, score) VALUES (1, 'alice', 90.0)", vec![])
-        .await
-        .unwrap();
-    conn.exec("INSERT INTO test (id, name, score) VALUES (2, 'bob', 85.5)", vec![])
-        .await
-        .unwrap();
+    conn.exec(
+        "INSERT INTO test (id, name, score) VALUES (1, 'alice', 90.0)",
+        vec![],
+    )
+    .await
+    .unwrap();
+    conn.exec(
+        "INSERT INTO test (id, name, score) VALUES (2, 'bob', 85.5)",
+        vec![],
+    )
+    .await
+    .unwrap();
 
     let rows = conn
         .get_rows("SELECT * FROM test ORDER BY id", vec![])
@@ -289,9 +298,12 @@ async fn test_get_rows_with_data() {
 #[tokio::test]
 async fn test_get_rows_metadata() {
     let mut conn = connect_with_table().await;
-    conn.exec("INSERT INTO test (id, name, score) VALUES (1, 'meta', 77.0)", vec![])
-        .await
-        .unwrap();
+    conn.exec(
+        "INSERT INTO test (id, name, score) VALUES (1, 'meta', 77.0)",
+        vec![],
+    )
+    .await
+    .unwrap();
 
     let rows = conn
         .get_rows("SELECT id, name, score FROM test", vec![])
@@ -310,9 +322,12 @@ async fn test_get_rows_metadata() {
 #[tokio::test]
 async fn test_get_rows_values() {
     let mut conn = connect_with_table().await;
-    conn.exec("INSERT INTO test (id, name, score) VALUES (7, 'val', 99.9)", vec![])
-        .await
-        .unwrap();
+    conn.exec(
+        "INSERT INTO test (id, name, score) VALUES (7, 'val', 99.9)",
+        vec![],
+    )
+    .await
+    .unwrap();
 
     let mut rows = conn
         .get_rows("SELECT id, name, score FROM test WHERE id = 7", vec![])
@@ -358,10 +373,7 @@ async fn test_get_rows_index_out_of_range() {
         .await
         .unwrap();
 
-    let mut rows = conn
-        .get_rows("SELECT id FROM test", vec![])
-        .await
-        .unwrap();
+    let mut rows = conn.get_rows("SELECT id FROM test", vec![]).await.unwrap();
     let row = &mut rows[0];
     // Column index 5 is out of range (only 1 column)
     let err = row.get(5);
@@ -375,9 +387,12 @@ async fn test_get_rows_index_out_of_range() {
 #[tokio::test]
 async fn test_get_values() {
     let mut conn = connect_with_table().await;
-    conn.exec("INSERT INTO test (id, name, score) VALUES (1, 'gv', 50.0)", vec![])
-        .await
-        .unwrap();
+    conn.exec(
+        "INSERT INTO test (id, name, score) VALUES (1, 'gv', 50.0)",
+        vec![],
+    )
+    .await
+    .unwrap();
 
     let values = conn
         .get_values("SELECT id, name FROM test", vec![])
@@ -408,9 +423,12 @@ async fn test_transaction_commit() {
     let mut conn = connect_with_table().await;
 
     conn.begin().await.expect("begin should succeed");
-    conn.exec("INSERT INTO test (id, name) VALUES (1, 'committed')", vec![])
-        .await
-        .unwrap();
+    conn.exec(
+        "INSERT INTO test (id, name) VALUES (1, 'committed')",
+        vec![],
+    )
+    .await
+    .unwrap();
     conn.commit().await.expect("commit should succeed");
 
     // Data should be visible after commit
@@ -432,16 +450,16 @@ async fn test_transaction_rollback() {
 
     // Begin transaction, insert, then rollback
     conn.begin().await.expect("begin should succeed");
-    conn.exec("INSERT INTO test (id, name) VALUES (2, 'rolled_back')", vec![])
-        .await
-        .unwrap();
+    conn.exec(
+        "INSERT INTO test (id, name) VALUES (2, 'rolled_back')",
+        vec![],
+    )
+    .await
+    .unwrap();
     conn.rollback().await.expect("rollback should succeed");
 
     // Only baseline data should exist
-    let rows = conn
-        .get_rows("SELECT * FROM test", vec![])
-        .await
-        .unwrap();
+    let rows = conn.get_rows("SELECT * FROM test", vec![]).await.unwrap();
     assert_eq!(
         rows.len(),
         1,
@@ -540,10 +558,7 @@ async fn test_exec_constraint_violation() {
     let result = conn
         .exec("INSERT INTO test (id, name) VALUES (1, 'dupe')", vec![])
         .await;
-    assert!(
-        result.is_err(),
-        "duplicate primary key should return error"
-    );
+    assert!(result.is_err(), "duplicate primary key should return error");
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -652,10 +667,7 @@ async fn test_binary_round_trip() {
     let blob_data = vec![0u8, 1, 2, 255, 128, 64];
     conn.exec(
         "INSERT INTO blobs (id, data) VALUES (?, ?)",
-        vec![
-            rbs::Value::I64(1),
-            rbs::Value::Binary(blob_data.clone()),
-        ],
+        vec![rbs::Value::I64(1), rbs::Value::Binary(blob_data.clone())],
     )
     .await
     .unwrap();
@@ -726,5 +738,9 @@ fn test_placeholder_passthrough() {
     use rbdc::db::Placeholder;
     let driver = TursoDriver {};
     let sql = "SELECT * FROM t WHERE a = ? AND b = ?";
-    assert_eq!(driver.exchange(sql), sql, "Turso uses ? placeholders (pass-through)");
+    assert_eq!(
+        driver.exchange(sql),
+        sql,
+        "Turso uses ? placeholders (pass-through)"
+    );
 }

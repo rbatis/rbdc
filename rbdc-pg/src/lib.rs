@@ -23,4 +23,4 @@ pub use driver::PgDriver as PostgresDriver;
 pub use driver::PgDriver as Driver;
 
 // Export commonly used types
-pub use types::{Point, TsVector, TsQuery};
+pub use types::{Point, TsQuery, TsVector};

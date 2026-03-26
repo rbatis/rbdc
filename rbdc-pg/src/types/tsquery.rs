@@ -89,7 +89,8 @@ mod tests {
             type_info: crate::type_info::PgTypeInfo::UNKNOWN,
             format: PgValueFormat::Text,
             timezone_sec: None,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(result.0, "hello & world");
     }
 

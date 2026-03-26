@@ -35,13 +35,16 @@ impl Display for Point {
 
 impl From<Point> for Value {
     fn from(arg: Point) -> Self {
-        rbs::Value::Ext("point", Box::new(rbs::Value::Ext(
+        rbs::Value::Ext(
             "point",
-            Box::new(rbs::Value::Array(vec![
-                rbs::Value::F64(arg.x),
-                rbs::Value::F64(arg.y),
-            ]))
-        )))
+            Box::new(rbs::Value::Ext(
+                "point",
+                Box::new(rbs::Value::Array(vec![
+                    rbs::Value::F64(arg.x),
+                    rbs::Value::F64(arg.y),
+                ])),
+            )),
+        )
     }
 }
 
@@ -55,7 +58,7 @@ impl Decode for Point {
                 // Or use TEXT format in PostgreSQL: ST_AsText(point_column)
                 return Err(Error::from(
                     "POINT binary format (WKB) not supported. \
-                     Use TEXT format: ST_AsText(point_column) or parse with geo-types crate."
+                     Use TEXT format: ST_AsText(point_column) or parse with geo-types crate.",
                 ));
             }
             PgValueFormat::Text => {
@@ -71,7 +74,7 @@ impl Decode for Point {
                     )));
                 }
 
-                let coords = &s[6..s.len()-1]; // Remove "POINT(" and ")"
+                let coords = &s[6..s.len() - 1]; // Remove "POINT(" and ")"
                 let parts: Vec<&str> = coords.split_whitespace().collect();
 
                 if parts.len() != 2 {
@@ -81,9 +84,11 @@ impl Decode for Point {
                     )));
                 }
 
-                let x = parts[0].parse::<f64>()
+                let x = parts[0]
+                    .parse::<f64>()
                     .map_err(|e| Error::from(format!("Invalid x coordinate: {}", e)))?;
-                let y = parts[1].parse::<f64>()
+                let y = parts[1]
+                    .parse::<f64>()
                     .map_err(|e| Error::from(format!("Invalid y coordinate: {}", e)))?;
 
                 Self { x, y }
@@ -116,7 +121,10 @@ mod tests {
 
     #[test]
     fn test_beijing_coords() {
-        let point = Point { x: 116.4074, y: 39.9042 };
+        let point = Point {
+            x: 116.4074,
+            y: 39.9042,
+        };
         let display = format!("{}", point);
         println!("Beijing: {}", display);
         assert!(display.contains("POINT("));
@@ -130,7 +138,8 @@ mod tests {
             type_info: crate::type_info::PgTypeInfo::UNKNOWN,
             format: PgValueFormat::Text,
             timezone_sec: None,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(result.x, 116.4);
         assert_eq!(result.y, 39.9);
     }
@@ -143,7 +152,8 @@ mod tests {
             type_info: crate::type_info::PgTypeInfo::UNKNOWN,
             format: PgValueFormat::Text,
             timezone_sec: None,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(result.x, -74.0060);
         assert_eq!(result.y, 40.7128);
     }

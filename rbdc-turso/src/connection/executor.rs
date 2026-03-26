@@ -26,14 +26,10 @@ impl TursoConnection {
             .map(value_to_libsql)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let mut rows_result = self
-            .conn
-            .query(sql, libsql_params)
-            .await
-            .map_err(|e| {
-                log::warn!("turso: query failed: {}", e);
-                TursoError::from(e)
-            })?;
+        let mut rows_result = self.conn.query(sql, libsql_params).await.map_err(|e| {
+            log::warn!("turso: query failed: {}", e);
+            TursoError::from(e)
+        })?;
 
         let column_count = rows_result.column_count() as usize;
 
@@ -86,14 +82,10 @@ impl TursoConnection {
             .map(value_to_libsql)
             .collect::<Result<Vec<_>, _>>()?;
 
-        let rows_affected = self
-            .conn
-            .execute(sql, libsql_params)
-            .await
-            .map_err(|e| {
-                log::warn!("turso: exec failed: {}", e);
-                TursoError::from(e)
-            })?;
+        let rows_affected = self.conn.execute(sql, libsql_params).await.map_err(|e| {
+            log::warn!("turso: exec failed: {}", e);
+            TursoError::from(e)
+        })?;
 
         let last_id = self.conn.last_insert_rowid();
 

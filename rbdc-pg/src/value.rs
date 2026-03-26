@@ -32,7 +32,12 @@ pub struct PgValue {
 }
 
 impl<'r> PgValueRef<'r> {
-    pub(crate) fn get(buf: &mut &'r [u8], format: PgValueFormat, ty: PgTypeInfo, timezone_sec: Option<i32>) -> Self {
+    pub(crate) fn get(
+        buf: &mut &'r [u8],
+        format: PgValueFormat,
+        ty: PgTypeInfo,
+        timezone_sec: Option<i32>,
+    ) -> Self {
         let mut element_len = buf.get_i32();
 
         let element_val = if element_len == -1 {
@@ -69,7 +74,12 @@ impl<'r> PgValueRef<'r> {
 }
 
 impl PgValue {
-    pub fn get(buf: &mut &[u8], format: PgValueFormat, ty: PgTypeInfo, timezone_sec: Option<i32>) -> Self {
+    pub fn get(
+        buf: &mut &[u8],
+        format: PgValueFormat,
+        ty: PgTypeInfo,
+        timezone_sec: Option<i32>,
+    ) -> Self {
         let mut element_len = buf.get_i32();
 
         let element_val = if element_len == -1 {

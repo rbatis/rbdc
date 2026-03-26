@@ -37,7 +37,8 @@ impl Default for Hstore {
 
 impl Display for Hstore {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let pairs: Vec<String> = self.0
+        let pairs: Vec<String> = self
+            .0
             .iter()
             .map(|(k, v)| format!("{}=>{}", k, v))
             .collect();
@@ -199,7 +200,8 @@ mod tests {
             type_info: crate::type_info::PgTypeInfo::HSTORE,
             format: PgValueFormat::Text,
             timezone_sec: None,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(hstore.0.len(), 0);
     }
 
@@ -211,7 +213,8 @@ mod tests {
             type_info: crate::type_info::PgTypeInfo::HSTORE,
             format: PgValueFormat::Text,
             timezone_sec: None,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(hstore.0.get("name"), Some(&"John".to_string()));
     }
 
@@ -223,7 +226,8 @@ mod tests {
             type_info: crate::type_info::PgTypeInfo::HSTORE,
             format: PgValueFormat::Text,
             timezone_sec: None,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(hstore.0.len(), 3);
         assert_eq!(hstore.0.get("name"), Some(&"John".to_string()));
         assert_eq!(hstore.0.get("age"), Some(&"30".to_string()));

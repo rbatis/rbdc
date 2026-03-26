@@ -65,10 +65,9 @@ fn test_parse_remote_without_token_parses_but_validation_fails() {
 
 #[test]
 fn test_parse_remote_with_empty_token_validation_fails() {
-    let opts = rbdc_turso::TursoConnectOptions::from_str(
-        "turso://?url=libsql://my-db.turso.io&token=",
-    )
-    .unwrap();
+    let opts =
+        rbdc_turso::TursoConnectOptions::from_str("turso://?url=libsql://my-db.turso.io&token=")
+            .unwrap();
     assert!(opts.is_remote());
 
     let result = opts.validate();
@@ -220,7 +219,9 @@ fn test_driver_default_option_type() {
     let driver = rbdc_turso::TursoDriver {};
     let opt = driver.default_option();
     // Must be downcastable to TursoConnectOptions
-    assert!(opt.downcast_ref::<rbdc_turso::TursoConnectOptions>().is_some());
+    assert!(opt
+        .downcast_ref::<rbdc_turso::TursoConnectOptions>()
+        .is_some());
 }
 
 #[test]
@@ -320,12 +321,15 @@ async fn test_connect_local_with_missing_parent_fails() {
         .as_nanos();
 
     let mut missing_parent = std::env::temp_dir();
-    missing_parent.push(format!("rbdc_turso_missing_parent_{}_{}", std::process::id(), ts));
+    missing_parent.push(format!(
+        "rbdc_turso_missing_parent_{}_{}",
+        std::process::id(),
+        ts
+    ));
     let _ = std::fs::remove_dir_all(&missing_parent);
 
     let db_path = missing_parent.join("db.sqlite");
-    let opts =
-        rbdc_turso::TursoConnectOptions::new().url(db_path.to_string_lossy().to_string());
+    let opts = rbdc_turso::TursoConnectOptions::new().url(db_path.to_string_lossy().to_string());
 
     let result = opts.connect_turso().await;
     assert!(

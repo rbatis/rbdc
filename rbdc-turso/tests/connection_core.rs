@@ -4,7 +4,7 @@
 //! an in-memory Turso database. They cover:
 //!
 //! - Connection establishment via `Driver::connect`
-//! - Query execution (`get_rows`, `get_values`)
+//! - Query execution (`exec_rows`, `exec_decode`)
 //! - Statement execution (`exec`)
 //! - Transaction lifecycle (`begin`, `commit`, `rollback`)
 //! - Ping and close semantics
@@ -107,7 +107,7 @@ async fn test_connect_local_file() {
     .unwrap();
 
     let rows = conn
-        .get_rows("SELECT id, name FROM local_file_test", vec![])
+        .exec_rows("SELECT id, name FROM local_file_test", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -259,21 +259,21 @@ async fn test_exec_with_params() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Query (get_rows)
+// Query (exec_rows)
 // ──────────────────────────────────────────────────────────────────────
 
 #[tokio::test]
-async fn test_get_rows_empty() {
+async fn test_exec_rows_empty() {
     let mut conn = connect_with_table().await;
     let rows = conn
-        .get_rows("SELECT * FROM test", vec![])
+        .exec_rows("SELECT * FROM test", vec![])
         .await
         .expect("SELECT should succeed");
     assert!(rows.is_empty(), "empty table should return no rows");
 }
 
 #[tokio::test]
-async fn test_get_rows_with_data() {
+async fn test_exec_rows_with_data() {
     let mut conn = connect_with_table().await;
     conn.exec(
         "INSERT INTO test (id, name, score) VALUES (1, 'alice', 90.0)",
@@ -289,14 +289,14 @@ async fn test_get_rows_with_data() {
     .unwrap();
 
     let rows = conn
-        .get_rows("SELECT * FROM test ORDER BY id", vec![])
+        .exec_rows("SELECT * FROM test ORDER BY id", vec![])
         .await
         .expect("SELECT should succeed");
     assert_eq!(rows.len(), 2);
 }
 
 #[tokio::test]
-async fn test_get_rows_metadata() {
+async fn test_exec_rows_metadata() {
     let mut conn = connect_with_table().await;
     conn.exec(
         "INSERT INTO test (id, name, score) VALUES (1, 'meta', 77.0)",
@@ -306,7 +306,7 @@ async fn test_get_rows_metadata() {
     .unwrap();
 
     let rows = conn
-        .get_rows("SELECT id, name, score FROM test", vec![])
+        .exec_rows("SELECT id, name, score FROM test", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -320,7 +320,7 @@ async fn test_get_rows_metadata() {
 }
 
 #[tokio::test]
-async fn test_get_rows_values() {
+async fn test_exec_rows_values() {
     let mut conn = connect_with_table().await;
     conn.exec(
         "INSERT INTO test (id, name, score) VALUES (7, 'val', 99.9)",
@@ -330,7 +330,7 @@ async fn test_get_rows_values() {
     .unwrap();
 
     let mut rows = conn
-        .get_rows("SELECT id, name, score FROM test WHERE id = 7", vec![])
+        .exec_rows("SELECT id, name, score FROM test WHERE id = 7", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -347,7 +347,7 @@ async fn test_get_rows_values() {
 }
 
 #[tokio::test]
-async fn test_get_rows_with_params() {
+async fn test_exec_rows_with_params() {
     let mut conn = connect_with_table().await;
     conn.exec("INSERT INTO test (id, name) VALUES (1, 'find_me')", vec![])
         .await
@@ -357,7 +357,7 @@ async fn test_get_rows_with_params() {
         .unwrap();
 
     let rows = conn
-        .get_rows(
+        .exec_rows(
             "SELECT id, name FROM test WHERE name = ?",
             vec![rbs::Value::String("find_me".to_string())],
         )
@@ -367,13 +367,13 @@ async fn test_get_rows_with_params() {
 }
 
 #[tokio::test]
-async fn test_get_rows_index_out_of_range() {
+async fn test_exec_rows_index_out_of_range() {
     let mut conn = connect_with_table().await;
     conn.exec("INSERT INTO test (id, name) VALUES (1, 'oob')", vec![])
         .await
         .unwrap();
 
-    let mut rows = conn.get_rows("SELECT id FROM test", vec![]).await.unwrap();
+    let mut rows = conn.exec_rows("SELECT id FROM test", vec![]).await.unwrap();
     let row = &mut rows[0];
     // Column index 5 is out of range (only 1 column)
     let err = row.get(5);
@@ -381,11 +381,11 @@ async fn test_get_rows_index_out_of_range() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// get_values (default trait implementation)
+// exec_decode (default trait implementation)
 // ──────────────────────────────────────────────────────────────────────
 
 #[tokio::test]
-async fn test_get_values() {
+async fn test_exec_decode() {
     let mut conn = connect_with_table().await;
     conn.exec(
         "INSERT INTO test (id, name, score) VALUES (1, 'gv', 50.0)",
@@ -395,11 +395,11 @@ async fn test_get_values() {
     .unwrap();
 
     let values = conn
-        .get_values("SELECT id, name FROM test", vec![])
+        .exec_decode("SELECT id, name FROM test", vec![])
         .await
-        .expect("get_values should succeed");
+        .expect("exec_decode should succeed");
 
-    // get_values returns Value::Array of Value::Map entries
+    // exec_decode returns Value::Array of Value::Map entries
     match &values {
         rbs::Value::Array(arr) => {
             assert_eq!(arr.len(), 1);
@@ -433,7 +433,7 @@ async fn test_transaction_commit() {
 
     // Data should be visible after commit
     let rows = conn
-        .get_rows("SELECT name FROM test WHERE id = 1", vec![])
+        .exec_rows("SELECT name FROM test WHERE id = 1", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -459,7 +459,7 @@ async fn test_transaction_rollback() {
     conn.rollback().await.expect("rollback should succeed");
 
     // Only baseline data should exist
-    let rows = conn.get_rows("SELECT * FROM test", vec![]).await.unwrap();
+    let rows = conn.exec_rows("SELECT * FROM test", vec![]).await.unwrap();
     assert_eq!(
         rows.len(),
         1,
@@ -483,7 +483,7 @@ async fn test_transaction_rollback_preserves_prior_data() {
 
     // The DELETE should have been rolled back
     let rows = conn
-        .get_rows("SELECT * FROM test WHERE id = 1", vec![])
+        .exec_rows("SELECT * FROM test WHERE id = 1", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1, "rollback should preserve prior data");
@@ -515,7 +515,7 @@ async fn test_multiple_transactions() {
     conn.commit().await.unwrap();
 
     let rows = conn
-        .get_rows("SELECT * FROM test ORDER BY id", vec![])
+        .exec_rows("SELECT * FROM test ORDER BY id", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 2, "only committed transactions should persist");
@@ -533,9 +533,9 @@ async fn test_exec_invalid_sql() {
 }
 
 #[tokio::test]
-async fn test_get_rows_invalid_sql() {
+async fn test_exec_rows_invalid_sql() {
     let mut conn = connect_in_memory().await;
-    let result = conn.get_rows("SELECT FROM WHERE", vec![]).await;
+    let result = conn.exec_rows("SELECT FROM WHERE", vec![]).await;
     assert!(result.is_err(), "invalid SQL should return error");
 }
 
@@ -623,7 +623,7 @@ async fn test_null_round_trip() {
     .unwrap();
 
     let mut rows = conn
-        .get_rows("SELECT name, score FROM test WHERE id = 1", vec![])
+        .exec_rows("SELECT name, score FROM test WHERE id = 1", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -648,7 +648,7 @@ async fn test_bool_as_integer() {
     .unwrap();
 
     let mut rows = conn
-        .get_rows("SELECT flag FROM bools WHERE id = 1", vec![])
+        .exec_rows("SELECT flag FROM bools WHERE id = 1", vec![])
         .await
         .unwrap();
     let row = &mut rows[0];
@@ -673,7 +673,7 @@ async fn test_binary_round_trip() {
     .unwrap();
 
     let mut rows = conn
-        .get_rows("SELECT data FROM blobs WHERE id = 1", vec![])
+        .exec_rows("SELECT data FROM blobs WHERE id = 1", vec![])
         .await
         .unwrap();
     let row = &mut rows[0];
@@ -698,7 +698,7 @@ async fn test_connection_usable_after_sql_error() {
         .expect("connection should recover from SQL error");
 
     let rows = conn
-        .get_rows("SELECT name FROM test WHERE id = 1", vec![])
+        .exec_rows("SELECT name FROM test WHERE id = 1", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);

@@ -173,7 +173,7 @@ impl fast_pool::Manager for ConnManagerProxy {
 }
 
 impl Connection for ConnProxy {
-    fn get_rows(
+    fn exec_rows(
         &mut self,
         sql: &str,
         params: Vec<Value>,
@@ -181,14 +181,14 @@ impl Connection for ConnProxy {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }
-        self.conn.as_mut().unwrap().get_rows(sql, params)
+        self.conn.as_mut().unwrap().exec_rows(sql, params)
     }
 
-    fn get_values(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
+    fn exec_decode(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
         if self.conn.is_none() {
             return Box::pin(async { Err(Error::from("conn is drop")) });
         }
-        self.conn.as_mut().unwrap().get_values(sql, params)
+        self.conn.as_mut().unwrap().exec_decode(sql, params)
     }
 
     fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>> {
@@ -257,7 +257,7 @@ mod test {
     pub struct Conn {}
 
     impl Connection for Conn {
-        fn get_rows(
+        fn exec_rows(
             &mut self,
             _sql: &str,
             _params: Vec<Value>,

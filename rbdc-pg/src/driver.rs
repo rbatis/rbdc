@@ -85,7 +85,7 @@ mod test {
 //             std::thread::sleep(std::time::Duration::from_secs(2));
 //             let mut conn = pool.get().await.unwrap();
 //             let data = conn
-//                 .get_values("select * from biz_activity", vec![])
+//                 .exec_decode("select * from biz_activity", vec![])
 //                 .await
 //                 .unwrap();
 //             for mut x in data {

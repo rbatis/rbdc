@@ -73,7 +73,7 @@ mod test {
     //         let pool = FastPool::new(ConnManager::new(MssqlDriver {}, uri).unwrap()).unwrap();
     //         let mut conn = pool.get().await.unwrap();
     //         let data = conn
-    //             .get_values("SELECT 1", vec![])
+    //             .exec_decode("SELECT 1", vec![])
     //             .await
     //             .unwrap();
     //         for mut x in data {

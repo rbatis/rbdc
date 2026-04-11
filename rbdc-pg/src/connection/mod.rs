@@ -215,7 +215,7 @@ impl Connection for PgConnection {
         self.exec("/* RBDC ping */", vec![]).map_ok(|_| ()).boxed()
     }
 
-    fn get_rows(
+    fn exec_rows(
         &mut self,
         sql: &str,
         params: Vec<Value>,

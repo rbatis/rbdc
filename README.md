@@ -32,7 +32,7 @@ use rbdc_pool_fast::FastPool;
 async fn main() -> Result<(), rbdc::Error> {
     let pool = FastPool::new_url(SqliteDriver {},"sqlite://target/test.db")?;
     let mut conn = pool.get().await?;
-    let v = conn.get_values("SELECT * FROM sqlite_master", vec![]).await?;
+    let v = conn.exec_decode("SELECT * FROM sqlite_master", vec![]).await?;
     println!("{}", v);
     //if need decode use `let result:Vec<Table> = rbs::from_value(v)?;`
     Ok(())
@@ -68,7 +68,7 @@ async fn main() -> Result<(), rbdc::Error> {
     let uri = "YourDriver://****";
     let pool = FastPool::new_url(YourDriver{}, uri)?;
     let mut conn = pool.get().await?;
-    let v = conn.get_values("SELECT 1", vec![]).await?;
+    let v = conn.exec_decode("SELECT 1", vec![]).await?;
     println!("{}", v);
 }
 ```

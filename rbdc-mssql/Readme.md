@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut conn = pool.get().await?;
 
     // 执行查询
-    let result = conn.get_values("SELECT 1 as test", vec![]).await?;
+    let result = conn.exec_decode("SELECT 1 as test", vec![]).await?;
     println!("查询结果: {:?}", result);
 
     Ok(())

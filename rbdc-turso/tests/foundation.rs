@@ -280,7 +280,7 @@ async fn test_in_memory_connection_is_functional() {
     assert_eq!(result.rows_affected, 1);
 
     let rows = conn
-        .get_rows("SELECT id, name FROM foundation_test", vec![])
+        .exec_rows("SELECT id, name FROM foundation_test", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);

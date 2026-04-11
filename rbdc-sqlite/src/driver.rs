@@ -102,7 +102,7 @@ mod test {
 //             .await;
 //
 //             let data = conn
-//                 .get_values("select * from biz_activity", vec![])
+//                 .exec_decode("select * from biz_activity", vec![])
 //                 .await
 //                 .unwrap();
 //             for mut x in data {

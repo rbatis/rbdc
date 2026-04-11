@@ -215,7 +215,7 @@ impl Row for MssqlRow {
 }
 
 impl Connection for MssqlConnection {
-    fn get_rows(
+    fn exec_rows(
         &mut self,
         sql: &str,
         params: Vec<Value>,

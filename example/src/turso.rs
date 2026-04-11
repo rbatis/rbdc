@@ -39,7 +39,7 @@ async fn main() -> Result<(), Error> {
         .await?;
 
     // Query data
-    let v = conn.get_values("SELECT * FROM users", vec![]).await?;
+    let v = conn.exec_decode("SELECT * FROM users", vec![]).await?;
     println!("Query result: {}", v);
 
     Ok(())

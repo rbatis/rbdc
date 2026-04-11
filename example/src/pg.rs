@@ -11,7 +11,7 @@ async fn main() -> Result<(), Error> {
         "postgres://postgres:123456@localhost:5432/postgres",
     )?;
     let mut conn = pool.get().await?;
-    let v = conn.get_values("select * from user", vec![]).await?;
+    let v = conn.exec_decode("select * from user", vec![]).await?;
     println!("{}", v);
     Ok(())
 }

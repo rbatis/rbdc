@@ -33,7 +33,7 @@ async fn par_001_null_value() {
     .unwrap();
 
     let mut rows = conn
-        .get_rows("SELECT val FROM par001 WHERE id = 1", vec![])
+        .exec_rows("SELECT val FROM par001 WHERE id = 1", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -77,7 +77,7 @@ async fn par_002_integer_values() {
     }
 
     let mut rows = conn
-        .get_rows("SELECT val FROM par002 ORDER BY id", vec![])
+        .exec_rows("SELECT val FROM par002 ORDER BY id", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), cases.len());
@@ -123,7 +123,7 @@ async fn par_003_real_values() {
     }
 
     let mut rows = conn
-        .get_rows("SELECT val FROM par003 ORDER BY id", vec![])
+        .exec_rows("SELECT val FROM par003 ORDER BY id", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), cases.len());
@@ -181,7 +181,7 @@ async fn par_004_text_values() {
     }
 
     let mut rows = conn
-        .get_rows("SELECT val FROM par004 ORDER BY id", vec![])
+        .exec_rows("SELECT val FROM par004 ORDER BY id", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), cases.len());
@@ -230,7 +230,7 @@ async fn par_005_blob_values() {
     }
 
     let mut rows = conn
-        .get_rows("SELECT val FROM par005 ORDER BY id", vec![])
+        .exec_rows("SELECT val FROM par005 ORDER BY id", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), cases.len());
@@ -284,7 +284,7 @@ async fn par_006_json_text_default_no_detection() {
     }
 
     let mut rows = conn
-        .get_rows("SELECT val FROM par006 ORDER BY id", vec![])
+        .exec_rows("SELECT val FROM par006 ORDER BY id", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), cases.len());
@@ -324,7 +324,7 @@ async fn par_006_json_text_with_detection_enabled() {
     }
 
     let mut rows = conn
-        .get_rows("SELECT val FROM par006j ORDER BY id", vec![])
+        .exec_rows("SELECT val FROM par006j ORDER BY id", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), cases.len());
@@ -385,7 +385,7 @@ async fn par_007_bool_parameter_binding() {
     .unwrap();
 
     let mut rows = conn
-        .get_rows("SELECT flag FROM par007 ORDER BY id", vec![])
+        .exec_rows("SELECT flag FROM par007 ORDER BY id", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 2);
@@ -418,7 +418,7 @@ async fn par_008_metadata_columns() {
     .unwrap();
 
     let rows = conn
-        .get_rows("SELECT id, name, score, data FROM par008", vec![])
+        .exec_rows("SELECT id, name, score, data FROM par008", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -476,7 +476,7 @@ async fn par_009_row_access_out_of_bounds() {
         .unwrap();
 
     let mut rows = conn
-        .get_rows("SELECT a, b FROM par009", vec![])
+        .exec_rows("SELECT a, b FROM par009", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -621,7 +621,7 @@ async fn par_012_mixed_types_single_row() {
     .unwrap();
 
     let mut rows = conn
-        .get_rows("SELECT i, r, t, b, n FROM par012", vec![])
+        .exec_rows("SELECT i, r, t, b, n FROM par012", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -629,7 +629,7 @@ async fn par_012_mixed_types_single_row() {
     let md = rows[0].meta_data();
     assert_eq!(md.column_len(), 5);
 
-    // Values accessed in reverse order (like get_values does) to verify
+    // Values accessed in reverse order (like exec_decode does) to verify
     // index-stable access via Option::take pattern
     let n = rows[0].get(4).unwrap();
     assert_eq!(n, Value::Null);
@@ -653,11 +653,11 @@ async fn par_012_mixed_types_single_row() {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// PAR-013: get_values convenience method
+// PAR-013: exec_decode convenience method
 // ────────────────────────────────────────────────────────────────────
 
 #[tokio::test]
-async fn par_013_get_values() {
+async fn par_013_exec_decode() {
     let mut conn = turso_conn().await;
     conn.exec(
         "CREATE TABLE par013 (id INTEGER PRIMARY KEY, name TEXT)",
@@ -670,11 +670,11 @@ async fn par_013_get_values() {
         .unwrap();
 
     let values = conn
-        .get_values("SELECT id, name FROM par013 ORDER BY id", vec![])
+        .exec_decode("SELECT id, name FROM par013 ORDER BY id", vec![])
         .await
         .unwrap();
 
-    // get_values returns Value::Array of Value::Map
+    // exec_decode returns Value::Array of Value::Map
     match values {
         Value::Array(arr) => {
             assert_eq!(arr.len(), 2);
@@ -701,13 +701,13 @@ async fn par_014_empty_result_set() {
         .unwrap();
 
     let rows = conn
-        .get_rows("SELECT id FROM par014", vec![])
+        .exec_rows("SELECT id FROM par014", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 0);
 
     let values = conn
-        .get_values("SELECT id FROM par014", vec![])
+        .exec_decode("SELECT id FROM par014", vec![])
         .await
         .unwrap();
     assert_eq!(values, Value::Array(vec![]));
@@ -733,7 +733,7 @@ async fn par_015_aliased_column_names() {
         .unwrap();
 
     let rows = conn
-        .get_rows(
+        .exec_rows(
             "SELECT id AS row_id, long_column_name AS name FROM par015",
             vec![],
         )
@@ -766,7 +766,7 @@ async fn par_016_multiple_rows() {
     }
 
     let mut rows = conn
-        .get_rows("SELECT id FROM par016 ORDER BY id", vec![])
+        .exec_rows("SELECT id FROM par016 ORDER BY id", vec![])
         .await
         .unwrap();
     assert_eq!(rows.len(), 100);

@@ -111,7 +111,7 @@ impl MySqlConnection {
 }
 
 impl Connection for MySqlConnection {
-    fn get_rows(
+    fn exec_rows(
         &mut self,
         sql: &str,
         params: Vec<Value>,

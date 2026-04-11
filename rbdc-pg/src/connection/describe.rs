@@ -209,7 +209,7 @@ impl PgConnection {
                 typbasetype: 0,
             };
 
-            let rows = self.get_values(
+            let rows = self.exec_decode(
                 "SELECT typname, typtype, typcategory, typrelid, typelem, typbasetype FROM pg_catalog.pg_type WHERE oid = $1",
                 vec![oid.0.into()]
             ).await?;
@@ -285,7 +285,7 @@ impl PgConnection {
         //language=SQL
         let mut oid = Oid(0);
         let rows = self
-            .get_values(
+            .exec_decode(
                 "SELECT oid FROM pg_catalog.pg_type WHERE typname ILIKE $1",
                 vec![Value::String(name.to_string())],
             )
@@ -327,7 +327,7 @@ impl PgConnection {
         }
         Box::pin(async move {
             let rows = self
-                .get_values(
+                .exec_decode(
                     r#"
 SELECT rngsubtype
 FROM pg_catalog.pg_range
@@ -357,7 +357,7 @@ WHERE rngtypid = $1
             pub enumlabel: String,
         }
         let rows = self
-            .get_values(
+            .exec_decode(
                 r#"
 SELECT enumlabel
 FROM pg_catalog.pg_enum
@@ -395,7 +395,7 @@ ORDER BY enumsortorder
 
         Box::pin(async move {
             let rows = self
-                .get_values(
+                .exec_decode(
                     r#"
 SELECT attname, atttypid
 FROM pg_catalog.pg_attribute

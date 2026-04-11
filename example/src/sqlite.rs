@@ -12,7 +12,7 @@ async fn main() -> Result<(), Error> {
         .await;
     let mut conn = pool.get().await?;
     let v = conn
-        .get_values("select * from sqlite_master", vec![])
+        .exec_decode("select * from sqlite_master", vec![])
         .await?;
     println!("{}", v);
     Ok(())

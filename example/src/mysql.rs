@@ -8,7 +8,7 @@ use rbdc_pool_fast::FastPool;
 async fn main() -> Result<(), Error> {
     let pool = FastPool::new_url(MysqlDriver {}, "mysql://root:123456@localhost:3306/test")?;
     let mut conn = pool.get().await?;
-    let v = conn.get_values("select * from user", vec![]).await?;
+    let v = conn.exec_decode("select * from user", vec![]).await?;
     println!("{}", v);
     Ok(())
 }

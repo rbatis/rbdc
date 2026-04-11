@@ -10,6 +10,6 @@ async fn main() {
     let uri = "mssql://SA:TestPass!123456@localhost:1433/master";
     let pool = FastPool::new_url(MssqlDriver {}, uri).unwrap();
     let mut conn = pool.get().await.unwrap();
-    let v = conn.get_values("SELECT 1", vec![]).await.unwrap();
+    let v = conn.exec_decode("SELECT 1", vec![]).await.unwrap();
     println!("{}", v);
 }

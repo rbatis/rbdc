@@ -33,7 +33,7 @@ impl std::fmt::Debug for TursoConnection {
 }
 
 impl Connection for TursoConnection {
-    fn get_rows(
+    fn exec_rows(
         &mut self,
         sql: &str,
         params: Vec<Value>,

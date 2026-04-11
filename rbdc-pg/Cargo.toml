@@ -1,6 +1,6 @@
 [package]
 name = "rbdc-pg"
-version = "4.7.1"
+version = "4.8.0"
 edition = "2021"
 description = "The Rust SQL Toolkit and ORM Library. An async, pure Rust SQL crate featuring compile-time Dynamic SQL"
 readme = "Readme.md"
@@ -18,7 +18,7 @@ tls-rustls=["rbdc/tls-rustls"]
 tls-native-tls=["rbdc/tls-native-tls"]
 [dependencies]
 rbs = { version = "4"}
-rbdc = { version = "4.7", path = "../", default-features = false, optional = true }
+rbdc = { version = "4.8", path = "../", default-features = false, optional = true }
 bytes = "1.1.0"
 log = "0.4"
 serde = { version = "1", features = ["derive", "rc"] }

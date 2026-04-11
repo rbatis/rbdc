@@ -71,7 +71,7 @@ mod test {
 //             std::thread::sleep(std::time::Duration::from_secs(2));
 //             let mut conn = pool.get().await.unwrap();
 //             let data = conn
-//                 .get_values("select * from sys_dict where code = ?", vec![Value::String("111".to_string())])
+//                 .exec_decode("select * from sys_dict where code = ?", vec![Value::String("111".to_string())])
 //                 .await
 //                 .unwrap();
 //             for mut x in data {
@@ -90,7 +90,7 @@ mod test {
 //                 .await
 //                 .unwrap();
 //             let data = c
-//                 .get_values("select * from sys_dict", vec![])
+//                 .exec_decode("select * from sys_dict", vec![])
 //                 .await
 //                 .unwrap();
 //             for mut x in data {
@@ -155,7 +155,7 @@ mod test {
 //             let param = vec![
 //             ];
 //             let data = c
-//                 .get_values(
+//                 .exec_decode(
 //                     "select count(1) as count from sys_dict where id!='' order by create_date",
 //                     param,
 //                 )

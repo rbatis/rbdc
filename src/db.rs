@@ -84,7 +84,7 @@ impl From<(u64, Value)> for ExecResult {
 /// Represents a connection to a database
 pub trait Connection: Send + Sync {
     /// Execute a query that is expected to return a result set, such as a `SELECT` statement
-    fn get_rows(
+    fn exec_rows(
         &mut self,
         sql: &str,
         params: Vec<Value>,
@@ -92,8 +92,8 @@ pub trait Connection: Send + Sync {
 
     /// Execute a query that is expected to return a result set, such as a `SELECT` statement
     /// return array of [{'column': 'value'}]
-    fn get_values(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
-        let v = self.get_rows(sql, params);
+    fn exec_decode(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
+       let v = self.exec_rows(sql, params);
         Box::pin(async move {
             let v = v.await?;
             let mut rows = Vec::with_capacity(v.len());
@@ -151,16 +151,16 @@ pub trait Connection: Send + Sync {
 }
 
 impl Connection for Box<dyn Connection> {
-    fn get_rows(
+    fn exec_rows(
         &mut self,
         sql: &str,
         params: Vec<Value>,
     ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
-        self.deref_mut().get_rows(sql, params)
+        self.deref_mut().exec_rows(sql, params)
     }
 
-    fn get_values(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
-        self.deref_mut().get_values(sql, params)
+    fn exec_decode(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
+        self.deref_mut().exec_decode(sql, params)
     }
 
     fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>> {

@@ -50,7 +50,7 @@ impl SqliteConnectOptions {
 }
 
 impl Connection for SqliteConnection {
-    fn get_rows(
+    fn exec_rows(
         &mut self,
         sql: &str,
         params: Vec<Value>,

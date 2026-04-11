@@ -84,7 +84,7 @@ async fn guard_no_fallback_on_query_failure() {
     let mut conn = driver.connect("turso://:memory:").await.unwrap();
 
     // Query a nonexistent table → error, not fallback
-    let result = conn.get_rows("SELECT * FROM nonexistent", vec![]).await;
+    let result = conn.exec_rows("SELECT * FROM nonexistent", vec![]).await;
     assert!(result.is_err());
 
     // The connection should still be alive (error doesn't trigger fallback)

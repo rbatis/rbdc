@@ -222,7 +222,7 @@ where
             MaybeTlsStream::Tls(s) => s.get_ref().get_ref().get_ref(),
 
             MaybeTlsStream::Upgrading => {
-                panic!("{}", io::Error::from(io::ErrorKind::ConnectionAborted))
+                panic!("TLS stream accessed while connection is in upgrading state - this indicates a race condition or incorrect state management");
             }
         }
     }
@@ -243,7 +243,7 @@ where
             MaybeTlsStream::Tls(s) => s.get_mut().get_mut().get_mut(),
 
             MaybeTlsStream::Upgrading => {
-                panic!("{}", io::Error::from(io::ErrorKind::ConnectionAborted))
+                panic!("TLS stream accessed while connection is in upgrading state - this indicates a race condition or incorrect state management");
             }
         }
     }

@@ -20,17 +20,38 @@ impl Debug for ConnectionGuard {
     }
 }
 
+impl ConnectionGuard {
+    /// Returns a reference to the inner connection if it hasn't been consumed.
+    /// Returns `None` if the guard has already been dropped or the connection has been taken.
+    pub fn get(&self) -> Option<&dyn Connection> {
+        self.conn.as_deref()
+    }
+
+    /// Returns a mutable reference to the inner connection if it hasn't been consumed.
+    /// Returns `None` if the guard has already been dropped or the connection has been taken.
+    pub fn get_mut(&mut self) -> Option<&mut dyn Connection> {
+        match &mut self.conn {
+            Some(c) => Some(c.as_mut()),
+            None => None,
+        }
+    }
+}
+
 impl Deref for ConnectionGuard {
     type Target = Box<dyn Connection>;
 
     fn deref(&self) -> &Self::Target {
-        self.conn.as_ref().unwrap()
+        self.conn
+            .as_ref()
+            .expect("ConnectionGuard has been consumed - connection already closed or taken")
     }
 }
 
 impl DerefMut for ConnectionGuard {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.conn.as_mut().unwrap()
+        self.conn
+            .as_mut()
+            .expect("ConnectionGuard has been consumed - connection already closed or taken")
     }
 }
 

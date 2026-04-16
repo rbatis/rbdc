@@ -157,7 +157,12 @@ impl MySqlConnection {
                 }
 
                 // otherwise, this first packet is the start of the result-set metadata,
-                *self.stream.waiting.front_mut().unwrap() = Waiting::Row;
+                let waiting_state = self.stream.waiting.front_mut().ok_or_else(|| {
+                    Error::protocol(
+                        "protocol invariant violated: waiting queue is empty, expected Result state marker",
+                    )
+                })?;
+                *waiting_state = Waiting::Row;
 
                 // column count as lenenc; guard against malformed packets
                 if packet.is_empty() { return Err(Error::protocol("empty packet when expecting column count".to_string())); }
@@ -187,7 +192,12 @@ impl MySqlConnection {
 
                         if eof.status.contains(Status::SERVER_MORE_RESULTS_EXISTS) {
                             // more result sets exist, continue to the next one
-                            *self.stream.waiting.front_mut().unwrap() = Waiting::Result;
+                            let waiting_state = self.stream.waiting.front_mut().ok_or_else(|| {
+                                Error::protocol(
+                                    "protocol invariant violated: waiting queue is empty, expected Result state marker",
+                                )
+                            })?;
+                            *waiting_state = Waiting::Result;
                             break;
                         }
 

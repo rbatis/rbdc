@@ -178,57 +178,57 @@ impl Connection for ConnProxy {
         sql: &str,
         params: Vec<Value>,
     ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
-        if self.conn.is_none() {
-            return Box::pin(async { Err(Error::from("conn is drop")) });
+        match &mut self.conn {
+            Some(conn) => conn.exec_rows(sql, params),
+            None => Box::pin(async { Err(Error::from("conn is drop")) }),
         }
-        self.conn.as_mut().unwrap().exec_rows(sql, params)
     }
 
     fn exec_decode(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
-        if self.conn.is_none() {
-            return Box::pin(async { Err(Error::from("conn is drop")) });
+        match &mut self.conn {
+            Some(conn) => conn.exec_decode(sql, params),
+            None => Box::pin(async { Err(Error::from("conn is drop")) }),
         }
-        self.conn.as_mut().unwrap().exec_decode(sql, params)
     }
 
     fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>> {
-        if self.conn.is_none() {
-            return Box::pin(async { Err(Error::from("conn is drop")) });
+        match &mut self.conn {
+            Some(conn) => conn.exec(sql, params),
+            None => Box::pin(async { Err(Error::from("conn is drop")) }),
         }
-        self.conn.as_mut().unwrap().exec(sql, params)
     }
 
     fn ping(&mut self) -> BoxFuture<'_, Result<(), Error>> {
-        if self.conn.is_none() {
-            return Box::pin(async { Err(Error::from("conn is drop")) });
+        match &mut self.conn {
+            Some(conn) => conn.ping(),
+            None => Box::pin(async { Err(Error::from("conn is drop")) }),
         }
-        self.conn.as_mut().unwrap().ping()
     }
 
     fn close(&mut self) -> BoxFuture<'_, Result<(), Error>> {
-        if self.conn.is_none() {
-            return Box::pin(async { Err(Error::from("conn is drop")) });
+        match &mut self.conn {
+            Some(conn) => conn.close(),
+            None => Box::pin(async { Err(Error::from("conn is drop")) }),
         }
-        self.conn.as_mut().unwrap().close()
     }
 
     fn begin(&mut self) -> BoxFuture<'_, Result<(), Error>> {
-        if self.conn.is_none() {
-            return Box::pin(async { Err(Error::from("conn is drop")) });
+        match &mut self.conn {
+            Some(conn) => conn.begin(),
+            None => Box::pin(async { Err(Error::from("conn is drop")) }),
         }
-        self.conn.as_mut().unwrap().begin()
     }
     fn commit(&mut self) -> BoxFuture<'_, Result<(), Error>> {
-        if self.conn.is_none() {
-            return Box::pin(async { Err(Error::from("conn is drop")) });
+        match &mut self.conn {
+            Some(conn) => conn.commit(),
+            None => Box::pin(async { Err(Error::from("conn is drop")) }),
         }
-        self.conn.as_mut().unwrap().commit()
     }
     fn rollback(&mut self) -> BoxFuture<'_, Result<(), Error>> {
-        if self.conn.is_none() {
-            return Box::pin(async { Err(Error::from("conn is drop")) });
+        match &mut self.conn {
+            Some(conn) => conn.rollback(),
+            None => Box::pin(async { Err(Error::from("conn is drop")) }),
         }
-        self.conn.as_mut().unwrap().rollback()
     }
 }
 

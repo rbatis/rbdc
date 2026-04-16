@@ -29,7 +29,9 @@ impl Driver for SqliteDriver {
         &'a self,
         opt: &'a dyn ConnectOptions,
     ) -> BoxFuture<'a, Result<Box<dyn Connection>, Error>> {
-        let opt: &SqliteConnectOptions = opt.downcast_ref().unwrap();
+        let opt: &SqliteConnectOptions = opt.downcast_ref().expect(
+            "SqliteDriver::connect_opt requires SqliteConnectOptions, got a different ConnectOptions type",
+        );
         Box::pin(async move {
             let conn = opt.connect().await?;
             Ok(Box::new(conn) as Box<dyn Connection>)

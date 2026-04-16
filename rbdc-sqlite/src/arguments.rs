@@ -58,7 +58,9 @@ impl SqliteArguments {
             let n: usize = if let Some(name) = handle.bind_parameter_name(param_i) {
                 if let Some(name) = name.strip_prefix('?') {
                     // parameter should have the form ?NNN
-                    atoi(name.as_bytes()).expect("parameter of the form ?NNN")
+                    atoi(name.as_bytes()).ok_or_else(|| {
+                        err_protocol!("invalid parameter index in ?NNN format: {}", name)
+                    })?
                 } else if let Some(name) = name.strip_prefix('$') {
                     // parameter should have the form $NNN
                     atoi(name.as_bytes()).ok_or_else(|| {

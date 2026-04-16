@@ -95,8 +95,12 @@ impl Drop for ConnectionHandle {
             let status = sqlite3_close(self.0.as_ptr());
             if status != SQLITE_OK {
                 // this should *only* happen due to an internal bug in SQLite where we left
-                // SQLite handles open
-                panic!("{}", SqliteError::new(self.0.as_ptr()));
+                // SQLite handles open. We log the error instead of panicking because
+                // panicking in Drop is unsafe (can cause二次panic).
+                log::error!(
+                    "Failed to close SQLite connection: {}",
+                    SqliteError::new(self.0.as_ptr())
+                );
             }
         }
     }

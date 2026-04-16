@@ -30,7 +30,9 @@ impl Driver for MssqlDriver {
         &'a self,
         opt: &'a dyn ConnectOptions,
     ) -> BoxFuture<'a, Result<Box<dyn Connection>, Error>> {
-        let opt = opt.downcast_ref::<MssqlConnectOptions>().unwrap();
+        let opt = opt.downcast_ref::<MssqlConnectOptions>().expect(
+            "MssqlDriver::connect_opt requires MssqlConnectOptions, got a different ConnectOptions type",
+        );
         Box::pin(async move {
             let conn = MssqlConnection::establish(&opt.0).await?;
             Ok(Box::new(conn) as Box<dyn Connection>)

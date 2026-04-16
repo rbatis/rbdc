@@ -87,7 +87,8 @@ impl DataType {
             SQLITE_TEXT => DataType::Text,
 
             // https://sqlite.org/c3ref/c_blob.html
-            _ => panic!("unknown data type code {}", code),
+            // SQLite type codes are exhaustive; reaching here indicates a library bug
+            _ => unreachable!("unknown SQLite data type code {} - this indicates a version mismatch between libsqlite3_sys and the SQLite library", code),
         }
     }
 }

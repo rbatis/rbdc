@@ -124,7 +124,7 @@ impl EstablishParams {
         //
         // We also need to convert the u128 value to i32, checking we're not overflowing.
         let ms = i32::try_from(self.busy_timeout.as_millis())
-            .expect("Given busy timeout value is too big.");
+            .map_err(|_| Error::from("Given busy timeout value is too big (> i32::MAX)"))?;
 
         status = unsafe { sqlite3_busy_timeout(handle.as_ptr(), ms) };
 

@@ -239,7 +239,9 @@ pub trait ConnectOptions: Any + Send + Sync + Debug + 'static {
     where
         Self: Sized,
     {
-        *self = *arg.downcast().expect("must be self type!");
+        *self = *arg.downcast().expect(
+            "ConnectOptions::set: type mismatch - expected the same type that implements ConnectOptions",
+        );
     }
 
     ///set option from uri

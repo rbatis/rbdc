@@ -30,7 +30,9 @@ impl Driver for PgDriver {
         &'a self,
         opt: &'a dyn ConnectOptions,
     ) -> BoxFuture<'a, Result<Box<dyn Connection>, Error>> {
-        let opt: &PgConnectOptions = opt.downcast_ref().unwrap();
+        let opt: &PgConnectOptions = opt.downcast_ref().expect(
+            "PgDriver::connect_opt requires PgConnectOptions, got a different ConnectOptions type",
+        );
         Box::pin(async move {
             let conn = opt.connect().await?;
             Ok(conn)

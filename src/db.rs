@@ -315,7 +315,7 @@ impl IntoMaps for Value {
             .iter()
             .map(|row| {
                 let Value::Array(values) = row else {
-                    return Ok::<Value, Error>(Value::Map(ValueMap::new()));
+                    return Value::Map(ValueMap::new());
                 };
                 let mut map = ValueMap::with_capacity(columns.len());
                 for (k, v) in columns.iter().zip(values.iter()) {
@@ -325,9 +325,9 @@ impl IntoMaps for Value {
                     };
                     map.insert(key.into(), v.clone());
                 }
-                Ok(Value::Map(map))
+                Value::Map(map)
             })
-            .collect::<Result<Vec<_>, Error>>()?;
+            .collect();
         Value::Array(result)
     }
 }

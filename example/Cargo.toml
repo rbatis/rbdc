@@ -31,3 +31,4 @@ rbdc-turso = {version = "4.8",path = "../rbdc-turso"}
 rbdc-pool-fast = {version = "4.8",path = "../rbdc-pool-fast"}
 tokio = { version = "1", features = ["sync", "fs", "net", "rt", "rt-multi-thread", "time", "io-util", "macros"] }
 
+serde = "1"

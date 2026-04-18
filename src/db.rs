@@ -100,12 +100,16 @@ pub trait Connection: Send + Sync {
             for (row_idx, mut x) in v.into_iter().enumerate() {
                 let md = x.meta_data();
                 let mut row = Vec::with_capacity(md.column_len());
-                for i in 0..md.column_len() {
+                for mut i in 0..md.column_len() {
+                    i = md.column_len() - i - 1;
                     row.push(x.get(i).unwrap_or(Value::Null));
                 }
                 if row_idx == 0 {
                     let columns: Vec<Value> = (0..md.column_len())
-                        .map(|i| Value::String(md.column_name(i)))
+                        .map(|mut i| {
+                            i = md.column_len() - i - 1;
+                            Value::String(md.column_name(i))
+                        })
                         .collect();
                     rows.push(Value::Array(columns));
                 }

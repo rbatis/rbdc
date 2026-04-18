@@ -1,7 +1,6 @@
 use crate::Error;
 use futures_core::future::BoxFuture;
 use rbs::Value;
-use rbs::value::map::ValueMap;
 use std::any::Any;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
@@ -90,22 +89,27 @@ pub trait Connection: Send + Sync {
         params: Vec<Value>,
     ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>>;
 
-    /// Execute a query that is expected to return a result set, such as a `SELECT` statement
-    /// return array of [{'column': 'value'}]
+    /// Execute a query that is expected to return a result set, such as a `SELECT` statement.
+    /// you can use `let result:Vec<Table>=rbs::from_value(v)?;` to decode this result.
+    /// return csv format Value [['column'],['value']].
     fn exec_decode(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
-       let v = self.exec_rows(sql, params);
+        let v = self.exec_rows(sql, params);
         Box::pin(async move {
             let v = v.await?;
-            let mut rows = Vec::with_capacity(v.len());
-            for mut x in v {
+            let mut rows = Vec::with_capacity(v.len() + 1);
+            for (row_idx, mut x) in v.into_iter().enumerate() {
                 let md = x.meta_data();
-                let mut m = ValueMap::with_capacity(md.column_len());
-                for mut i in 0..md.column_len() {
-                    i = md.column_len() - i - 1;
-                    let n = md.column_name(i);
-                    m.insert(Value::String(n), x.get(i)?);
+                let mut row = Vec::with_capacity(md.column_len());
+                for i in 0..md.column_len() {
+                    row.push(x.get(i).unwrap_or(Value::Null));
                 }
-                rows.push(Value::Map(m));
+                if row_idx == 0 {
+                    let columns: Vec<Value> = (0..md.column_len())
+                        .map(|i| Value::String(md.column_name(i)))
+                        .collect();
+                    rows.push(Value::Array(columns));
+                }
+                rows.push(Value::Array(row));
             }
             Ok(Value::Array(rows))
         })
@@ -281,4 +285,47 @@ impl dyn ConnectOptions {
 /// "select * from  table where name =  $1"
 pub trait Placeholder {
     fn exchange(&self, sql: &str) -> String;
+}
+
+
+use rbs::value::map::ValueMap;
+
+/// 将 CSV 格式 Value 转换为 [{k:v}] 格式的 Map 数组
+/// CSV 格式: [[col1,col2],[val1,val2],[val3,val4]]
+/// 转换后: [{"col1": val1, "col2": val2}, {"col1": val3, "col2": val4}]
+pub trait IntoMaps {
+    fn into_maps(self) -> Result<Value, Error>;
+}
+
+impl IntoMaps for Value {
+    fn into_maps(self) -> Result<Value, Error> {
+        let Value::Array(rows) = self else {
+            return Err(Error::from("into_maps: expected Array"));
+        };
+        if rows.is_empty() {
+            return Ok(Value::Array(vec![]));
+        }
+        let Value::Array(columns) = &rows[0] else {
+            return Err(Error::from("into_maps: first row must be column array"));
+        };
+        let data_rows = &rows[1..];
+        let result: Vec<Value> = data_rows
+            .iter()
+            .map(|row| {
+                let Value::Array(values) = row else {
+                    return Ok::<Value, Error>(Value::Map(ValueMap::new()));
+                };
+                let mut map = ValueMap::with_capacity(columns.len());
+                for (k, v) in columns.iter().zip(values.iter()) {
+                    let key = match k {
+                        Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    };
+                    map.insert(key.into(), v.clone());
+                }
+                Ok(Value::Map(map))
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        Ok(Value::Array(result))
+    }
 }

@@ -17,8 +17,8 @@ default = ["tls-rustls"]
 tls-rustls=["rbdc/tls-rustls"]
 tls-native-tls=["rbdc/tls-native-tls"]
 [dependencies]
-rbs = { version = "4.7" }
-rbdc = { version = "4.8", path = "../", default-features = false, optional = true }
+rbs = { version = "4.8" }
+rbdc = { version = "4.9", path = "../", default-features = false, optional = true }
 bytes = "1.1.0"
 log = "0.4"
 serde = { version = "1", features = ["derive", "rc"] }

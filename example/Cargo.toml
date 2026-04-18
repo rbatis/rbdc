@@ -22,7 +22,7 @@ name = "turso"
 path = "src/turso.rs"
 [dependencies]
 rbs = "4"
-rbdc = {version = "4.8",path = "../"}
+rbdc = {version = "4.9",path = "../"}
 rbdc-sqlite = {version = "4.8",path = "../rbdc-sqlite"}
 rbdc-mssql = {version = "4.8",path = "../rbdc-mssql"}
 rbdc-mysql = {version = "4.8",path = "../rbdc-mysql"}

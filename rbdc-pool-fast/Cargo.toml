@@ -16,8 +16,8 @@ homepage = "https://rbatis.github.io/rbatis.io"
 [dependencies]
 async-trait = "0.1"
 futures-core = { version = "0.3" }
-rbs = { version = "4.7" }
-rbdc = {version = "4.8",path = "../" ,default-features = false}
+rbs = { version = "4.8" }
+rbdc = {version = "4.9",path = "../" ,default-features = false}
 fast_pool = {version = "1.0"}
 dark-std = "0.2"
 log = "0.4.21"

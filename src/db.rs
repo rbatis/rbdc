@@ -291,26 +291,24 @@ pub trait Placeholder {
     fn exchange(&self, sql: &str) -> String;
 }
 
-
 use rbs::value::map::ValueMap;
 
-/// 将 CSV 格式 Value 转换为 [{k:v}] 格式的 Map 数组
-/// CSV 格式: [[col1,col2],[val1,val2],[val3,val4]]
-/// 转换后: [{"col1": val1, "col2": val2}, {"col1": val3, "col2": val4}]
+/// from : [[col1,col2],[val1,val2],[val3,val4]]
+/// into: [{"col1": val1, "col2": val2}, {"col1": val3, "col2": val4}]
 pub trait IntoMaps {
-    fn into_maps(self) -> Result<Value, Error>;
+    fn into_maps(self) -> Value;
 }
 
 impl IntoMaps for Value {
-    fn into_maps(self) -> Result<Value, Error> {
+    fn into_maps(self) -> Value {
         let Value::Array(rows) = self else {
-            return Err(Error::from("into_maps: expected Array"));
+            return Value::Array(vec![]);
         };
         if rows.is_empty() {
-            return Ok(Value::Array(vec![]));
+            return Value::Array(vec![]);
         }
         let Value::Array(columns) = &rows[0] else {
-            return Err(Error::from("into_maps: first row must be column array"));
+           return Value::Array(vec![]);
         };
         let data_rows = &rows[1..];
         let result: Vec<Value> = data_rows
@@ -330,6 +328,6 @@ impl IntoMaps for Value {
                 Ok(Value::Map(map))
             })
             .collect::<Result<Vec<_>, Error>>()?;
-        Ok(Value::Array(result))
+        Value::Array(result)
     }
 }

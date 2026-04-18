@@ -2,7 +2,7 @@
 members = ["rbdc-pool-fast","rbdc-sqlite","rbdc-mysql","rbdc-pg","rbdc-mssql","rbdc-turso", "example"]
 [package]
 name = "rbdc"
-version = "4.8.1"
+version = "4.8.2"
 edition = "2024"
 description = "The Rust SQL Toolkit and ORM Library. An async, pure Rust SQL crate featuring compile-time Dynamic SQL"
 readme = "README.md"
@@ -37,7 +37,7 @@ futures-util = { version = "0.3.21", features = ["alloc", "sink"] }
 futures-channel = { version = "0.3.21", default-features = false, features = ["sink", "alloc", "std"] }
 tokio-native-tls = { version = "0.3.0", optional = true }
 native-tls = { version = "0.2.10", optional = true }
-rbs = { version = "4" }
+rbs = { version = "4.7" }
 fastdate = { version = "0.3" }
 serde_bytes = "0.11.6"
 async-trait = "0.1.56"

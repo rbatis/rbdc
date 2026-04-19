@@ -15,14 +15,6 @@ async fn main() -> Result<(), Error> {
         .exec_decode("select * from sqlite_master", vec![])
         .await?;
     println!("{}", v);
-    
-    #[derive(Debug,serde::Deserialize,serde::Serialize)]
-    pub struct User { 
-       pub name:String,
-       pub sql:String
-    }
-    let result:Vec<User> = rbs::from_value(v)?;
-    println!("{:?}", result);
-
+    //if need decode use `let result:Vec<Table> = rbs::from_value(v)?;`
     Ok(())
 }

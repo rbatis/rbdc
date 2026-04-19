@@ -12,4 +12,5 @@ async fn main() {
     let mut conn = pool.get().await.unwrap();
     let v = conn.exec_decode("SELECT 1", vec![]).await.unwrap();
     println!("{}", v);
+    //if need decode use `let result:Vec<Table> = rbs::from_value(v)?;`
 }

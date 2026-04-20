@@ -3,7 +3,7 @@ use crate::type_info::PgTypeInfo;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
 use crate::types::TypeInfo;
-use crate::value::{PgValueRef, PgValueFormat};
+use crate::value::{PgValueFormat, PgValueRef};
 use rbdc::json::Json;
 use rbdc::Error;
 use rbs::Value;
@@ -50,11 +50,11 @@ impl Decode for Json {
                 buf[0]
             );
             Ok(Self {
-            0: String::from_utf8_lossy(&buf[1..]).into_owned(),
+                0: String::from_utf8_lossy(&buf[1..]).into_owned(),
             })
-        }else{
+        } else {
             Ok(Self {
-            0: String::from_utf8_lossy(&buf).into_owned(),
+                0: String::from_utf8_lossy(&buf).into_owned(),
             })
         }
     }
@@ -73,11 +73,11 @@ pub fn decode_json(value: PgValueRef) -> Result<Value, Error> {
             "unsupported JSONB format version {}; please open an issue",
             buf[0]
         );
-       Ok(serde_json::from_str(&String::from_utf8_lossy(&buf[1..]))
-        .map_err(|e| Error::from(e.to_string()))?)
-    }else{
+        Ok(serde_json::from_str(&String::from_utf8_lossy(&buf[1..]))
+            .map_err(|e| Error::from(e.to_string()))?)
+    } else {
         Ok(serde_json::from_str(&String::from_utf8_lossy(&buf))
-        .map_err(|e| Error::from(e.to_string()))?)
+            .map_err(|e| Error::from(e.to_string()))?)
     }
 }
 

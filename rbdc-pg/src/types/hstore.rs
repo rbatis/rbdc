@@ -1,6 +1,6 @@
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValueRef, PgValueFormat};
+use crate::value::{PgValueFormat, PgValueRef};
 use rbdc::Error;
 use rbs::Value;
 use std::collections::HashMap;

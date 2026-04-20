@@ -1,5 +1,5 @@
-use crate::db::Row;
 use crate::Error;
+use crate::db::Row;
 use rbs::Value;
 use std::fmt::{Debug, Formatter};
 

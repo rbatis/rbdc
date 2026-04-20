@@ -3,7 +3,7 @@ use crate::type_info::PgTypeInfo;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
 use crate::types::TypeInfo;
-use crate::value::{PgValueRef, PgValueFormat};
+use crate::value::{PgValueFormat, PgValueRef};
 use byteorder::{BigEndian, ByteOrder};
 use rbdc::Error;
 

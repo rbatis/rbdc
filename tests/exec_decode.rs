@@ -5,10 +5,10 @@
 //! - Keys are column names, values are the row values
 //! Format: [{"col1": "val1", "col2": "val2"}, {"col1": "val3", "col2": "val4"}]
 
-use std::fmt::Debug;
 use futures_core::future::BoxFuture;
-use rbs::Value;
 use rbdc::db::{Connection, MetaData, Row};
+use rbs::Value;
+use std::fmt::Debug;
 
 // Mock MetaData for testing
 #[derive(Debug, Clone)]
@@ -159,11 +159,19 @@ fn test_exec_decode_single_row_single_column() {
 fn test_exec_decode_multiple_columns_multiple_rows() {
     let row1 = MockRow::new(
         vec!["id", "name", "score"],
-        vec![Value::I64(1), Value::String("Alice".to_string()), Value::I64(100)],
+        vec![
+            Value::I64(1),
+            Value::String("Alice".to_string()),
+            Value::I64(100),
+        ],
     );
     let row2 = MockRow::new(
         vec!["id", "name", "score"],
-        vec![Value::I64(2), Value::String("Bob".to_string()), Value::I64(85)],
+        vec![
+            Value::I64(2),
+            Value::String("Bob".to_string()),
+            Value::I64(85),
+        ],
     );
     let conn = MockConnection::with_rows(vec![Box::new(row1), Box::new(row2)]);
     let mut conn = conn;
@@ -177,7 +185,10 @@ fn test_exec_decode_multiple_columns_multiple_rows() {
             match &arr[0] {
                 Value::Map(m) => {
                     assert_eq!(*m.get(&Value::String("id".to_string())), Value::I64(1));
-                    assert_eq!(*m.get(&Value::String("name".to_string())), Value::String("Alice".to_string()));
+                    assert_eq!(
+                        *m.get(&Value::String("name".to_string())),
+                        Value::String("Alice".to_string())
+                    );
                     assert_eq!(*m.get(&Value::String("score".to_string())), Value::I64(100));
                 }
                 _ => panic!("Expected Map"),
@@ -187,7 +198,10 @@ fn test_exec_decode_multiple_columns_multiple_rows() {
             match &arr[1] {
                 Value::Map(m) => {
                     assert_eq!(*m.get(&Value::String("id".to_string())), Value::I64(2));
-                    assert_eq!(*m.get(&Value::String("name".to_string())), Value::String("Bob".to_string()));
+                    assert_eq!(
+                        *m.get(&Value::String("name".to_string())),
+                        Value::String("Bob".to_string())
+                    );
                     assert_eq!(*m.get(&Value::String("score".to_string())), Value::I64(85));
                 }
                 _ => panic!("Expected Map"),
@@ -201,7 +215,11 @@ fn test_exec_decode_multiple_columns_multiple_rows() {
 fn test_exec_decode_with_null_values() {
     let row = MockRow::new(
         vec!["id", "name", "email"],
-        vec![Value::I64(1), Value::String("Alice".to_string()), Value::Null],
+        vec![
+            Value::I64(1),
+            Value::String("Alice".to_string()),
+            Value::Null,
+        ],
     );
     let conn = MockConnection::with_rows(vec![Box::new(row)]);
     let mut conn = conn;
@@ -213,7 +231,10 @@ fn test_exec_decode_with_null_values() {
             match &arr[0] {
                 Value::Map(m) => {
                     assert_eq!(*m.get(&Value::String("id".to_string())), Value::I64(1));
-                    assert_eq!(*m.get(&Value::String("name".to_string())), Value::String("Alice".to_string()));
+                    assert_eq!(
+                        *m.get(&Value::String("name".to_string())),
+                        Value::String("Alice".to_string())
+                    );
                     assert_eq!(*m.get(&Value::String("email".to_string())), Value::Null);
                 }
                 _ => panic!("Expected Map"),
@@ -243,10 +264,22 @@ fn test_exec_decode_various_types() {
             assert_eq!(arr.len(), 1);
             match &arr[0] {
                 Value::Map(m) => {
-                    assert_eq!(*m.get(&Value::String("int_val".to_string())), Value::I64(42));
-                    assert_eq!(*m.get(&Value::String("str_val".to_string())), Value::String("hello".to_string()));
-                    assert_eq!(*m.get(&Value::String("float_val".to_string())), Value::F64(3.14));
-                    assert_eq!(*m.get(&Value::String("bool_val".to_string())), Value::Bool(true));
+                    assert_eq!(
+                        *m.get(&Value::String("int_val".to_string())),
+                        Value::I64(42)
+                    );
+                    assert_eq!(
+                        *m.get(&Value::String("str_val".to_string())),
+                        Value::String("hello".to_string())
+                    );
+                    assert_eq!(
+                        *m.get(&Value::String("float_val".to_string())),
+                        Value::F64(3.14)
+                    );
+                    assert_eq!(
+                        *m.get(&Value::String("bool_val".to_string())),
+                        Value::Bool(true)
+                    );
                 }
                 _ => panic!("Expected Map"),
             }
@@ -259,7 +292,11 @@ fn test_exec_decode_various_types() {
 fn test_exec_decode_column_and_value_positions_align() {
     let row = MockRow::new(
         vec!["first", "second", "third"],
-        vec![Value::String("a".to_string()), Value::String("b".to_string()), Value::String("c".to_string())],
+        vec![
+            Value::String("a".to_string()),
+            Value::String("b".to_string()),
+            Value::String("c".to_string()),
+        ],
     );
     let conn = MockConnection::with_rows(vec![Box::new(row)]);
     let mut conn = conn;
@@ -270,9 +307,18 @@ fn test_exec_decode_column_and_value_positions_align() {
         assert_eq!(arr.len(), 1);
 
         if let Value::Map(m) = &arr[0] {
-            assert_eq!(*m.get(&Value::String("first".to_string())), Value::String("a".to_string()));
-            assert_eq!(*m.get(&Value::String("second".to_string())), Value::String("b".to_string()));
-            assert_eq!(*m.get(&Value::String("third".to_string())), Value::String("c".to_string()));
+            assert_eq!(
+                *m.get(&Value::String("first".to_string())),
+                Value::String("a".to_string())
+            );
+            assert_eq!(
+                *m.get(&Value::String("second".to_string())),
+                Value::String("b".to_string())
+            );
+            assert_eq!(
+                *m.get(&Value::String("third".to_string())),
+                Value::String("c".to_string())
+            );
         } else {
             panic!("Expected Map");
         }

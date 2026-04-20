@@ -1,4 +1,4 @@
-use crate::value::{PgValueRef};
+use crate::value::PgValueRef;
 use rbdc::Error;
 
 pub trait Decode: Sized {

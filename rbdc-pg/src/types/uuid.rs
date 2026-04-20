@@ -1,7 +1,7 @@
 use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValueRef, PgValueFormat};
+use crate::value::{PgValueFormat, PgValueRef};
 use rbdc::uuid::Uuid;
 use rbdc::Error;
 use std::str::FromStr;

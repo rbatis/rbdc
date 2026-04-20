@@ -2,7 +2,7 @@ use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
 use crate::types::numeric::{PgNumeric, PgNumericSign};
-use crate::value::{PgValueRef, PgValueFormat};
+use crate::value::{PgValueFormat, PgValueRef};
 use bigdecimal::BigDecimal;
 use num_bigint::{BigInt, Sign};
 use rbdc::Error;

@@ -1,7 +1,7 @@
 use crate::types::date::decode_date_buf;
 use crate::types::time::decode_time;
 use crate::types::{Decode, Encode};
-use crate::value::{MySqlValueRef, MySqlValueFormat};
+use crate::value::{MySqlValueFormat, MySqlValueRef};
 use rbdc::datetime::DateTime;
 use rbdc::Error;
 

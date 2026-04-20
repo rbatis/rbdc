@@ -93,7 +93,11 @@ pub trait Connection: Send + Sync {
     /// Execute a query that is expected to return a result set, such as a `SELECT` statement.
     /// you can use `let result:Vec<Table>=rbs::from_value(v)?;` to decode this result.
     /// return csv format Value [['column'],['value']].
-    fn exec_decode(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
+    fn exec_decode(
+        &mut self,
+        sql: &str,
+        params: Vec<Value>,
+    ) -> BoxFuture<'_, Result<Value, Error>> {
         let v = self.exec_rows(sql, params);
         Box::pin(async move {
             let v = v.await?;
@@ -103,7 +107,10 @@ pub trait Connection: Send + Sync {
                 let col_len = md.column_len();
                 let mut m = ValueMap::with_capacity(col_len);
                 for i in 0..col_len {
-                    m.insert(Value::String(md.column_name(i)), x.get(i).unwrap_or(Value::Null));
+                    m.insert(
+                        Value::String(md.column_name(i)),
+                        x.get(i).unwrap_or(Value::Null),
+                    );
                 }
                 rows.push(Value::Map(m));
             }
@@ -159,7 +166,11 @@ impl Connection for Box<dyn Connection> {
         self.deref_mut().exec_rows(sql, params)
     }
 
-    fn exec_decode(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
+    fn exec_decode(
+        &mut self,
+        sql: &str,
+        params: Vec<Value>,
+    ) -> BoxFuture<'_, Result<Value, Error>> {
         self.deref_mut().exec_decode(sql, params)
     }
 

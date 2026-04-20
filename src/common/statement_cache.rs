@@ -12,9 +12,9 @@ impl<T> StatementCache<T> {
     /// Create a new cache with the given capacity.
     pub fn new(capacity: usize) -> Self {
         Self {
-            inner: LruCache::new(NonZeroUsize::new(capacity).expect(
-                "StatementCache capacity must be non-zero",
-            )),
+            inner: LruCache::new(
+                NonZeroUsize::new(capacity).expect("StatementCache capacity must be non-zero"),
+            ),
         }
     }
 

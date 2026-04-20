@@ -1,6 +1,6 @@
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValueRef, PgValueFormat};
+use crate::value::{PgValueFormat, PgValueRef};
 use rbdc::Error;
 use rbs::Value;
 
@@ -67,7 +67,7 @@ impl Encode for TsVector {
 mod tests {
     use super::*;
     use crate::types::decode::Decode;
-    use crate::value::{PgValueFormat};
+    use crate::value::PgValueFormat;
 
     #[test]
     fn test_display() {

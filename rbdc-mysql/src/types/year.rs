@@ -1,5 +1,5 @@
 use crate::types::{Decode, Encode};
-use crate::value::{MySqlValueRef, MySqlValueFormat};
+use crate::value::{MySqlValueFormat, MySqlValueRef};
 use byteorder::{ByteOrder, LittleEndian};
 use rbdc::Error;
 use std::fmt::{Debug, Display, Formatter};

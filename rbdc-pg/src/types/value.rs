@@ -10,7 +10,7 @@ use crate::types::timestamptz::Timestamptz;
 use crate::types::timetz::Timetz;
 use crate::types::Oid;
 use crate::types::TypeInfo;
-use crate::value::{PgValueRef, PgValueFormat};
+use crate::value::{PgValueFormat, PgValueRef};
 use rbdc::date::Date;
 use rbdc::datetime::DateTime;
 use rbdc::decimal::Decimal;

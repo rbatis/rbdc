@@ -1,5 +1,5 @@
 use crate::types::{Decode, Encode};
-use crate::value::{MySqlValueRef, MySqlValueFormat};
+use crate::value::{MySqlValueFormat, MySqlValueRef};
 use bytes::Buf;
 use rbdc::types::time::Time;
 use rbdc::Error;

@@ -6,7 +6,7 @@ use std::time::Duration;
 use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValueRef, PgValueFormat};
+use crate::value::{PgValueFormat, PgValueRef};
 
 impl Decode for Time {
     fn decode(value: PgValueRef) -> Result<Self, Error> {

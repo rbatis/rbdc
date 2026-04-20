@@ -1,6 +1,6 @@
 use crate::io::MySqlBufMutExt;
 use crate::types::{Decode, Encode};
-use crate::value::{MySqlValueRef};
+use crate::value::MySqlValueRef;
 use rbdc::decimal::Decimal;
 use rbdc::Error;
 use std::str::FromStr;

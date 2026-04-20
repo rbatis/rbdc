@@ -182,7 +182,11 @@ impl Connection for ConnProxy {
         }
     }
 
-    fn exec_decode(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<Value, Error>> {
+    fn exec_decode(
+        &mut self,
+        sql: &str,
+        params: Vec<Value>,
+    ) -> BoxFuture<'_, Result<Value, Error>> {
         match &mut self.conn {
             Some(conn) => conn.exec_decode(sql, params),
             None => Box::pin(async { Err(Error::from("conn is drop")) }),

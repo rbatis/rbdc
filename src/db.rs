@@ -99,20 +99,20 @@ pub trait Connection: Send + Sync {
             let mut rows = Vec::with_capacity(v.len() + 1);
             for (row_idx, mut x) in v.into_iter().enumerate() {
                 let md = x.meta_data();
-                let mut row = Vec::with_capacity(md.column_len());
-                for mut i in 0..md.column_len() {
-                    i = md.column_len() - i - 1;
-                    row.push(x.get(i).unwrap_or(Value::Null));
-                }
+                let col_len = md.column_len();
+                // Row::get uses remove(), so we must access in reverse order
+                // to match column_name(i) which goes 0..col_len
                 if row_idx == 0 {
-                    let columns: Vec<Value> = (0..md.column_len())
-                        .map(|mut i| {
-                            i = md.column_len() - i - 1;
-                            Value::String(md.column_name(i))
-                        })
+                    let columns: Vec<Value> = (0..col_len)
+                        .rev()
+                        .map(|i| Value::String(md.column_name(i)))
                         .collect();
                     rows.push(Value::Array(columns));
                 }
+                let row: Vec<Value> = (0..col_len)
+                    .rev()
+                    .map(|i| x.get(i).unwrap_or(Value::Null))
+                    .collect();
                 rows.push(Value::Array(row));
             }
             Ok(Value::Array(rows))

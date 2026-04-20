@@ -12,7 +12,7 @@ async fn main() -> Result<(), Error> {
         .await;
     let mut conn = pool.get().await?;
     let v = conn
-        .exec_decode("select * from sqlite_master", vec![])
+        .exec_decode("select name,type from sqlite_master", vec![])
         .await?;
     println!("{}", v);
     //if need decode use `let result:Vec<Table> = rbs::from_value(v)?;`

@@ -1,6 +1,7 @@
 use crate::Error;
 use futures_core::future::BoxFuture;
 use rbs::Value;
+use rbs::value::map::ValueMap;
 use std::any::Any;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
@@ -97,23 +98,15 @@ pub trait Connection: Send + Sync {
         Box::pin(async move {
             let v = v.await?;
             let mut rows = Vec::with_capacity(v.len() + 1);
-            for (row_idx, mut x) in v.into_iter().enumerate() {
+            for (_row_idx, mut x) in v.into_iter().enumerate() {
                 let md = x.meta_data();
                 let col_len = md.column_len();
-                // Row::get uses remove(), so we must access in reverse order
-                // to match column_name(i) which goes 0..col_len
-                if row_idx == 0 {
-                    let columns: Vec<Value> = (0..col_len)
-                        .rev()
-                        .map(|i| Value::String(md.column_name(i)))
-                        .collect();
-                    rows.push(Value::Array(columns));
+                let mut m = ValueMap::with_capacity(col_len);
+                for index in 0..col_len { 
+                    let i = col_len - index - 1;
+                    m.insert(Value::String(md.column_name(i)), x.get(i).unwrap_or(Value::Null));
                 }
-                let row: Vec<Value> = (0..col_len)
-                    .rev()
-                    .map(|i| x.get(i).unwrap_or(Value::Null))
-                    .collect();
-                rows.push(Value::Array(row));
+                rows.push(Value::Map(m));
             }
             Ok(Value::Array(rows))
         })
@@ -289,45 +282,4 @@ impl dyn ConnectOptions {
 /// "select * from  table where name =  $1"
 pub trait Placeholder {
     fn exchange(&self, sql: &str) -> String;
-}
-
-use rbs::value::map::ValueMap;
-
-/// from : [[col1,col2],[val1,val2],[val3,val4]]
-/// into: [{"col1": val1, "col2": val2}, {"col1": val3, "col2": val4}]
-pub trait IntoMaps {
-    fn into_maps(self) -> Value;
-}
-
-impl IntoMaps for Value {
-    fn into_maps(self) -> Value {
-        let Value::Array(rows) = self else {
-            return Value::Array(vec![]);
-        };
-        if rows.is_empty() {
-            return Value::Array(vec![]);
-        }
-        let Value::Array(columns) = &rows[0] else {
-           return Value::Array(vec![]);
-        };
-        let data_rows = &rows[1..];
-        let result: Vec<Value> = data_rows
-            .iter()
-            .map(|row| {
-                let Value::Array(values) = row else {
-                    return Value::Map(ValueMap::new());
-                };
-                let mut map = ValueMap::with_capacity(columns.len());
-                for (k, v) in columns.iter().zip(values.iter()) {
-                    let key = match k {
-                        Value::String(s) => s.clone(),
-                        other => other.to_string(),
-                    };
-                    map.insert(key.into(), v.clone());
-                }
-                Value::Map(map)
-            })
-            .collect();
-        Value::Array(result)
-    }
 }

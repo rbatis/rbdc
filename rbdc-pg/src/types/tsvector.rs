@@ -67,7 +67,7 @@ impl Encode for TsVector {
 mod tests {
     use super::*;
     use crate::types::decode::Decode;
-    use crate::value::{PgValue, PgValueFormat};
+    use crate::value::{PgValueFormat};
 
     #[test]
     fn test_display() {

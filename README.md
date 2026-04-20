@@ -6,6 +6,15 @@
 
 Database driver abstraction layer for Rust, providing a unified interface for [rbatis](https://github.com/rbatis/rbatis).
 
+## Table of Contents
+
+- [Features](#features)
+- [Supported Databases](#supported-databases)
+- [Quick Start](#quick-start)
+- [Scan Utility](#scan-utility)
+- [Implement Custom Driver](#implement-custom-driver)
+- [License](#license)
+
 ## Features
 
 - **Safe**: `#![forbid(unsafe_code)]` - 100% safe Rust
@@ -30,13 +39,33 @@ use rbdc_pool_fast::FastPool;
 
 #[tokio::main]
 async fn main() -> Result<(), rbdc::Error> {
-    let pool = FastPool::new_url(SqliteDriver {},"sqlite://target/test.db")?;
+    let pool = FastPool::new_url(SqliteDriver {}, "sqlite://target/test.db")?;
     let mut conn = pool.get().await?;
     let v = conn.exec_decode("SELECT * FROM sqlite_master", vec![]).await?;
     println!("{}", v);
-    //if need decode use `let result:Vec<Table> = rbs::from_value(v)?;`
+    // if need decode use `let result: Vec<Table> = rbs::from_value(v)?;`
     Ok(())
 }
+```
+
+## Scan Utility
+
+For memory-efficient row-by-row iteration instead of loading all rows into a `Value` array at once:
+
+```rust
+use rbdc::db::Connection;
+use rbdc::util::Scan;
+
+let rows = conn.exec_rows("SELECT * FROM activity", vec![]).await?;
+let scan = Scan::new(rows);
+
+// Collect all rows into a Vec of struct
+#[derive(serde::Deserialize)]
+struct Activity {
+    id: Option<String>,
+    name: Option<String>,
+}
+let activities: Vec<Activity> = scan.collect()?;
 ```
 
 ## Implement Custom Driver
@@ -48,25 +77,26 @@ use rbdc::db::{Driver, MetaData, Row, Connection, ConnectOptions, Placeholder};
 
 impl Driver for YourDriver {}
 impl MetaData for YourMetaData {
-     //TODO imple methods
+    // TODO: impl methods
 }
 impl Row for YourRow {
-     //TODO imple methods
+    // TODO: impl methods
 }
 impl Connection for YourConnection {
-     //TODO imple methods
+    // TODO: impl methods
 }
 impl ConnectOptions for YourConnectOptions {
-     //TODO imple methods
+    // TODO: impl methods
 }
 impl Placeholder for YourPlaceholder {
-     //TODO imple methods
+    // TODO: impl methods
 }
+
 /// use your driver
 #[tokio::main]
 async fn main() -> Result<(), rbdc::Error> {
     let uri = "YourDriver://****";
-    let pool = FastPool::new_url(YourDriver{}, uri)?;
+    let pool = FastPool::new_url(YourDriver {}, uri)?;
     let mut conn = pool.get().await?;
     let v = conn.exec_decode("SELECT 1", vec![]).await?;
     println!("{}", v);

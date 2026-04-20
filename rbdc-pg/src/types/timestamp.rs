@@ -1,7 +1,7 @@
 use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use rbdc::timestamp::Timestamp;
 use rbdc::Error;
 use std::str::FromStr;
@@ -25,7 +25,7 @@ impl Encode for Timestamp {
 }
 
 impl Decode for Timestamp {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 // TIMESTAMP is encoded as the microseconds since the epoch

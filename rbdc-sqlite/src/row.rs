@@ -80,7 +80,7 @@ impl Row for SqliteRow {
     }
 
     fn get(&mut self, i: usize) -> Result<Value, Error> {
-        match self.try_take(i) {
+        match self.try_get_raw(i) {
             Err(e) => Err(Error::from(format!("get error index:{},error:{}", i, e))),
             Ok(v) => Value::decode(v),
         }
@@ -96,9 +96,9 @@ impl SqliteRow {
         Ok(SqliteValueRef::value(&self.values[index]))
     }
 
-    fn try_take(&mut self, index: usize) -> Result<SqliteValue, Error> {
+    fn try_get(&mut self, index: usize) -> Result<SqliteValue, Error> {
         if (index + 1) > self.values.len() {
-            return Err(Error::from("try_take out of range!"));
+            return Err(Error::from("try_get out of range!"));
         }
         Ok(self.values.remove(index))
     }

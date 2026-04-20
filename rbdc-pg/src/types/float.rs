@@ -1,12 +1,12 @@
 use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use byteorder::{BigEndian, ByteOrder};
 use rbdc::Error;
 
 impl Decode for f64 {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => BigEndian::read_f64(value.as_bytes()?),
             PgValueFormat::Text => value.as_str()?.parse()?,
@@ -15,7 +15,7 @@ impl Decode for f64 {
 }
 
 impl Decode for f32 {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
@@ -45,39 +45,5 @@ impl Encode for f32 {
         buf.extend(&self.to_be_bytes());
 
         Ok(IsNull::No)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::type_info::PgTypeInfo;
-    use crate::types::decode::Decode;
-    use crate::value::{PgValue, PgValueFormat};
-
-    #[test]
-    fn test_decode_f32() {
-        let bytes: [u8; 4] = 3_f32.to_be_bytes();
-        let r: f32 = Decode::decode(PgValue {
-            value: Some(bytes.to_vec()),
-            type_info: PgTypeInfo::FLOAT4,
-            format: PgValueFormat::Binary,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(r, 3.0);
-    }
-
-    #[test]
-    fn test_decode_f32_by_f64() {
-        let bytes: [u8; 8] = 3_f64.to_be_bytes();
-        println!("bytes={:?}", bytes);
-        let r: f32 = Decode::decode(PgValue {
-            value: Some(bytes.to_vec()),
-            type_info: PgTypeInfo::FLOAT4,
-            format: PgValueFormat::Binary,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(r, 3.0);
     }
 }

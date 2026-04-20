@@ -1,7 +1,7 @@
 use crate::types::date::decode_date_buf;
 use crate::types::time::decode_time;
 use crate::types::{Decode, Encode};
-use crate::value::{MySqlValue, MySqlValueFormat};
+use crate::value::{MySqlValueRef, MySqlValueFormat};
 use rbdc::datetime::DateTime;
 use rbdc::Error;
 
@@ -44,7 +44,7 @@ impl Encode for DateTime {
 }
 
 impl Decode for DateTime {
-    fn decode(value: MySqlValue) -> Result<Self, Error> {
+    fn decode(value: MySqlValueRef<'_>) -> Result<Self, Error> {
         Ok(match value.format() {
             MySqlValueFormat::Text => Self({
                 let s = value.as_str()?;

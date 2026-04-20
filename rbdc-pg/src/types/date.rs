@@ -1,14 +1,14 @@
 use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use rbdc::date::Date;
 use rbdc::Error;
 use std::str::FromStr;
 use std::time::Duration;
 
 impl Decode for fastdate::Date {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 // DATE is encoded as the days since epoch
@@ -83,7 +83,7 @@ impl Encode for fastdate::Date {
 }
 
 impl Decode for Date {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(Self(fastdate::Date::decode(value)?))
     }
 }

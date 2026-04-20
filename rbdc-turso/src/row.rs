@@ -42,8 +42,8 @@ impl Row for TursoRow {
         }
         // Take the value, leaving None in place. Index-stable unlike
         // Vec::remove(). Matches the MySQL/Postgres adapter pattern.
-        match self.values[i].take() {
-            Some(tv) => Ok(turso_value_to_rbs(&tv, self.json_detect)),
+        match &self.values[i] {
+            Some(tv) => Ok(turso_value_to_rbs(tv, self.json_detect)),
             None => Err(Error::from(format!("column index {} already consumed", i))),
         }
     }

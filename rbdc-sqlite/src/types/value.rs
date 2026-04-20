@@ -1,12 +1,12 @@
 use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::type_info::DataType;
-use crate::{SqliteArgumentValue, SqliteValue};
+use crate::{SqliteArgumentValue, SqliteValueRef};
 use rbdc::Error;
 use rbs::Value;
 
 impl Decode for Value {
-    fn decode(value: SqliteValue) -> Result<Self, Error>
+    fn decode(value: SqliteValueRef) -> Result<Self, Error>
     where
         Self: Sized,
     {

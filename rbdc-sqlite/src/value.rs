@@ -69,6 +69,12 @@ impl<'r> SqliteValueRef<'r> {
         }
     }
 
+    pub fn type_info_opt(&self) -> Option<SqliteTypeInfo> {
+        match self.0 {
+            SqliteValueData::Value(v) => v.type_info_opt(),
+        }
+    }
+
     pub fn is_null(&self) -> bool {
         match self.0 {
             SqliteValueData::Value(v) => v.is_null(),
@@ -103,7 +109,6 @@ impl SqliteValue {
 
     pub fn type_info_opt(&self) -> Option<SqliteTypeInfo> {
         let dt = DataType::from_code(unsafe { sqlite3_value_type(self.handle.0.as_ptr()) });
-
         if let DataType::Null = dt {
             None
         } else {

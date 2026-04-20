@@ -1,6 +1,6 @@
 use crate::io::MySqlBufMutExt;
 use crate::types::{Decode, Encode};
-use crate::value::MySqlValue;
+use crate::value::MySqlValueRef;
 use rbdc::Error;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -28,7 +28,7 @@ impl Encode for Geometry {
 }
 
 impl Decode for Geometry {
-    fn decode(value: MySqlValue) -> Result<Self, Error> {
+    fn decode(value: MySqlValueRef<'_>) -> Result<Self, Error> {
         Ok(Geometry(value.as_bytes().unwrap_or_default().to_vec()))
     }
 }

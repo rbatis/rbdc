@@ -10,7 +10,7 @@ use crate::types::timestamptz::Timestamptz;
 use crate::types::timetz::Timetz;
 use crate::types::Oid;
 use crate::types::TypeInfo;
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use rbdc::date::Date;
 use rbdc::datetime::DateTime;
 use rbdc::decimal::Decimal;
@@ -106,7 +106,7 @@ impl TypeInfo for Value {
 }
 
 impl Decode for Value {
-    fn decode(arg: PgValue) -> Result<Self, Error> {
+    fn decode(arg: PgValueRef<'_>) -> Result<Self, Error> {
         if arg.value.is_none() {
             return Ok(Value::Null);
         }

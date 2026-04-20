@@ -1,5 +1,5 @@
 use crate::types::{Decode, Encode};
-use crate::value::{MySqlValue, MySqlValueFormat};
+use crate::value::{MySqlValueRef, MySqlValueFormat};
 use byteorder::{ByteOrder, LittleEndian};
 use rbdc::Error;
 use std::fmt::{Debug, Display, Formatter};
@@ -29,7 +29,7 @@ impl Encode for Year {
 }
 
 impl Decode for Year {
-    fn decode(value: MySqlValue) -> Result<Self, Error> {
+    fn decode(value: MySqlValueRef<'_>) -> Result<Self, Error> {
         Ok(Self({
             match value.format() {
                 MySqlValueFormat::Text => value.as_str()?.parse().unwrap_or_default(),

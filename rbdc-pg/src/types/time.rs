@@ -6,10 +6,10 @@ use std::time::Duration;
 use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 
 impl Decode for Time {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         match value.format() {
             PgValueFormat::Binary => {
                 // TIME is encoded as the microseconds since midnight

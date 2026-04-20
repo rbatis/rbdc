@@ -1,6 +1,6 @@
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use rbdc::Error;
 use rbs::Value;
 
@@ -36,7 +36,7 @@ impl std::fmt::Display for TsQuery {
 }
 
 impl Decode for TsQuery {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 // TSQUERY binary format is complex
@@ -84,8 +84,8 @@ mod tests {
     #[test]
     fn test_decode_text() {
         let s = "hello & world";
-        let result: TsQuery = Decode::decode(PgValue {
-            value: Some(s.as_bytes().to_vec()),
+        let result: TsQuery = Decode::decode(PgValueRef {
+            value: Some(s.as_bytes()),
             type_info: crate::type_info::PgTypeInfo::UNKNOWN,
             format: PgValueFormat::Text,
             timezone_sec: None,

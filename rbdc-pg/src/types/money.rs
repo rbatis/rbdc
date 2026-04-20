@@ -1,7 +1,7 @@
 use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueFormat, PgValueRef};
 use byteorder::{BigEndian, ByteOrder};
 use rbdc::Error;
 use rbs::Value;
@@ -41,7 +41,7 @@ impl Encode for Money {
 }
 
 impl Decode for Money {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(Self({
             match value.format() {
                 PgValueFormat::Binary => {

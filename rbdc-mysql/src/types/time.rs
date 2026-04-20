@@ -1,5 +1,5 @@
 use crate::types::{Decode, Encode};
-use crate::value::{MySqlValue, MySqlValueFormat};
+use crate::value::{MySqlValueRef, MySqlValueFormat};
 use bytes::Buf;
 use rbdc::types::time::Time;
 use rbdc::Error;
@@ -12,7 +12,7 @@ impl Encode for Time {
 }
 
 impl Decode for Time {
-    fn decode(value: MySqlValue) -> Result<Self, Error> {
+    fn decode(value: MySqlValueRef<'_>) -> Result<Self, Error> {
         Ok(Time(fastdate::Time::decode(value)?))
     }
 }
@@ -36,7 +36,7 @@ impl Encode for fastdate::Time {
 }
 
 impl Decode for fastdate::Time {
-    fn decode(value: MySqlValue) -> Result<Self, Error> {
+    fn decode(value: MySqlValueRef<'_>) -> Result<Self, Error> {
         Ok(match value.format() {
             MySqlValueFormat::Text => {
                 fastdate::Time::from_str(value.as_str()?).map_err(|e| Error::from(e.to_string()))?

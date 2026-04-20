@@ -2,7 +2,7 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::type_info::DataType;
 use crate::types::Type;
-use crate::{SqliteArgumentValue, SqliteTypeInfo, SqliteValue};
+use crate::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef};
 use rbdc::error::Error;
 
 impl Type for u8 {
@@ -20,8 +20,8 @@ impl Encode for u8 {
 }
 
 impl Decode for u8 {
-    fn decode(value: SqliteValue) -> Result<Self, Error> {
-        Ok(value.int().try_into()?)
+    fn decode(value: SqliteValueRef) -> Result<Self, Error> {
+        Ok(value.to_owned().int().try_into()?)
     }
 }
 
@@ -40,8 +40,8 @@ impl Encode for u16 {
 }
 
 impl Decode for u16 {
-    fn decode(value: SqliteValue) -> Result<Self, Error> {
-        Ok(value.int().try_into()?)
+    fn decode(value: SqliteValueRef) -> Result<Self, Error> {
+        Ok(value.to_owned().int().try_into()?)
     }
 }
 
@@ -60,7 +60,7 @@ impl Encode for u32 {
 }
 
 impl Decode for u32 {
-    fn decode(value: SqliteValue) -> Result<Self, Error> {
-        Ok(value.int64().try_into()?)
+    fn decode(value: SqliteValueRef) -> Result<Self, Error> {
+        Ok(value.to_owned().int64().try_into()?)
     }
 }

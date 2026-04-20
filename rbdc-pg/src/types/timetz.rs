@@ -1,7 +1,7 @@
 use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use byteorder::{BigEndian, ReadBytesExt};
 use fastdate::time1::UtcOffset;
 use rbdc::Error;
@@ -53,7 +53,7 @@ impl From<Timetz> for Value {
 }
 
 impl Decode for Timetz {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         match value.format() {
             PgValueFormat::Binary => {
                 let mut buf = Cursor::new(value.as_bytes()?);

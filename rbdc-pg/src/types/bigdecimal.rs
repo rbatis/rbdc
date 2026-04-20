@@ -2,7 +2,7 @@ use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
 use crate::types::numeric::{PgNumeric, PgNumericSign};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use bigdecimal::BigDecimal;
 use num_bigint::{BigInt, Sign};
 use rbdc::Error;
@@ -140,7 +140,7 @@ impl Encode for BigDecimal {
 }
 
 impl Decode for BigDecimal {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         match value.format() {
             PgValueFormat::Binary => PgNumeric::decode(value.as_bytes()?)?.try_into(),
             PgValueFormat::Text => Ok(value

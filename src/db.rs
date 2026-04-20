@@ -102,8 +102,7 @@ pub trait Connection: Send + Sync {
                 let md = x.meta_data();
                 let col_len = md.column_len();
                 let mut m = ValueMap::with_capacity(col_len);
-                for index in 0..col_len { 
-                    let i = col_len - index - 1;
+                for i in 0..col_len {
                     m.insert(Value::String(md.column_name(i)), x.get(i).unwrap_or(Value::Null));
                 }
                 rows.push(Value::Map(m));

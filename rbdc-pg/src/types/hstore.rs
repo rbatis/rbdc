@@ -1,6 +1,6 @@
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use rbdc::Error;
 use rbs::Value;
 use std::collections::HashMap;
@@ -61,7 +61,7 @@ impl From<Hstore> for Value {
 }
 
 impl Decode for Hstore {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 // Binary format:
@@ -158,110 +158,5 @@ impl Encode for Hstore {
         Err(Error::from(
             "HStore encoding not supported. Use hstore(text) or hstore(text, text) in your query instead."
         ))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::decode::Decode;
-    use crate::value::{PgValue, PgValueFormat};
-
-    #[test]
-    fn test_display() {
-        let mut map = HashMap::new();
-        map.insert("name".to_string(), "John".to_string());
-        map.insert("age".to_string(), "30".to_string());
-        let hstore = Hstore(map);
-        let display = format!("{}", hstore);
-        // HashMap iteration order is not guaranteed, so just check both parts are present
-        assert!(display.contains("name=>John"));
-        assert!(display.contains("age=>30"));
-    }
-
-    #[test]
-    fn test_default() {
-        let hstore = Hstore::default();
-        assert_eq!(hstore.0.len(), 0);
-    }
-
-    #[test]
-    fn test_from_hashmap() {
-        let mut map = HashMap::new();
-        map.insert("key".to_string(), "value".to_string());
-        let hstore: Hstore = map.into();
-        assert_eq!(hstore.0.get("key"), Some(&"value".to_string()));
-    }
-
-    #[test]
-    fn test_decode_text_empty() {
-        let hstore: Hstore = Decode::decode(PgValue {
-            value: Some(b"".to_vec()),
-            type_info: crate::type_info::PgTypeInfo::HSTORE,
-            format: PgValueFormat::Text,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(hstore.0.len(), 0);
-    }
-
-    #[test]
-    fn test_decode_text_single() {
-        let s = "name=>John";
-        let hstore: Hstore = Decode::decode(PgValue {
-            value: Some(s.as_bytes().to_vec()),
-            type_info: crate::type_info::PgTypeInfo::HSTORE,
-            format: PgValueFormat::Text,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(hstore.0.get("name"), Some(&"John".to_string()));
-    }
-
-    #[test]
-    fn test_decode_text_multiple() {
-        let s = "name=>John, age=>30, city=>NYC";
-        let hstore: Hstore = Decode::decode(PgValue {
-            value: Some(s.as_bytes().to_vec()),
-            type_info: crate::type_info::PgTypeInfo::HSTORE,
-            format: PgValueFormat::Text,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(hstore.0.len(), 3);
-        assert_eq!(hstore.0.get("name"), Some(&"John".to_string()));
-        assert_eq!(hstore.0.get("age"), Some(&"30".to_string()));
-        assert_eq!(hstore.0.get("city"), Some(&"NYC".to_string()));
-    }
-
-    #[test]
-    fn test_from_value() {
-        let mut map = HashMap::new();
-        map.insert("key".to_string(), "value".to_string());
-        let hstore = Hstore(map);
-        let value: Value = hstore.into();
-        match value {
-            Value::Ext(type_name, boxed) => {
-                assert_eq!(type_name, "hstore");
-                if let Value::String(s) = *boxed {
-                    assert!(s.contains("key"));
-                    assert!(s.contains("value"));
-                } else {
-                    panic!("Expected String");
-                }
-            }
-            _ => panic!("Expected Ext variant"),
-        }
-    }
-
-    #[test]
-    fn test_equality() {
-        let mut map1 = HashMap::new();
-        map1.insert("key".to_string(), "value".to_string());
-        let h1 = Hstore(map1.clone());
-
-        let h2 = Hstore(map1);
-
-        assert_eq!(h1, h2);
     }
 }

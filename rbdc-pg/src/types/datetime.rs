@@ -1,7 +1,7 @@
 use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use byteorder::{BigEndian, ReadBytesExt};
 use rbdc::datetime::DateTime;
 use rbdc::Error;
@@ -34,7 +34,7 @@ impl Encode for DateTime {
 }
 
 impl Decode for DateTime {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 let mut buf = Cursor::new(value.as_bytes()?);

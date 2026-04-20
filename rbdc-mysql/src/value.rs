@@ -28,6 +28,7 @@ pub struct MySqlValueRef<'r> {
     pub(crate) value: Option<&'r [u8]>,
     pub(crate) type_info: MySqlTypeInfo,
     pub(crate) format: MySqlValueFormat,
+    pub(crate) option: Arc<MySqlConnectOptions>,
 }
 
 impl MySqlValue {
@@ -70,6 +71,7 @@ impl MySqlValue {
             value: self.value.as_deref(),
             type_info: self.type_info.clone(),
             format: self.format,
+            option: self.option.clone(),
         }
     }
 

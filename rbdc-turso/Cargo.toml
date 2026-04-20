@@ -1,6 +1,6 @@
 [package]
 name = "rbdc-turso"
-version = "4.9.0"
+version = "4.9.1"
 edition = "2021"
 description = "Turso/libSQL async database driver for rbdc"
 readme = "Readme.md"

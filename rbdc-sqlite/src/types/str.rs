@@ -2,7 +2,7 @@ use crate::decode::Decode;
 use crate::encode::{Encode, IsNull};
 use crate::type_info::DataType;
 use crate::types::Type;
-use crate::{SqliteArgumentValue, SqliteTypeInfo, SqliteValue};
+use crate::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef};
 use rbdc::error::Error;
 
 impl Type for String {
@@ -20,7 +20,7 @@ impl Encode for String {
 }
 
 impl Decode for String {
-    fn decode(value: SqliteValue) -> Result<Self, Error> {
-        value.text().map(ToOwned::to_owned)
+    fn decode(value: SqliteValueRef) -> Result<Self, Error> {
+        value.to_owned().text().map(ToOwned::to_owned)
     }
 }

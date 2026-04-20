@@ -4,7 +4,7 @@ use std::str::FromStr;
 use crate::types::date::decode_date_buf;
 use crate::types::time::decode_time;
 use crate::types::{Decode, Encode};
-use crate::value::{MySqlValue, MySqlValueFormat};
+use crate::value::{MySqlValueRef, MySqlValueFormat};
 use rbdc::timestamp::Timestamp;
 use rbdc::Error;
 
@@ -41,7 +41,7 @@ impl Encode for Timestamp {
 }
 
 impl Decode for Timestamp {
-    fn decode(value: MySqlValue) -> Result<Self, Error> {
+    fn decode(value: MySqlValueRef<'_>) -> Result<Self, Error> {
         Ok(match value.format() {
             MySqlValueFormat::Text => Self(
                 fastdate::DateTime::from_str(value.as_str()?)

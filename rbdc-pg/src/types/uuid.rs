@@ -1,7 +1,7 @@
 use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use rbdc::uuid::Uuid;
 use rbdc::Error;
 use std::str::FromStr;
@@ -15,7 +15,7 @@ impl Encode for Uuid {
 }
 
 impl Decode for Uuid {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(Self(match value.format() {
             PgValueFormat::Binary => uuid::Uuid::from_slice(value.as_bytes()?)
                 .map_err(|e| Error::from(format!("Decode Uuid:{}", e)))?

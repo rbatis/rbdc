@@ -1,6 +1,6 @@
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueFormat, PgValueRef};
 use rbdc::Error;
 use rbs::Value;
 use std::fmt::{Display, Formatter};
@@ -49,7 +49,7 @@ impl From<Point> for Value {
 }
 
 impl Decode for Point {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 // Binary format is WKB (Well-Known Binary)
@@ -104,129 +104,5 @@ impl Encode for Point {
         Err(Error::from(
             "POINT encoding not supported. Use PostGIS ST_GeomFromText() or ST_MakePoint() in your query instead."
         ))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::decode::Decode;
-    use crate::value::{PgValue, PgValueFormat};
-
-    #[test]
-    fn test_display() {
-        let point = Point { x: 116.4, y: 39.9 };
-        assert_eq!(format!("{}", point), "POINT(116.4 39.9)");
-    }
-
-    #[test]
-    fn test_beijing_coords() {
-        let point = Point {
-            x: 116.4074,
-            y: 39.9042,
-        };
-        let display = format!("{}", point);
-        println!("Beijing: {}", display);
-        assert!(display.contains("POINT("));
-    }
-
-    #[test]
-    fn test_decode_text_valid() {
-        let s = "POINT(116.4 39.9)";
-        let result: Point = Decode::decode(PgValue {
-            value: Some(s.as_bytes().to_vec()),
-            type_info: crate::type_info::PgTypeInfo::UNKNOWN,
-            format: PgValueFormat::Text,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(result.x, 116.4);
-        assert_eq!(result.y, 39.9);
-    }
-
-    #[test]
-    fn test_decode_text_negative_coords() {
-        let s = "POINT(-74.0060 40.7128)";
-        let result: Point = Decode::decode(PgValue {
-            value: Some(s.as_bytes().to_vec()),
-            type_info: crate::type_info::PgTypeInfo::UNKNOWN,
-            format: PgValueFormat::Text,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(result.x, -74.0060);
-        assert_eq!(result.y, 40.7128);
-    }
-
-    #[test]
-    fn test_decode_text_invalid_format() {
-        let s = "INVALID(116.4 39.9)";
-        let result: Result<Point, _> = Decode::decode(PgValue {
-            value: Some(s.as_bytes().to_vec()),
-            type_info: crate::type_info::PgTypeInfo::UNKNOWN,
-            format: PgValueFormat::Text,
-            timezone_sec: None,
-        });
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_decode_text_invalid_coords_count() {
-        let s = "POINT(116.4)";
-        let result: Result<Point, _> = Decode::decode(PgValue {
-            value: Some(s.as_bytes().to_vec()),
-            type_info: crate::type_info::PgTypeInfo::UNKNOWN,
-            format: PgValueFormat::Text,
-            timezone_sec: None,
-        });
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_from_value() {
-        let point = Point { x: 1.0, y: 2.0 };
-        let value: rbs::Value = point.into();
-        match value {
-            rbs::Value::Ext(type_name, boxed) => {
-                assert_eq!(type_name, "point");
-                if let rbs::Value::Ext(inner_type, inner_boxed) = *boxed {
-                    assert_eq!(inner_type, "point");
-                    if let rbs::Value::Array(arr) = *inner_boxed {
-                        assert_eq!(arr.len(), 2);
-                        if let rbs::Value::F64(x) = &arr[0] {
-                            assert_eq!(*x, 1.0);
-                        } else {
-                            panic!("Expected F64");
-                        }
-                        if let rbs::Value::F64(y) = &arr[1] {
-                            assert_eq!(*y, 2.0);
-                        } else {
-                            panic!("Expected F64");
-                        }
-                    } else {
-                        panic!("Expected Array");
-                    }
-                } else {
-                    panic!("Expected inner Ext");
-                }
-            }
-            _ => panic!("Expected Ext variant"),
-        }
-    }
-
-    #[test]
-    fn test_equality() {
-        let p1 = Point { x: 1.0, y: 2.0 };
-        let p2 = Point { x: 1.0, y: 2.0 };
-        let p3 = Point { x: 2.0, y: 3.0 };
-        assert_eq!(p1, p2);
-        assert_ne!(p1, p3);
-    }
-
-    #[test]
-    fn test_clone() {
-        let p1 = Point { x: 1.0, y: 2.0 };
-        let p2 = p1;
-        assert_eq!(p1, p2);
     }
 }

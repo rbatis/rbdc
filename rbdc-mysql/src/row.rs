@@ -3,7 +3,7 @@ use crate::options::MySqlConnectOptions;
 use crate::protocol;
 use crate::result_set::{MySqlColumn, MySqlTypeInfo};
 use crate::types::Decode;
-use crate::value::{MySqlValue, MySqlValueFormat, MySqlValueRef};
+use crate::value::{MySqlValueFormat, MySqlValueRef};
 use rbdc::db::{MetaData, Row};
 use rbdc::ext::ustr::UStr;
 use rbdc::Error;
@@ -33,16 +33,6 @@ impl MySqlRow {
             format: self.format,
             type_info: column.type_info.clone(),
             value,
-        })
-    }
-
-    pub fn try_take(&mut self, index: usize) -> Option<MySqlValue> {
-        let column: &MySqlColumn = &self.columns[index];
-        let value = self.row.take(index)?;
-        Some(MySqlValue {
-            value: Some(value),
-            type_info: column.type_info.clone(),
-            format: self.format,
             option: self.option.clone(),
         })
     }
@@ -56,9 +46,9 @@ impl Row for MySqlRow {
     }
 
     fn get(&mut self, i: usize) -> Result<Value, Error> {
-        match self.try_take(i) {
-            None => Ok(Value::Null),
-            Some(v) => Value::decode(v),
+        match self.try_get(i) {
+            Ok(v) => Value::decode(v),
+            Err(_) => Ok(Value::Null),
         }
     }
 }

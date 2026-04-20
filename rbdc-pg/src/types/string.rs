@@ -3,11 +3,11 @@ use crate::type_info::PgTypeInfo;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
 use crate::types::TypeInfo;
-use crate::value::PgValue;
+use crate::value::PgValueRef;
 use rbdc::Error;
 
 impl Decode for String {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(value.as_str()?.to_owned())
     }
 }

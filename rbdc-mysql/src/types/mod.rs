@@ -1,5 +1,4 @@
-use crate::result_set::MySqlTypeInfo;
-use crate::value::MySqlValue;
+use crate::{result_set::MySqlTypeInfo, value::MySqlValueRef};
 use rbdc::Error;
 
 pub mod date;
@@ -21,7 +20,7 @@ pub trait TypeInfo {
 }
 
 pub trait Decode {
-    fn decode(value: MySqlValue) -> Result<Self, Error>
+    fn decode(value: MySqlValueRef<'_>) -> Result<Self, Error>
     where
         Self: Sized;
 }

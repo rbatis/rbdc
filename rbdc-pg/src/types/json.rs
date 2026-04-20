@@ -3,7 +3,7 @@ use crate::type_info::PgTypeInfo;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
 use crate::types::TypeInfo;
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use rbdc::json::Json;
 use rbdc::Error;
 use rbs::Value;
@@ -34,10 +34,10 @@ impl Encode for Json {
 }
 
 impl Decode for Json {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         let fmt = value.format();
         let type_info = value.type_info;
-        let mut buf = value.value.unwrap_or_default();
+        let buf = value.value.unwrap_or_default();
         if buf.len() == 0 {
             return Ok(Json {
                 0: "null".to_string(),
@@ -49,18 +49,21 @@ impl Decode for Json {
                 "unsupported JSONB format version {}; please open an issue",
                 buf[0]
             );
-            buf.remove(0);
-        }
-        Ok(Self {
+            Ok(Self {
+            0: String::from_utf8_lossy(&buf[1..]).into_owned(),
+            })
+        }else{
+            Ok(Self {
             0: String::from_utf8_lossy(&buf).into_owned(),
-        })
+            })
+        }
     }
 }
 
-pub fn decode_json(value: PgValue) -> Result<Value, Error> {
+pub fn decode_json(value: PgValueRef) -> Result<Value, Error> {
     let fmt = value.format();
     let type_info = value.type_info;
-    let mut buf = value.value.unwrap_or_default();
+    let buf = value.value.unwrap_or_default();
     if buf.len() == 0 {
         return Ok(Value::Null);
     }
@@ -70,10 +73,12 @@ pub fn decode_json(value: PgValue) -> Result<Value, Error> {
             "unsupported JSONB format version {}; please open an issue",
             buf[0]
         );
-        buf.remove(0);
-    }
-    Ok(serde_json::from_str(&String::from_utf8_lossy(&buf))
+       Ok(serde_json::from_str(&String::from_utf8_lossy(&buf[1..]))
         .map_err(|e| Error::from(e.to_string()))?)
+    }else{
+        Ok(serde_json::from_str(&String::from_utf8_lossy(&buf))
+        .map_err(|e| Error::from(e.to_string()))?)
+    }
 }
 
 pub fn encode_json(v: Value, buf: &mut PgArgumentBuffer) -> Result<IsNull, Error> {

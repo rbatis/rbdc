@@ -3,14 +3,14 @@ use crate::type_info::{PgType, PgTypeInfo, PgTypeKind};
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
 use crate::types::{Oid, TypeInfo};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueFormat, PgValueRef};
 use bytes::Buf;
 use rbdc::Error;
 use rbs::Value;
 use std::borrow::Cow;
 
 impl<T: Decode + TypeInfo> Decode for Vec<T> {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         let format = value.format();
         match format {
             PgValueFormat::Binary => {
@@ -59,7 +59,7 @@ impl<T: Decode + TypeInfo> Decode for Vec<T> {
                 let mut elements = Vec::with_capacity(len as usize);
 
                 for _ in 0..len {
-                    elements.push(T::decode(PgValue::get(
+                    elements.push(T::decode(PgValueRef::get(
                         &mut buf,
                         format,
                         element_type_info.clone(),
@@ -151,9 +151,9 @@ impl<T: Decode + TypeInfo> Decode for Vec<T> {
                     let value_opt = if value == "NULL" {
                         None
                     } else {
-                        Some(value.as_bytes().to_vec())
+                        Some(value.as_bytes())
                     };
-                    elements.push(T::decode(PgValue {
+                    elements.push(T::decode(PgValueRef {
                         value: value_opt,
                         type_info: element_type_info.clone(),
                         format,

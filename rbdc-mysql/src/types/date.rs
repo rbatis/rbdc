@@ -1,5 +1,5 @@
 use crate::types::{Decode, Encode};
-use crate::value::{MySqlValue, MySqlValueFormat};
+use crate::value::{MySqlValueFormat, MySqlValueRef};
 use byteorder::{ByteOrder, LittleEndian};
 use rbdc::date::Date;
 use rbdc::Error;
@@ -18,7 +18,7 @@ impl Encode for Date {
 }
 
 impl Decode for Date {
-    fn decode(value: MySqlValue) -> Result<Self, Error> {
+    fn decode(value: MySqlValueRef<'_>) -> Result<Self, Error> {
         Ok(Date(match value.format() {
             MySqlValueFormat::Text => {
                 fastdate::Date::from_str(value.as_str()?).map_err(|e| Error::from(e.to_string()))?

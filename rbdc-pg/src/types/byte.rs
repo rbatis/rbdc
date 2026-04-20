@@ -1,7 +1,7 @@
 use crate::arguments::PgArgumentBuffer;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use rbdc::Error;
 use rbs::Value;
 use std::fmt::{Display, Formatter};
@@ -23,7 +23,7 @@ impl Encode for Bytea {
 }
 
 impl Decode for Bytea {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         // note: in the TEXT encoding, a value of "0" here is encoded as an empty string
         Ok(Self(Vec::<u8>::decode(value)?))
     }
@@ -50,17 +50,17 @@ impl Encode for Vec<u8> {
 }
 
 impl Decode for Vec<u8> {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         match value.format() {
-            PgValueFormat::Binary => value.into_bytes(),
+            PgValueFormat::Binary => Ok(value.as_bytes()?.to_vec()),
             PgValueFormat::Text => {
-                hex::decode(text_hex_decode_input(&value)?).map_err(|e| Error::from(e.to_string()))
+                hex::decode(text_hex_decode_input(value)?).map_err(|e| Error::from(e.to_string()))
             }
         }
     }
 }
 
-fn text_hex_decode_input(value: &PgValue) -> Result<&[u8], Error> {
+fn text_hex_decode_input(value: PgValueRef) -> Result<&[u8], Error> {
     // BYTEA is formatted as \x followed by hex characters
     value
         .as_bytes()?

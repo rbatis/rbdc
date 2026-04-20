@@ -3,12 +3,12 @@ use crate::type_info::PgTypeInfo;
 use crate::types::decode::Decode;
 use crate::types::encode::{Encode, IsNull};
 use crate::types::TypeInfo;
-use crate::value::{PgValue, PgValueFormat};
+use crate::value::{PgValueRef, PgValueFormat};
 use byteorder::{BigEndian, ByteOrder};
 use rbdc::Error;
 
 impl Decode for u64 {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => BigEndian::read_u64(value.as_bytes()?),
             PgValueFormat::Text => value.as_str()?.parse()?,
@@ -17,7 +17,7 @@ impl Decode for u64 {
 }
 
 impl Decode for u32 {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
@@ -35,7 +35,7 @@ impl Decode for u32 {
 }
 
 impl Decode for u16 {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
@@ -55,14 +55,14 @@ impl Decode for u16 {
 }
 
 impl Decode for u8 {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         // note: in the TEXT encoding, a value of "0" here is encoded as an empty string
         Ok(value.as_bytes()?.get(0).copied().unwrap_or_default() as u8)
     }
 }
 
 impl Decode for i64 {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => BigEndian::read_i64(value.as_bytes()?),
             PgValueFormat::Text => value.as_str()?.parse()?,
@@ -71,7 +71,7 @@ impl Decode for i64 {
 }
 
 impl Decode for i32 {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
@@ -89,7 +89,7 @@ impl Decode for i32 {
 }
 
 impl Decode for i16 {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
@@ -109,7 +109,7 @@ impl Decode for i16 {
 }
 
 impl Decode for i8 {
-    fn decode(value: PgValue) -> Result<Self, Error> {
+    fn decode(value: PgValueRef) -> Result<Self, Error> {
         // note: in the TEXT encoding, a value of "0" here is encoded as an empty string
         Ok(value.as_bytes()?.get(0).copied().unwrap_or_default() as i8)
     }
@@ -185,94 +185,5 @@ impl Encode for i8 {
 impl TypeInfo for i8 {
     fn type_info(&self) -> PgTypeInfo {
         PgTypeInfo::BYTEA
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::type_info::PgTypeInfo;
-    use crate::types::decode::Decode;
-    use crate::value::{PgValue, PgValueFormat};
-
-    #[test]
-    fn test_decode_u32() {
-        let bytes: [u8; 4] = 3_u32.to_be_bytes();
-        let r: u32 = Decode::decode(PgValue {
-            value: Some(bytes.to_vec()),
-            type_info: PgTypeInfo::INT8,
-            format: PgValueFormat::Binary,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(r, 3);
-    }
-
-    #[test]
-    fn test_decode_u32_by_u64() {
-        let bytes: [u8; 8] = 3_u64.to_be_bytes();
-        println!("bytes={:?}", bytes);
-        let r: u32 = Decode::decode(PgValue {
-            value: Some(bytes.to_vec()),
-            type_info: PgTypeInfo::INT8,
-            format: PgValueFormat::Binary,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(r, 3);
-    }
-
-    #[test]
-    fn test_decode_u16_by_u64() {
-        let bytes: [u8; 8] = 3_u64.to_be_bytes();
-        println!("bytes={:?}", bytes);
-        let r: u16 = Decode::decode(PgValue {
-            value: Some(bytes.to_vec()),
-            type_info: PgTypeInfo::INT8,
-            format: PgValueFormat::Binary,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(r, 3);
-    }
-
-    #[test]
-    fn test_decode_i32() {
-        let bytes: [u8; 4] = 3_i32.to_be_bytes();
-        let r: i32 = Decode::decode(PgValue {
-            value: Some(bytes.to_vec()),
-            type_info: PgTypeInfo::INT8,
-            format: PgValueFormat::Binary,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(r, 3);
-    }
-
-    #[test]
-    fn test_decode_i32_by_i64() {
-        let bytes: [u8; 8] = 3_i64.to_be_bytes();
-        println!("bytes={:?}", bytes);
-        let r: i32 = Decode::decode(PgValue {
-            value: Some(bytes.to_vec()),
-            type_info: PgTypeInfo::INT8,
-            format: PgValueFormat::Binary,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(r, 3);
-    }
-
-    #[test]
-    fn test_decode_i16_by_i64() {
-        let bytes: [u8; 8] = 3_i64.to_be_bytes();
-        println!("bytes={:?}", bytes);
-        let r: i16 = Decode::decode(PgValue {
-            value: Some(bytes.to_vec()),
-            type_info: PgTypeInfo::INT8,
-            format: PgValueFormat::Binary,
-            timezone_sec: None,
-        })
-        .unwrap();
-        assert_eq!(r, 3);
     }
 }

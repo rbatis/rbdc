@@ -1,11 +1,11 @@
 use crate::protocol::text::ColumnType;
-use crate::value::{MySqlValue, MySqlValueFormat};
+use crate::value::{MySqlValueFormat, MySqlValueRef};
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::Buf;
 use fastdate::Date;
 use rbdc::Error;
 
-pub(crate) fn uint_decode(value: MySqlValue) -> Result<u64, Error> {
+pub(crate) fn uint_decode(value: MySqlValueRef<'_>) -> Result<u64, Error> {
     if value.type_info.r#type == ColumnType::Bit {
         // NOTE: Regardless of the value format, there is raw binary data here
         let buf = value.as_bytes()?;
@@ -26,7 +26,7 @@ pub(crate) fn uint_decode(value: MySqlValue) -> Result<u64, Error> {
     })
 }
 
-pub(crate) fn int_decode(value: MySqlValue) -> Result<i64, Error> {
+pub(crate) fn int_decode(value: MySqlValueRef<'_>) -> Result<i64, Error> {
     Ok(match value.format() {
         MySqlValueFormat::Text => value.as_str()?.parse().unwrap_or_default(),
         MySqlValueFormat::Binary => {
@@ -36,7 +36,7 @@ pub(crate) fn int_decode(value: MySqlValue) -> Result<i64, Error> {
     })
 }
 
-pub(crate) fn f32_decode(value: MySqlValue) -> Result<f32, Error> {
+pub(crate) fn f32_decode(value: MySqlValueRef<'_>) -> Result<f32, Error> {
     Ok(match value.format() {
         MySqlValueFormat::Binary => {
             let buf = value.as_bytes()?;
@@ -54,14 +54,14 @@ pub(crate) fn f32_decode(value: MySqlValue) -> Result<f32, Error> {
     })
 }
 
-pub(crate) fn f64_decode(value: MySqlValue) -> Result<f64, Error> {
+pub(crate) fn f64_decode(value: MySqlValueRef<'_>) -> Result<f64, Error> {
     Ok(match value.format() {
         MySqlValueFormat::Binary => LittleEndian::read_f64(value.as_bytes()?),
         MySqlValueFormat::Text => value.as_str()?.parse().unwrap_or_default(),
     })
 }
 
-pub(crate) fn decode_timestamp(value: MySqlValue) -> Result<String, Error> {
+pub(crate) fn decode_timestamp(value: MySqlValueRef<'_>) -> Result<String, Error> {
     Ok(match value.format() {
         MySqlValueFormat::Text => {
             let mut v = value.as_str()?.to_string();
@@ -84,7 +84,7 @@ pub(crate) fn decode_timestamp(value: MySqlValue) -> Result<String, Error> {
     })
 }
 
-pub(crate) fn decode_year(value: MySqlValue) -> Result<String, Error> {
+pub(crate) fn decode_year(value: MySqlValueRef<'_>) -> Result<String, Error> {
     Ok(match value.format() {
         MySqlValueFormat::Text => value.as_str()?.to_string(),
         MySqlValueFormat::Binary => {
@@ -95,7 +95,7 @@ pub(crate) fn decode_year(value: MySqlValue) -> Result<String, Error> {
     })
 }
 
-pub(crate) fn decode_date(value: MySqlValue) -> Result<String, Error> {
+pub(crate) fn decode_date(value: MySqlValueRef<'_>) -> Result<String, Error> {
     Ok(match value.format() {
         MySqlValueFormat::Text => value.as_str()?.to_string(),
         MySqlValueFormat::Binary => {
@@ -106,7 +106,7 @@ pub(crate) fn decode_date(value: MySqlValue) -> Result<String, Error> {
     })
 }
 
-pub(crate) fn decode_time(value: MySqlValue) -> Result<String, Error> {
+pub(crate) fn decode_time(value: MySqlValueRef<'_>) -> Result<String, Error> {
     Ok(match value.format() {
         MySqlValueFormat::Text => value.as_str()?.to_string(),
         MySqlValueFormat::Binary => {
@@ -161,6 +161,6 @@ pub(crate) fn decode_time_buf(_: u8, mut buf: &[u8]) -> Result<String, Error> {
     ))
 }
 
-pub(crate) fn decode_bool(value: MySqlValue) -> Result<bool, Error> {
+pub(crate) fn decode_bool(value: MySqlValueRef<'_>) -> Result<bool, Error> {
     Ok(int_decode(value)? != 0)
 }

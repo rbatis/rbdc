@@ -3,7 +3,7 @@ use crate::message::DataRow;
 use crate::meta_data::PgMetaData;
 use crate::statement::PgStatementMetadata;
 use crate::types::decode::Decode;
-use crate::value::{PgValue, PgValueFormat, PgValueRef};
+use crate::value::{PgValueFormat, PgValueRef};
 use rbdc::db::MetaData;
 use rbdc::Error;
 use rbs::Value;
@@ -37,13 +37,13 @@ impl PgRow {
         })
     }
 
-    pub fn try_take(&mut self, index: usize) -> Result<PgValue, Error> {
+    pub fn try_get(&mut self, index: usize) -> Result<PgValueRef, Error> {
         if (index + 1) > self.metadata.column_names.len() {
             return Err(Error::from(format!("ColumnNotFound={}", index)));
         }
         let column = &self.metadata.columns[index];
-        let value = self.data.take(index);
-        Ok(PgValue {
+        let value = self.data.get(index);
+        Ok(PgValueRef {
             value: value,
             type_info: column.type_info.clone(),
             format: self.format,
@@ -70,7 +70,7 @@ impl rbdc::db::Row for PgRow {
     }
 
     fn get(&mut self, i: usize) -> Result<Value, Error> {
-        match self.try_take(i) {
+        match self.try_get(i) {
             Err(e) => Err(Error::from(format!("get error  index:{},error:{}", i, e))),
             Ok(v) => Value::decode(v),
         }

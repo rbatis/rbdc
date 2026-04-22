@@ -17,7 +17,6 @@ use std::time::Duration;
 pub struct FastPool {
     pub manager: Arc<ConnectionManager>,
     pub inner: fast_pool::Pool<DurationManager<ConnManagerProxy>>,
-    pub timeout: Arc<AtomicDuration>,
 }
 
 impl FastPool {
@@ -72,15 +71,14 @@ impl Pool for FastPool {
             inner: fast_pool::Pool::new(DurationManager::new(
                 ConnManagerProxy::new(manager),
                 CheckMode::NoLimit,
-            )),
-            timeout: Arc::new(AtomicDuration::new(None)),
+            ))
         })
     }
 
     async fn get(&self) -> Result<Box<dyn Connection>, Error> {
         let v = self
             .inner
-            .get_timeout(self.timeout.get())
+            .get_timeout(self.inner.timeout_wait.get())
             .await
             .map_err(|e| Error::from(e.to_string()))?;
         let proxy = ConnProxy { conn: Some(v) };
@@ -106,7 +104,7 @@ impl Pool for FastPool {
     }
 
     async fn set_timeout(&self, timeout: Option<Duration>) {
-        self.timeout.store(timeout);
+        self.inner.timeout_wait.store(timeout);
     }
 
     async fn set_conn_max_lifetime(&self, max_lifetime: Option<Duration>) {

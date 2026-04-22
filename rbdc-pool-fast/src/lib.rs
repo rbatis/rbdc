@@ -78,7 +78,7 @@ impl Pool for FastPool {
     async fn get(&self) -> Result<Box<dyn Connection>, Error> {
         let v = self
             .inner
-            .get_timeout(self.inner.timeout_wait.get())
+            .get_timeout(self.inner.get_timeout_wait())
             .await
             .map_err(|e| Error::from(e.to_string()))?;
         let proxy = ConnProxy { conn: Some(v) };

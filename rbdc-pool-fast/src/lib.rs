@@ -1,4 +1,3 @@
-use dark_std::sync::AtomicDuration;
 use fast_pool::plugin::{CheckMode, DurationManager};
 use futures_core::future::BoxFuture;
 use log::error;

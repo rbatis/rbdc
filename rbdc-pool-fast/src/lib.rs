@@ -104,7 +104,7 @@ impl Pool for FastPool {
     }
 
     async fn set_timeout(&self, timeout: Option<Duration>) {
-        self.inner.timeout_wait.store(timeout);
+        self.inner.set_timeout_wait(timeout);
     }
 
     async fn set_conn_max_lifetime(&self, max_lifetime: Option<Duration>) {

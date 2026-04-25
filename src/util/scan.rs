@@ -1,26 +1,25 @@
-use crate::Error;
 use crate::db::Row;
+use crate::Error;
+use futures_util::Stream;
+use rbs::value::map::ValueMap;
 use rbs::Value;
 use std::fmt::{Debug, Formatter};
+use std::pin::Pin;
 
-/// Iterator for scanning query results row by row.
+/// Async Stream wrapper for scanning query results row by row.
 /// More memory efficient than loading all rows into Value Array.
 ///
 /// # Example
 ///
 /// ```
-/// use rbdc::db::{Connection, Row};
+/// use futures_util::StreamExt;
+/// use rbdc::db::Connection;
 /// use rbdc::util::Scan;
 /// use rbdc::Error;
-/// use futures_util::StreamExt;
 ///
 /// # async fn example(conn: &mut dyn Connection) -> Result<(), Error> {
-/// let mut stream = conn.exec_rows("SELECT * FROM activity", vec![]).await?;
-/// let mut rows: Vec<Box<dyn Row>> = Vec::new();
-/// while let Some(row) = stream.next().await {
-///     rows.push(row?);
-/// }
-/// let scan = Scan::new(rows);
+/// let stream = conn.exec_rows("SELECT * FROM activity", vec![]).await?;
+/// let scan = Scan::new(stream);
 ///
 /// // Collect all rows into a Vec of struct
 /// #[derive(serde::Deserialize)]
@@ -28,57 +27,76 @@ use std::fmt::{Debug, Formatter};
 ///     id: Option<String>,
 ///     name: Option<String>,
 /// }
-/// let activities: Vec<Activity> = scan.collect()?;
+/// let activities: Vec<Activity> = scan.collect().await?;
 /// # Ok(())
 /// # }
 /// ```
-pub struct Scan {
-    rows: Vec<Box<dyn Row>>,
-    current: usize,
+pub struct Scan<S> {
+    stream: S,
 }
 
-impl Debug for Scan {
+impl<S> Debug for Scan<S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Scan")
-            .field("remaining", &(self.rows.len() - self.current))
-            .finish()
+        f.debug_struct("Scan").finish()
     }
 }
 
-impl Iterator for Scan {
-    type Item = Result<Value, Error>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current >= self.rows.len() {
-            return None;
-        }
-        let row = &mut self.rows[self.current];
-        let md = row.meta_data();
-        let col_len = md.column_len();
-        let mut values = Vec::with_capacity(col_len);
-        for i in 0..col_len {
-            values.push(row.get(i).unwrap_or(Value::Null));
-        }
-        self.current += 1;
-        Some(Ok(Value::Array(values)))
+impl<S> Scan<S> {
+    /// Create a new Scan from a Stream.
+    pub fn new(stream: S) -> Self {
+        Self { stream }
     }
 }
 
-impl Scan {
-    /// Create a new Scan from rows.
-    pub fn new(rows: Vec<Box<dyn Row>>) -> Self {
-        Self { rows, current: 0 }
-    }
-
+impl<S> Scan<S>
+where
+    S: Stream<Item = Result<Box<dyn Row>, Error>> + Unpin + Send,
+{
     /// Collect all rows into a Vec of type T.
-    /// Each row is converted from Value::Array to T using rbs::from_value.
-    pub fn collect<T: serde::de::DeserializeOwned>(mut self) -> Result<Vec<T>, Error> {
+    /// Each row is converted from Value::Map to T using rbs::from_value.
+    pub async fn collect<T: serde::de::DeserializeOwned>(mut self) -> Result<Vec<T>, Error> {
+        use futures_util::StreamExt;
         let mut result = Vec::new();
-        while let Some(item) = self.next() {
-            let value = item?;
-            let t: T = rbs::from_value(value)?;
+        while let Some(row) = self.stream.next().await {
+            let mut row = row?;
+            let md = row.meta_data();
+            let col_len = md.column_len();
+            let mut map = ValueMap::new();
+            for i in 0..col_len {
+                let name = md.column_name(i);
+                let value = row.get(i).unwrap_or(Value::Null);
+                map.insert(Value::String(name), value);
+            }
+            let t: T = rbs::from_value(Value::Map(map))?;
             result.push(t);
         }
         Ok(result)
+    }
+}
+
+impl<S> Stream for Scan<S>
+where
+    S: Stream<Item = Result<Box<dyn Row>, Error>> + Unpin + Send,
+{
+    type Item = Result<Value, Error>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<Self::Item>> {
+        // Pin the stream inside
+        let stream = Pin::new(&mut self.stream);
+        futures_util::pin_mut!(stream);
+        stream.poll_next(cx).map(|opt| {
+            opt.map(|result| {
+                let mut row = result?;
+                let md = row.meta_data();
+                let col_len = md.column_len();
+                let mut map = ValueMap::new();
+                for i in 0..col_len {
+                    let name = md.column_name(i);
+                    let value = row.get(i).unwrap_or(Value::Null);
+                    map.insert(Value::String(name), value);
+                }
+                Ok(Value::Map(map))
+            })
+        })
     }
 }

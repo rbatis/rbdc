@@ -3,7 +3,6 @@ use rbdc::db::Connection;
 use rbdc::pool::Pool;
 use rbdc_pool_fast::FastPool;
 use rbdc_turso::TursoDriver;
-use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {

@@ -91,7 +91,7 @@ impl Connection for MockConnection {
         &mut self,
         _sql: &str,
         _params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<BoxStream<Result<Box<dyn Row>, rbdc::Error>>, rbdc::Error>> {
+    ) -> BoxFuture<'_, Result<BoxStream<'_,Result<Box<dyn Row>, rbdc::Error>>, rbdc::Error>> {
         let rows: Vec<Box<dyn Row>> = self.rows.lock().unwrap().drain(..).collect();
         Box::pin(async move {
             let stream = try_stream! {

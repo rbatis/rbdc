@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use fast_pool::plugin::{CheckMode, DurationManager};
 use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
@@ -235,14 +234,15 @@ impl Connection for ConnProxy {
 
 #[cfg(test)]
 mod test {
+    use std::pin::Pin;
     use crate::FastPool;
     use futures_core::future::BoxFuture;
-    use futures_core::stream::Stream;
     use rbdc::db::{ConnectOptions, Connection, Driver, ExecResult, Row};
     use rbdc::pool::ConnectionManager;
     use rbdc::pool::Pool;
     use rbdc::try_stream;
     use rbs::{Error, Value};
+    use futures_core::stream::BoxStream;
 
     #[derive(Debug)]
     pub struct Opt {}

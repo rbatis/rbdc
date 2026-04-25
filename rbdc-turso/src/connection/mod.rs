@@ -12,7 +12,6 @@ use futures_core::stream::BoxStream;
 use futures_util::StreamExt;
 use rbdc::db::{Connection, ExecResult, Row};
 use rbdc::error::Error;
-use rbdc::try_stream;
 use rbs::Value;
 
 /// A connection to a Turso database via the native async libsql API.
@@ -44,13 +43,9 @@ impl Connection for TursoConnection {
         let sql = sql.to_owned();
         Box::pin(async move {
             let rows = self.execute_query(&sql, params).await?;
-            let stream = try_stream! {
-                for row in rows {
-                    r#yield!(row);
-                }
-                Ok(())
-            }
-            .boxed();
+            let stream = futures_util::stream::iter(rows)
+                .map(Ok)
+                .boxed();
             Ok(stream as BoxStream<'_, Result<Box<dyn Row>, Error>>)
         })
     }

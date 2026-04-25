@@ -5,7 +5,6 @@ use either::Either;
 use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
-use rbdc::try_stream;
 use rbdc::common::StatementCache;
 use rbdc::db::{Connection, ExecResult, Row};
 use rbdc::Error;
@@ -23,7 +22,6 @@ mod tls;
 use crate::options::MySqlConnectOptions;
 use crate::query::MysqlQuery;
 use crate::query_result::MySqlQueryResult;
-use crate::row::MySqlRow;
 pub(crate) use stream::MySqlStream;
 
 const MAX_PACKET_SIZE: u32 = 1024;
@@ -135,23 +133,15 @@ impl Connection for MySqlConnection {
                     })
                 }
             };
-            let f: BoxStream<Result<MySqlRow, Error>> = many
+            let stream = many
                 .try_filter_map(|step| async move {
                     Ok(match step {
                         Either::Left(_) => None,
                         Either::Right(row) => Some(row),
                     })
                 })
+                .map(|row_result| row_result.map(|row| Box::new(row) as Box<dyn Row>))
                 .boxed();
-            let v: Vec<MySqlRow> = f.try_collect().await?;
-
-            let stream = try_stream! {
-                for row in v {
-                    r#yield!(Box::new(row) as Box<dyn Row>);
-                }
-                Ok(())
-            }
-            .boxed();
 
             Ok(stream as BoxStream<Result<Box<dyn Row>, Error>>)
         })

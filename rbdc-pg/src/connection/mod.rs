@@ -4,19 +4,17 @@ use crate::message::{
 };
 use crate::query::PgQuery;
 use crate::query_result::PgQueryResult;
-use crate::row::PgRow;
 use crate::statement::PgStatementMetadata;
 use crate::type_info::PgTypeInfo;
 use crate::types::{Oid, TypeInfo};
 use either::Either;
 use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
-use futures_util::{pin_mut, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
+use futures_util::{FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use rbdc::common::StatementCache;
 use rbdc::db::{Connection, ExecResult, Placeholder, Row};
 use rbdc::ext::ustr::UStr;
 use rbdc::io::Decode;
-use rbdc::try_stream;
 use rbdc::Error;
 use rbs::Value;
 use std::collections::HashMap;
@@ -243,22 +241,16 @@ impl Connection for PgConnection {
                     })
                 }
             };
-            let stream = try_stream! {
-                let f: BoxStream<Result<PgRow, Error>> = many
-                    .try_filter_map(|step| async move {
-                        Ok(match step {
-                            Either::Left(_) => None,
-                            Either::Right(row) => Some(row),
-                        })
+            let stream = many
+                .try_filter_map(|step| async move {
+                    Ok(match step {
+                        Either::Left(_) => None,
+                        Either::Right(row) => Some(row),
                     })
-                    .boxed();
-                pin_mut!(f);
-                while let Some(row) = f.try_next().await? {
-                    r#yield!(Box::new(row) as Box<dyn Row>);
-                }
-                Ok(())
-            }
-            .boxed();
+                })
+                .map(|row_result| row_result.map(|row| Box::new(row) as Box<dyn Row>))
+                .boxed();
+
             Ok(stream as BoxStream<Result<Box<dyn Row>, Error>>)
         })
     }

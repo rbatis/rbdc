@@ -13,10 +13,9 @@ use crate::decode::Decode;
 use crate::encode::Encode;
 use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
-use futures_util::{Stream, StreamExt};
+use futures_util::StreamExt;
 use percent_encoding::percent_decode_str;
 use rbdc::db::{ConnectOptions, Connection, ExecResult, MetaData, Placeholder, Row};
-use rbdc::try_stream;
 use rbdc::Error;
 use rbs::Value;
 use std::sync::Arc;
@@ -236,35 +235,31 @@ impl Connection for MssqlConnection {
                 )
                 .await
                 .map_err(|e| Error::from(e.to_string()))?;
-            let mut results = Vec::with_capacity(v.size_hint().0);
-            let s = v
-                .into_results()
-                .await
-                .map_err(|e| Error::from(e.to_string()))?;
-            for item in s {
-                for r in item {
-                    let mut columns = Vec::with_capacity(r.columns().len());
-                    let mut row = MssqlRow {
-                        columns: Arc::new(vec![]),
-                        datas: Vec::with_capacity(r.columns().len()),
-                    };
-                    for x in r.columns() {
-                        columns.push(x.clone());
+
+            use futures_util::TryStreamExt;
+            let stream = v
+                .map_err(|e| Error::from(e.to_string()))
+                .try_filter_map(|item| async move {
+                    match item {
+                        tiberius::QueryItem::Row(r) => {
+                            let mut columns = Vec::with_capacity(r.columns().len());
+                            let mut datas: Vec<ColumnData<'static>> = Vec::with_capacity(r.columns().len());
+                            for x in r.columns() {
+                                columns.push(x.clone());
+                            }
+                            for x in r {
+                                datas.push(x);
+                            }
+                            Ok(Some(Box::new(MssqlRow {
+                                columns: Arc::new(columns),
+                                datas,
+                            }) as Box<dyn Row>))
+                        }
+                        tiberius::QueryItem::Metadata(_) => Ok(None),
                     }
-                    row.columns = Arc::new(columns);
-                    for x in r {
-                        row.datas.push(x);
-                    }
-                    results.push(Box::new(row) as Box<dyn Row>);
-                }
-            }
-            let stream = try_stream! {
-                for row in results {
-                    r#yield!(row);
-                }
-                Ok(())
-            }
-            .boxed();
+                })
+                .boxed();
+
             Ok(stream as BoxStream<Result<Box<dyn Row>, Error>>)
         })
     }

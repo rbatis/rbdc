@@ -9,7 +9,7 @@ async fn main() -> Result<(), Error> {
     let url = "mysql://root:123456@localhost:3306/test";
     let pool = FastPool::new_url(MysqlDriver {}, url)?;
     let mut conn = pool.get().await?;
-    let v = conn.exec_decode("select * from user", vec![]).await?;
+    let v = conn.exec_decode("SHOW TABLES;", vec![]).await?;
     println!("{}", v);
     //if need decode use `let result:Vec<Table> = rbs::from_value(v)?;`
     Ok(())

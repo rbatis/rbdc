@@ -1,10 +1,10 @@
-use rbdc_pool_fast::FastPool;
 use rbdc::pool::Pool;
+use rbdc_pool_fast::FastPool;
 
 mod mock {
+    use futures_core::future::BoxFuture;
     use rbdc::db::{ConnectOptions, Connection, Driver, ExecResult, Row};
     use rbs::Value;
-    use futures_core::future::BoxFuture;
 
     #[derive(Debug)]
     pub struct Opt {}

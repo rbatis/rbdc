@@ -21,8 +21,6 @@ async fn main() -> Result<(), Error> {
     //     &format!("turso://?url={}&token={}", url, token)
     // )?;
 
-    pool.set_conn_max_lifetime(Some(Duration::from_secs(10)))
-        .await;
     let mut conn = pool.get().await?;
 
     // Create test table

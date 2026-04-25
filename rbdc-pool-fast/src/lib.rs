@@ -70,7 +70,7 @@ impl Pool for FastPool {
             inner: fast_pool::Pool::new(DurationManager::new(
                 ConnManagerProxy::new(manager),
                 CheckMode::NoLimit,
-            ))
+            )),
         })
     }
 

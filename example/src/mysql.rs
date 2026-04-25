@@ -6,7 +6,8 @@ use rbdc_pool_fast::FastPool;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let pool = FastPool::new_url(MysqlDriver {}, "mysql://root:123456@localhost:3306/test")?;
+    let url = "mysql://root:123456@localhost:3306/test";
+    let pool = FastPool::new_url(MysqlDriver {}, url)?;
     let mut conn = pool.get().await?;
     let v = conn.exec_decode("select * from user", vec![]).await?;
     println!("{}", v);

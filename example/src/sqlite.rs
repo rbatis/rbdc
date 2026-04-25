@@ -8,8 +8,6 @@ use std::time::Duration;
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let pool = FastPool::new_url(SqliteDriver {}, "sqlite://target/sqlite.db")?;
-    pool.set_conn_max_lifetime(Some(Duration::from_secs(10)))
-        .await;
     let mut conn = pool.get().await?;
     let v = conn
         .exec_decode("select name,type from sqlite_master", vec![])

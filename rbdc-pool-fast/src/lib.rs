@@ -1,6 +1,6 @@
 use fast_pool::plugin::{CheckMode, DurationManager};
 use futures_core::future::BoxFuture;
-use futures_core::stream::Stream;
+use futures_core::stream::BoxStream;
 use log::error;
 use rbdc::db::{ConnectOptions, Driver};
 use rbdc::db::{Connection, ExecResult, Row};
@@ -173,7 +173,7 @@ impl Connection for ConnProxy {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>> {
+    ) -> BoxFuture<'_, Result<BoxStream<'_, Result<Box<dyn Row>, Error>>, Error>> {
         match &mut self.conn {
             Some(conn) => conn.exec_rows(sql, params),
             None => Box::pin(async { Err(Error::from("conn is drop")) }),
@@ -263,7 +263,7 @@ mod test {
             &mut self,
             _sql: &str,
             _params: Vec<Value>,
-        ) -> BoxFuture<'_, Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>> {
+        ) -> BoxFuture<'_, Result<BoxStream<'_, Result<Box<dyn Row>, Error>>, Error>> {
             Box::pin(async move {
                 let rows: Vec<Box<dyn Row>> = vec![];
                 let stream = try_stream! {
@@ -272,7 +272,7 @@ mod test {
                     }
                     Ok(())
                 };
-                Ok(Box::new(stream) as Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin>)
+                Ok(Box::new(stream) as BoxStream<'_, Result<Box<dyn Row>, Error>>)
             })
         }
 

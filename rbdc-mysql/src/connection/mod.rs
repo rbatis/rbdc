@@ -3,7 +3,7 @@ use crate::protocol::text::{Ping, Quit};
 use crate::stmt::MySqlStatementMetadata;
 use either::Either;
 use futures_core::future::BoxFuture;
-use futures_core::stream::{BoxStream, Stream};
+use futures_core::stream::BoxStream;
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use rbdc::try_stream;
 use rbdc::common::StatementCache;
@@ -116,10 +116,7 @@ impl Connection for MySqlConnection {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<
-        '_,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
-    > {
+    ) -> BoxFuture<'_, Result<BoxStream<Result<Box<dyn Row>, Error>>, Error>> {
         let sql = sql.to_owned();
         Box::pin(async move {
             let many = {
@@ -153,12 +150,10 @@ impl Connection for MySqlConnection {
                     r#yield!(Box::new(row) as Box<dyn Row>);
                 }
                 Ok(())
-            };
+            }
+            .boxed();
 
-            Ok(Box::new(stream)
-                as Box<
-                    dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin,
-                >)
+            Ok(stream as BoxStream<Result<Box<dyn Row>, Error>>)
         })
     }
 

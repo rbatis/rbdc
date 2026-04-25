@@ -11,7 +11,6 @@ use crate::types::{Oid, TypeInfo};
 use either::Either;
 use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
-use futures_core::stream::Stream;
 use futures_util::{pin_mut, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use rbdc::common::StatementCache;
 use rbdc::db::{Connection, ExecResult, Placeholder, Row};
@@ -221,10 +220,7 @@ impl Connection for PgConnection {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<
-        '_,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
-    > {
+    ) -> BoxFuture<'_, Result<BoxStream<Result<Box<dyn Row>, Error>>, Error>> {
         let sql = PgDriver {}.exchange(sql);
         Box::pin(async move {
             let many = {
@@ -261,8 +257,9 @@ impl Connection for PgConnection {
                     r#yield!(Box::new(row) as Box<dyn Row>);
                 }
                 Ok(())
-            };
-            Ok(Box::new(stream) as Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin>)
+            }
+            .boxed();
+            Ok(stream as BoxStream<Result<Box<dyn Row>, Error>>)
         })
     }
 

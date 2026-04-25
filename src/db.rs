@@ -1,6 +1,6 @@
 use crate::Error;
 use futures_core::future::BoxFuture;
-use futures_core::stream::Stream;
+use futures_core::stream::BoxStream;
 use rbs::Value;
 use rbs::value::map::ValueMap;
 use std::any::Any;
@@ -90,10 +90,7 @@ pub trait Connection: Send + Sync {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<
-        '_,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
-    >;
+    ) -> BoxFuture<'_, Result<BoxStream<'_, Result<Box<dyn Row>, Error>>, Error>>;
 
     /// Execute a query that is expected to return a result set, such as a `SELECT` statement.
     /// you can use `let result:Vec<Table>=rbs::from_value(v)?;` to decode this result.
@@ -169,10 +166,7 @@ impl Connection for Box<dyn Connection> {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<
-        '_,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
-    > {
+    ) -> BoxFuture<'_, Result<BoxStream<'_, Result<Box<dyn Row>, Error>>, Error>> {
         self.deref_mut().exec_rows(sql, params)
     }
 

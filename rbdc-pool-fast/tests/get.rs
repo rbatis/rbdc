@@ -3,7 +3,7 @@ use rbdc_pool_fast::FastPool;
 
 mod mock {
     use futures_core::future::BoxFuture;
-    use futures_core::stream::Stream;
+    use futures_core::stream::{BoxStream, Stream};
     use rbdc::db::{ConnectOptions, Connection, Driver, ExecResult, Row};
     use rbdc::try_stream;
     use rbs::Value;
@@ -29,7 +29,7 @@ mod mock {
             &mut self,
             _sql: &str,
             _params: Vec<Value>,
-        ) -> BoxFuture<'_, Result<Box<dyn Stream<Item = Result<Box<dyn Row>, rbs::Error>> + Send + Unpin + '_>, rbs::Error>> {
+        ) -> BoxFuture<'_, Result<BoxStream<Result<Box<dyn Row>, rbs::Error>>, rbs::Error>> {
             Box::pin(async move {
                 let rows: Vec<Box<dyn Row>> = vec![];
                 let stream = try_stream! {
@@ -38,7 +38,7 @@ mod mock {
                     }
                     Ok(())
                 };
-                Ok(Box::new(stream) as Box<dyn Stream<Item = Result<Box<dyn Row>, rbs::Error>> + Send + Unpin>)
+                Ok(Box::new(stream) as BoxStream<Result<Box<dyn Row>, rbs::Error>>)
             })
         }
 

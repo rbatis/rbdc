@@ -8,7 +8,8 @@ pub mod executor;
 
 use crate::error::TursoError;
 use futures_core::future::BoxFuture;
-use futures_core::stream::Stream;
+use futures_core::stream::BoxStream;
+use futures_util::StreamExt;
 use rbdc::db::{Connection, ExecResult, Row};
 use rbdc::error::Error;
 use rbdc::try_stream;
@@ -39,10 +40,7 @@ impl Connection for TursoConnection {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<
-        '_,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
-    > {
+    ) -> BoxFuture<'_, Result<BoxStream<'_, Result<Box<dyn Row>, Error>>, Error>> {
         let sql = sql.to_owned();
         Box::pin(async move {
             let rows = self.execute_query(&sql, params).await?;
@@ -51,9 +49,9 @@ impl Connection for TursoConnection {
                     r#yield!(row);
                 }
                 Ok(())
-            };
-            Ok(Box::new(stream)
-                as Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin>)
+            }
+            .boxed();
+            Ok(stream as BoxStream<'_, Result<Box<dyn Row>, Error>>)
         })
     }
 

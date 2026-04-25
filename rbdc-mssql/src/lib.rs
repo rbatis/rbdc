@@ -12,7 +12,8 @@ pub use crate::driver::MssqlDriver as Driver;
 use crate::decode::Decode;
 use crate::encode::Encode;
 use futures_core::future::BoxFuture;
-use futures_core::Stream;
+use futures_core::stream::BoxStream;
+use futures_util::{Stream, StreamExt};
 use percent_encoding::percent_decode_str;
 use rbdc::db::{ConnectOptions, Connection, ExecResult, MetaData, Placeholder, Row};
 use rbdc::try_stream;
@@ -220,10 +221,7 @@ impl Connection for MssqlConnection {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<
-        '_,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
-    > {
+    ) -> BoxFuture<'_, Result<BoxStream<Result<Box<dyn Row>, Error>>, Error>> {
         let sql = MssqlDriver {}.exchange(sql);
         Box::pin(async move {
             let mut q = Query::new(sql);
@@ -265,11 +263,9 @@ impl Connection for MssqlConnection {
                     r#yield!(row);
                 }
                 Ok(())
-            };
-            Ok(Box::new(stream)
-                as Box<
-                    dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin,
-                >)
+            }
+            .boxed();
+            Ok(stream as BoxStream<Result<Box<dyn Row>, Error>>)
         })
     }
 

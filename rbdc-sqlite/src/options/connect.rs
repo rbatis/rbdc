@@ -3,7 +3,7 @@ use crate::type_info::Type;
 use crate::{SqliteArguments, SqliteConnectOptions, SqliteConnection, SqliteQueryResult};
 use either::Either;
 use futures_core::future::BoxFuture;
-use futures_core::stream::{BoxStream, Stream};
+use futures_core::stream::BoxStream;
 use futures_util::FutureExt;
 use futures_util::{StreamExt, TryStreamExt};
 use rbdc::db::{Connection, ExecResult, Row};
@@ -55,10 +55,7 @@ impl Connection for SqliteConnection {
         &mut self,
         sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<
-        '_,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
-    > {
+    ) -> BoxFuture<'_, Result<BoxStream<Result<Box<dyn Row>, Error>>, Error>> {
         let sql = sql.to_owned();
         let row_channel_size = self.row_channel_size;
         let has_args = !params.is_empty();
@@ -89,12 +86,10 @@ impl Connection for SqliteConnection {
                     }
                 }
                 Ok(())
-            };
+            }
+            .boxed();
 
-            Ok(Box::new(stream)
-                as Box<
-                    dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin,
-                >)
+            Ok(stream as BoxStream<Result<Box<dyn Row>, Error>>)
         })
     }
 

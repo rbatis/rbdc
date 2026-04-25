@@ -1,3 +1,4 @@
+use std::pin::Pin;
 use fast_pool::plugin::{CheckMode, DurationManager};
 use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
@@ -272,7 +273,8 @@ mod test {
                     }
                     Ok(())
                 };
-                Ok(Box::new(stream) as BoxStream<'_, Result<Box<dyn Row>, Error>>)
+                let stream: Pin<Box<dyn futures_core::Stream<Item = Result<Box<dyn Row>, Error>> + Send>> = Box::pin(stream);
+                Ok(stream)
             })
         }
 

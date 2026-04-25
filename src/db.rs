@@ -1,5 +1,6 @@
 use crate::Error;
 use futures_core::future::BoxFuture;
+use futures_core::stream::Stream;
 use rbs::Value;
 use rbs::value::map::ValueMap;
 use std::any::Any;
@@ -83,33 +84,39 @@ impl From<(u64, Value)> for ExecResult {
 
 /// Represents a connection to a database
 pub trait Connection: Send + Sync {
-    /// Execute a query that is expected to return a result set, such as a `SELECT` statement
-    fn exec_rows(
-        &mut self,
-        sql: &str,
+    /// Execute a query and return results as an async stream of rows.
+    /// This allows processing rows one by one without loading all results into memory.
+    fn exec_rows<'a>(
+        &'a mut self,
+        sql: &'a str,
         params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>>;
+    ) -> BoxFuture<
+        'a,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+    >;
 
     /// Execute a query that is expected to return a result set, such as a `SELECT` statement.
     /// you can use `let result:Vec<Table>=rbs::from_value(v)?;` to decode this result.
     /// return csv format Value [['column'],['value']].
-    fn exec_decode(
-        &mut self,
-        sql: &str,
+    fn exec_decode<'a>(
+        &'a mut self,
+        sql: &'a str,
         params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Value, Error>> {
+    ) -> BoxFuture<'a, Result<Value, Error>> {
         let v = self.exec_rows(sql, params);
         Box::pin(async move {
-            let v = v.await?;
-            let mut rows = Vec::with_capacity(v.len() + 1);
-            for (_row_idx, mut x) in v.into_iter().enumerate() {
-                let md = x.meta_data();
+            use futures_util::StreamExt;
+            let mut stream = v.await?;
+            let mut rows = Vec::new();
+            while let Some(row) = stream.next().await {
+                let mut row = row?;
+                let md = row.meta_data();
                 let col_len = md.column_len();
                 let mut m = ValueMap::with_capacity(col_len);
                 for i in 0..col_len {
                     m.insert(
                         Value::String(md.column_name(i)),
-                        x.get(i).unwrap_or(Value::Null),
+                        row.get(i).unwrap_or(Value::Null),
                     );
                 }
                 rows.push(Value::Map(m));
@@ -158,19 +165,22 @@ pub trait Connection: Send + Sync {
 }
 
 impl Connection for Box<dyn Connection> {
-    fn exec_rows(
-        &mut self,
-        sql: &str,
+    fn exec_rows<'a>(
+        &'a mut self,
+        sql: &'a str,
         params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<
+        'a,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+    > {
         self.deref_mut().exec_rows(sql, params)
     }
 
-    fn exec_decode(
-        &mut self,
-        sql: &str,
+    fn exec_decode<'a>(
+        &'a mut self,
+        sql: &'a str,
         params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Value, Error>> {
+    ) -> BoxFuture<'a, Result<Value, Error>> {
         self.deref_mut().exec_decode(sql, params)
     }
 

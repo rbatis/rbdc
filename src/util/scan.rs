@@ -9,12 +9,17 @@ use std::fmt::{Debug, Formatter};
 /// # Example
 ///
 /// ```
-/// use rbdc::db::Connection;
+/// use rbdc::db::{Connection, Row};
 /// use rbdc::util::Scan;
 /// use rbdc::Error;
+/// use futures_util::StreamExt;
 ///
 /// # async fn example(conn: &mut dyn Connection) -> Result<(), Error> {
-/// let rows = conn.exec_rows("SELECT * FROM activity", vec![]).await?;
+/// let mut stream = conn.exec_rows("SELECT * FROM activity", vec![]).await?;
+/// let mut rows: Vec<Box<dyn Row>> = Vec::new();
+/// while let Some(row) = stream.next().await {
+///     rows.push(row?);
+/// }
 /// let scan = Scan::new(rows);
 ///
 /// // Collect all rows into a Vec of struct

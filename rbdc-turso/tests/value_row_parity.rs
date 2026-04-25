@@ -6,6 +6,7 @@
 //!
 //! Each test scenario has a stable identifier (PAR-NNN) for traceability.
 
+use futures_util::StreamExt;
 use rbdc::db::{Connection, Driver};
 use rbs::Value;
 
@@ -32,15 +33,20 @@ async fn par_001_null_value() {
     .await
     .unwrap();
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT val FROM par001 WHERE id = 1", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
     // SQLite adapter: NULL → Value::Null
     let val = rows[0].get(0).unwrap();
     assert_eq!(val, Value::Null);
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -76,10 +82,14 @@ async fn par_002_integer_values() {
         .unwrap();
     }
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT val FROM par002 ORDER BY id", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), cases.len());
 
     // SQLite adapter: INTEGER → Value::I64
@@ -88,6 +98,7 @@ async fn par_002_integer_values() {
         assert_eq!(val, Value::I64(*expected), "failed for case: {}", label);
     }
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -122,10 +133,14 @@ async fn par_003_real_values() {
         .unwrap();
     }
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT val FROM par003 ORDER BY id", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), cases.len());
 
     for (i, (expected, label)) in cases.iter().enumerate() {
@@ -146,6 +161,7 @@ async fn par_003_real_values() {
         }
     }
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -180,10 +196,14 @@ async fn par_004_text_values() {
         .unwrap();
     }
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT val FROM par004 ORDER BY id", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), cases.len());
 
     for (i, (expected, label)) in cases.iter().enumerate() {
@@ -196,6 +216,7 @@ async fn par_004_text_values() {
         );
     }
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -229,10 +250,14 @@ async fn par_005_blob_values() {
         .unwrap();
     }
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT val FROM par005 ORDER BY id", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), cases.len());
 
     for (i, (expected, label)) in cases.iter().enumerate() {
@@ -245,6 +270,7 @@ async fn par_005_blob_values() {
         );
     }
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -283,10 +309,14 @@ async fn par_006_json_text_default_no_detection() {
         .unwrap();
     }
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT val FROM par006 ORDER BY id", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), cases.len());
 
     // With json_detect=false (default), ALL text comes back as String
@@ -299,6 +329,7 @@ async fn par_006_json_text_default_no_detection() {
         );
     }
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -323,10 +354,14 @@ async fn par_006_json_text_with_detection_enabled() {
         .unwrap();
     }
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT val FROM par006j ORDER BY id", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), cases.len());
 
     // JSON object → deserialized as Map
@@ -354,6 +389,7 @@ async fn par_006_json_text_with_detection_enabled() {
         "PAR-006j: numeric_string"
     );
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -384,16 +420,21 @@ async fn par_007_bool_parameter_binding() {
     .await
     .unwrap();
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT flag FROM par007 ORDER BY id", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 2);
 
     // SQLite stores booleans as INTEGER 1/0, reads back as I64
     assert_eq!(rows[0].get(0).unwrap(), Value::I64(1));
     assert_eq!(rows[1].get(0).unwrap(), Value::I64(0));
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -417,10 +458,14 @@ async fn par_008_metadata_columns() {
     .await
     .unwrap();
 
-    let rows = conn
+    let mut stream = conn
         .exec_rows("SELECT id, name, score, data FROM par008", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
 
     let md = rows[0].meta_data();
@@ -458,6 +503,7 @@ async fn par_008_metadata_columns() {
         data_type
     );
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -475,28 +521,31 @@ async fn par_009_row_access_out_of_bounds() {
         .await
         .unwrap();
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT a, b FROM par009", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
 
-    // Valid access by index — indices are stable (Option::take pattern)
+    // Valid access by index (Turso row values are not consumed on access)
     let a = rows[0].get(0).unwrap();
     assert_eq!(a, Value::I64(1));
     let b = rows[0].get(1).unwrap();
     assert_eq!(b, Value::String("x".into()));
 
-    // Accessing an already-consumed index should error
-    let result = rows[0].get(0);
-    assert!(result.is_err(), "should error on already-consumed column");
-    let err = result.unwrap_err().to_string();
-    assert!(err.contains("already consumed"), "got: {}", err);
+    // Turso rows don't consume values on get(), so re-accessing works
+    let a2 = rows[0].get(0).unwrap();
+    assert_eq!(a2, Value::I64(1));
 
-    // Out of bounds should also error
+    // Out of bounds should error
     let result = rows[0].get(99);
     assert!(result.is_err(), "should error on out-of-bounds access");
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -620,10 +669,14 @@ async fn par_012_mixed_types_single_row() {
     .await
     .unwrap();
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT i, r, t, b, n FROM par012", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
 
     let md = rows[0].meta_data();
@@ -649,6 +702,7 @@ async fn par_012_mixed_types_single_row() {
     let i = rows[0].get(0).unwrap();
     assert_eq!(i, Value::I64(42));
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -700,11 +754,16 @@ async fn par_014_empty_result_set() {
         .await
         .unwrap();
 
-    let rows = conn
+    let mut stream = conn
         .exec_rows("SELECT id FROM par014", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 0);
+    drop(stream);
 
     let values = conn
         .exec_decode("SELECT id FROM par014", vec![])
@@ -732,19 +791,24 @@ async fn par_015_aliased_column_names() {
         .await
         .unwrap();
 
-    let rows = conn
+    let mut stream = conn
         .exec_rows(
             "SELECT id AS row_id, long_column_name AS name FROM par015",
             vec![],
         )
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
 
     let md = rows[0].meta_data();
     assert_eq!(md.column_name(0), "row_id");
     assert_eq!(md.column_name(1), "name");
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 
@@ -765,10 +829,14 @@ async fn par_016_multiple_rows() {
             .unwrap();
     }
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT id FROM par016 ORDER BY id", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 100);
 
     for (i, row) in rows.iter_mut().enumerate() {
@@ -776,5 +844,6 @@ async fn par_016_multiple_rows() {
         assert_eq!(val, Value::I64(i as i64 + 1));
     }
 
+    drop(stream);
     conn.close().await.unwrap();
 }

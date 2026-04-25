@@ -15,6 +15,7 @@ use futures_core::future::BoxFuture;
 use futures_core::Stream;
 use percent_encoding::percent_decode_str;
 use rbdc::db::{ConnectOptions, Connection, ExecResult, MetaData, Placeholder, Row};
+use rbdc::try_stream;
 use rbdc::Error;
 use rbs::Value;
 use std::sync::Arc;
@@ -215,11 +216,14 @@ impl Row for MssqlRow {
 }
 
 impl Connection for MssqlConnection {
-    fn exec_rows(
-        &mut self,
-        sql: &str,
+    fn exec_rows<'a>(
+        &'a mut self,
+        sql: &'a str,
         params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<
+        'a,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+    > {
         let sql = MssqlDriver {}.exchange(sql);
         Box::pin(async move {
             let mut q = Query::new(sql);
@@ -256,7 +260,43 @@ impl Connection for MssqlConnection {
                     results.push(Box::new(row) as Box<dyn Row>);
                 }
             }
-            Ok(results)
+            let stream = try_stream! {
+                for row in results {
+                    r#yield!(row);
+                }
+                Ok(())
+            };
+            Ok(Box::new(stream)
+                as Box<
+                    dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin,
+                >)
+        })
+    }
+
+    fn exec_decode<'a>(
+        &'a mut self,
+        sql: &'a str,
+        params: Vec<Value>,
+    ) -> BoxFuture<'a, Result<Value, Error>> {
+        let v = self.exec_rows(sql, params);
+        Box::pin(async move {
+            use futures_util::StreamExt;
+            let mut stream = v.await?;
+            let mut rows = Vec::new();
+            while let Some(row) = stream.next().await {
+                let mut row = row?;
+                let md = row.meta_data();
+                let col_len = md.column_len();
+                let mut m = rbs::value::map::ValueMap::with_capacity(col_len);
+                for i in 0..col_len {
+                    m.insert(
+                        Value::String(md.column_name(i)),
+                        row.get(i).unwrap_or(Value::Null),
+                    );
+                }
+                rows.push(Value::Map(m));
+            }
+            Ok(Value::Array(rows))
         })
     }
 

@@ -11,6 +11,7 @@
 //! - Error handling and fail-fast behavior
 //! - No implicit fallback to any other backend
 
+use futures_util::StreamExt;
 use rbdc::db::{Connection, Driver};
 use rbdc_turso::TursoDriver;
 
@@ -106,12 +107,17 @@ async fn test_connect_local_file() {
     .await
     .unwrap();
 
-    let rows = conn
+    let mut stream = conn
         .exec_rows("SELECT id, name FROM local_file_test", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
 
+    drop(stream);
     conn.close().await.unwrap();
     let _ = std::fs::remove_file(&path);
 }
@@ -265,10 +271,14 @@ async fn test_exec_with_params() {
 #[tokio::test]
 async fn test_exec_rows_empty() {
     let mut conn = connect_with_table().await;
-    let rows = conn
+    let mut stream = conn
         .exec_rows("SELECT * FROM test", vec![])
         .await
         .expect("SELECT should succeed");
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert!(rows.is_empty(), "empty table should return no rows");
 }
 
@@ -288,10 +298,14 @@ async fn test_exec_rows_with_data() {
     .await
     .unwrap();
 
-    let rows = conn
+    let mut stream = conn
         .exec_rows("SELECT * FROM test ORDER BY id", vec![])
         .await
         .expect("SELECT should succeed");
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 2);
 }
 
@@ -305,10 +319,14 @@ async fn test_exec_rows_metadata() {
     .await
     .unwrap();
 
-    let rows = conn
+    let mut stream = conn
         .exec_rows("SELECT id, name, score FROM test", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
 
     let row = &rows[0];
@@ -329,10 +347,14 @@ async fn test_exec_rows_values() {
     .await
     .unwrap();
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT id, name, score FROM test WHERE id = 7", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
 
     let row = &mut rows[0];
@@ -356,13 +378,17 @@ async fn test_exec_rows_with_params() {
         .await
         .unwrap();
 
-    let rows = conn
+    let mut stream = conn
         .exec_rows(
             "SELECT id, name FROM test WHERE name = ?",
             vec![rbs::Value::String("find_me".to_string())],
         )
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
 }
 
@@ -373,7 +399,11 @@ async fn test_exec_rows_index_out_of_range() {
         .await
         .unwrap();
 
-    let mut rows = conn.exec_rows("SELECT id FROM test", vec![]).await.unwrap();
+    let mut stream = conn.exec_rows("SELECT id FROM test", vec![]).await.unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     let row = &mut rows[0];
     // Column index 5 is out of range (only 1 column)
     let err = row.get(5);
@@ -432,10 +462,14 @@ async fn test_transaction_commit() {
     conn.commit().await.expect("commit should succeed");
 
     // Data should be visible after commit
-    let rows = conn
+    let mut stream = conn
         .exec_rows("SELECT name FROM test WHERE id = 1", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
 }
 
@@ -459,7 +493,11 @@ async fn test_transaction_rollback() {
     conn.rollback().await.expect("rollback should succeed");
 
     // Only baseline data should exist
-    let rows = conn.exec_rows("SELECT * FROM test", vec![]).await.unwrap();
+    let mut stream = conn.exec_rows("SELECT * FROM test", vec![]).await.unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(
         rows.len(),
         1,
@@ -482,10 +520,14 @@ async fn test_transaction_rollback_preserves_prior_data() {
     conn.rollback().await.unwrap();
 
     // The DELETE should have been rolled back
-    let rows = conn
+    let mut stream = conn
         .exec_rows("SELECT * FROM test WHERE id = 1", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1, "rollback should preserve prior data");
 }
 
@@ -514,10 +556,14 @@ async fn test_multiple_transactions() {
         .unwrap();
     conn.commit().await.unwrap();
 
-    let rows = conn
+    let mut stream = conn
         .exec_rows("SELECT * FROM test ORDER BY id", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 2, "only committed transactions should persist");
 }
 
@@ -622,10 +668,14 @@ async fn test_null_round_trip() {
     .await
     .unwrap();
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT name, score FROM test WHERE id = 1", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
     let row = &mut rows[0];
     let score = row.get(1).unwrap();
@@ -647,10 +697,14 @@ async fn test_bool_as_integer() {
     .await
     .unwrap();
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT flag FROM bools WHERE id = 1", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     let row = &mut rows[0];
     let flag = row.get(0).unwrap();
     // Booleans are stored as integers (1/0) in Turso
@@ -672,10 +726,14 @@ async fn test_binary_round_trip() {
     .await
     .unwrap();
 
-    let mut rows = conn
+    let mut stream = conn
         .exec_rows("SELECT data FROM blobs WHERE id = 1", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     let row = &mut rows[0];
     let data = row.get(0).unwrap();
     assert_eq!(data, rbs::Value::Binary(blob_data));
@@ -697,10 +755,14 @@ async fn test_connection_usable_after_sql_error() {
         .await
         .expect("connection should recover from SQL error");
 
-    let rows = conn
+    let mut stream = conn
         .exec_rows("SELECT name FROM test WHERE id = 1", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
 }
 

@@ -3,7 +3,9 @@ use rbdc_pool_fast::FastPool;
 
 mod mock {
     use futures_core::future::BoxFuture;
+    use futures_core::stream::Stream;
     use rbdc::db::{ConnectOptions, Connection, Driver, ExecResult, Row};
+    use rbdc::try_stream;
     use rbs::Value;
 
     #[derive(Debug)]
@@ -23,12 +25,21 @@ mod mock {
     pub struct Conn {}
 
     impl Connection for Conn {
-        fn exec_rows(
-            &mut self,
-            _sql: &str,
+        fn exec_rows<'a>(
+            &'a mut self,
+            _sql: &'a str,
             _params: Vec<Value>,
-        ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, rbs::Error>> {
-            Box::pin(async { Ok(vec![]) })
+        ) -> BoxFuture<'a, Result<Box<dyn Stream<Item = Result<Box<dyn Row>, rbs::Error>> + Send + Unpin + 'a>, rbs::Error>> {
+            Box::pin(async move {
+                let rows: Vec<Box<dyn Row>> = vec![];
+                let stream = try_stream! {
+                    for row in rows {
+                        r#yield!(row);
+                    }
+                    Ok(())
+                };
+                Ok(Box::new(stream) as Box<dyn Stream<Item = Result<Box<dyn Row>, rbs::Error>> + Send + Unpin>)
+            })
         }
 
         fn exec(

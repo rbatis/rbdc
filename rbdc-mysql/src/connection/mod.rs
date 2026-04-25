@@ -3,8 +3,9 @@ use crate::protocol::text::{Ping, Quit};
 use crate::stmt::MySqlStatementMetadata;
 use either::Either;
 use futures_core::future::BoxFuture;
-use futures_core::stream::BoxStream;
+use futures_core::stream::{BoxStream, Stream};
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
+use rbdc::try_stream;
 use rbdc::common::StatementCache;
 use rbdc::db::{Connection, ExecResult, Row};
 use rbdc::Error;
@@ -111,11 +112,14 @@ impl MySqlConnection {
 }
 
 impl Connection for MySqlConnection {
-    fn exec_rows(
-        &mut self,
-        sql: &str,
+    fn exec_rows<'a>(
+        &'a mut self,
+        sql: &'a str,
         params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<
+        'a,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+    > {
         let sql = sql.to_owned();
         Box::pin(async move {
             let many = {
@@ -142,13 +146,19 @@ impl Connection for MySqlConnection {
                     })
                 })
                 .boxed();
-            let c: BoxFuture<'_, Result<Vec<MySqlRow>, Error>> = f.try_collect().boxed();
-            let v = c.await?;
-            let mut data: Vec<Box<dyn Row>> = Vec::with_capacity(v.len());
-            for x in v {
-                data.push(Box::new(x));
-            }
-            Ok(data)
+            let v: Vec<MySqlRow> = f.try_collect().await?;
+
+            let stream = try_stream! {
+                for row in v {
+                    r#yield!(Box::new(row) as Box<dyn Row>);
+                }
+                Ok(())
+            };
+
+            Ok(Box::new(stream)
+                as Box<
+                    dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin,
+                >)
         })
     }
 

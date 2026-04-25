@@ -7,6 +7,7 @@
 //!
 //! All tests are deterministic and do not require a live Turso endpoint.
 
+use futures_util::StreamExt;
 use rbdc::db::{ConnectOptions, Driver, Placeholder};
 use std::str::FromStr;
 
@@ -279,12 +280,17 @@ async fn test_in_memory_connection_is_functional() {
         .unwrap();
     assert_eq!(result.rows_affected, 1);
 
-    let rows = conn
+    let mut stream = conn
         .exec_rows("SELECT id, name FROM foundation_test", vec![])
         .await
         .unwrap();
+    let mut rows = Vec::new();
+    while let Some(row) = stream.next().await {
+        rows.push(row.unwrap());
+    }
     assert_eq!(rows.len(), 1);
 
+    drop(stream);
     conn.close().await.unwrap();
 }
 

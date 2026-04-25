@@ -6,7 +6,9 @@
 //! Format: [{"col1": "val1", "col2": "val2"}, {"col1": "val3", "col2": "val4"}]
 
 use futures_core::future::BoxFuture;
+use futures_core::stream::Stream;
 use rbdc::db::{Connection, MetaData, Row};
+use rbdc::try_stream;
 use rbs::Value;
 use std::fmt::Debug;
 
@@ -84,13 +86,27 @@ impl MockConnection {
 }
 
 impl Connection for MockConnection {
-    fn exec_rows(
-        &mut self,
-        _sql: &str,
+    fn exec_rows<'a>(
+        &'a mut self,
+        _sql: &'a str,
         _params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, rbdc::Error>> {
-        let rows = self.rows.lock().unwrap().drain(..).collect();
-        Box::pin(async move { Ok(rows) })
+    ) -> BoxFuture<
+        'a,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, rbdc::Error>> + Send + Unpin + 'a>, rbdc::Error>,
+    > {
+        let rows: Vec<Box<dyn Row>> = self.rows.lock().unwrap().drain(..).collect();
+        Box::pin(async move {
+            let stream = try_stream! {
+                for row in rows {
+                    r#yield!(row);
+                }
+                Ok(())
+            };
+            Ok(Box::new(stream)
+                as Box<
+                    dyn Stream<Item = Result<Box<dyn Row>, rbdc::Error>> + Send + Unpin,
+                >)
+        })
     }
 
     fn exec(

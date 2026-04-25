@@ -86,6 +86,7 @@ async fn guard_no_fallback_on_query_failure() {
     // Query a nonexistent table → error, not fallback
     let result = conn.exec_rows("SELECT * FROM nonexistent", vec![]).await;
     assert!(result.is_err());
+    drop(result);
 
     // The connection should still be alive (error doesn't trigger fallback)
     conn.ping().await.unwrap();

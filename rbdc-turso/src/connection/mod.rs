@@ -8,8 +8,10 @@ pub mod executor;
 
 use crate::error::TursoError;
 use futures_core::future::BoxFuture;
+use futures_core::stream::Stream;
 use rbdc::db::{Connection, ExecResult, Row};
 use rbdc::error::Error;
+use rbdc::try_stream;
 use rbs::Value;
 
 /// A connection to a Turso database via the native async libsql API.
@@ -33,13 +35,26 @@ impl std::fmt::Debug for TursoConnection {
 }
 
 impl Connection for TursoConnection {
-    fn exec_rows(
-        &mut self,
-        sql: &str,
+    fn exec_rows<'a>(
+        &'a mut self,
+        sql: &'a str,
         params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<
+        'a,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+    > {
         let sql = sql.to_owned();
-        Box::pin(async move { self.execute_query(&sql, params).await })
+        Box::pin(async move {
+            let rows = self.execute_query(&sql, params).await?;
+            let stream = try_stream! {
+                for row in rows {
+                    r#yield!(row);
+                }
+                Ok(())
+            };
+            Ok(Box::new(stream)
+                as Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin>)
+        })
     }
 
     fn exec(&mut self, sql: &str, params: Vec<Value>) -> BoxFuture<'_, Result<ExecResult, Error>> {

@@ -1,13 +1,14 @@
 use crate::query::SqliteQuery;
 use crate::type_info::Type;
-use crate::{SqliteConnectOptions, SqliteConnection, SqliteQueryResult, SqliteRow};
+use crate::{SqliteArguments, SqliteConnectOptions, SqliteConnection, SqliteQueryResult};
 use either::Either;
 use futures_core::future::BoxFuture;
-use futures_core::stream::BoxStream;
+use futures_core::stream::{BoxStream, Stream};
 use futures_util::FutureExt;
 use futures_util::{StreamExt, TryStreamExt};
 use rbdc::db::{Connection, ExecResult, Row};
 use rbdc::error::Error;
+use rbdc::try_stream;
 use rbs::Value;
 use std::fmt::Write;
 
@@ -50,44 +51,50 @@ impl SqliteConnectOptions {
 }
 
 impl Connection for SqliteConnection {
-    fn exec_rows(
-        &mut self,
-        sql: &str,
+    fn exec_rows<'a>(
+        &'a mut self,
+        sql: &'a str,
         params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<
+        'a,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+    > {
         let sql = sql.to_owned();
+        let row_channel_size = self.row_channel_size;
+        let has_args = !params.is_empty();
+
         Box::pin(async move {
-            let many = {
-                if params.len() == 0 {
-                    self.fetch_many(SqliteQuery {
-                        statement: Either::Left(sql),
-                        arguments: params,
-                        persistent: false,
-                    })
-                } else {
-                    let stmt = self.prepare_with(&sql, &[]).await?;
-                    self.fetch_many(SqliteQuery {
-                        statement: Either::Right(stmt),
-                        arguments: params,
-                        persistent: true,
-                    })
-                }
+            let rx = if has_args {
+                let arguments = SqliteArguments::from_args(params)?;
+                self.worker
+                    .execute(sql, Some(arguments.into_static()), row_channel_size, true)
+                    .await
+                    .map_err(|_| Error::from("WorkerCrashed"))?
+            } else {
+                self.worker
+                    .execute(sql, None, row_channel_size, false)
+                    .await
+                    .map_err(|_| Error::from("WorkerCrashed"))?
             };
-            let f: BoxStream<Result<SqliteRow, Error>> = many
-                .try_filter_map(|step| async move {
-                    Ok(match step {
-                        Either::Left(_) => None,
-                        Either::Right(row) => Some(row),
-                    })
-                })
-                .boxed();
-            let c: BoxFuture<'_, Result<Vec<SqliteRow>, Error>> = f.try_collect().boxed();
-            let v = c.await?;
-            let mut data: Vec<Box<dyn Row>> = Vec::with_capacity(v.len());
-            for x in v {
-                data.push(Box::new(x));
-            }
-            Ok(data)
+
+            let stream = try_stream! {
+                use futures_util::StreamExt;
+                let mut s = rx.into_stream();
+                while let Some(item) = s.next().await {
+                    match item? {
+                        Either::Left(_) => {}
+                        Either::Right(row) => {
+                            r#yield!(Box::new(row) as Box<dyn Row>);
+                        }
+                    }
+                }
+                Ok(())
+            };
+
+            Ok(Box::new(stream)
+                as Box<
+                    dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin,
+                >)
         })
     }
 

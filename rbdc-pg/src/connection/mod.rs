@@ -11,11 +11,13 @@ use crate::types::{Oid, TypeInfo};
 use either::Either;
 use futures_core::future::BoxFuture;
 use futures_core::stream::BoxStream;
-use futures_util::{FutureExt, StreamExt, TryFutureExt, TryStreamExt};
+use futures_core::stream::Stream;
+use futures_util::{pin_mut, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use rbdc::common::StatementCache;
 use rbdc::db::{Connection, ExecResult, Placeholder, Row};
 use rbdc::ext::ustr::UStr;
 use rbdc::io::Decode;
+use rbdc::try_stream;
 use rbdc::Error;
 use rbs::Value;
 use std::collections::HashMap;
@@ -215,11 +217,14 @@ impl Connection for PgConnection {
         self.exec("/* RBDC ping */", vec![]).map_ok(|_| ()).boxed()
     }
 
-    fn exec_rows(
-        &mut self,
-        sql: &str,
+    fn exec_rows<'a>(
+        &'a mut self,
+        sql: &'a str,
         params: Vec<Value>,
-    ) -> BoxFuture<'_, Result<Vec<Box<dyn Row>>, Error>> {
+    ) -> BoxFuture<
+        'a,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+    > {
         let sql = PgDriver {}.exchange(sql);
         Box::pin(async move {
             let many = {
@@ -242,21 +247,22 @@ impl Connection for PgConnection {
                     })
                 }
             };
-            let f: BoxStream<Result<PgRow, Error>> = many
-                .try_filter_map(|step| async move {
-                    Ok(match step {
-                        Either::Left(_) => None,
-                        Either::Right(row) => Some(row),
+            let stream = try_stream! {
+                let f: BoxStream<Result<PgRow, Error>> = many
+                    .try_filter_map(|step| async move {
+                        Ok(match step {
+                            Either::Left(_) => None,
+                            Either::Right(row) => Some(row),
+                        })
                     })
-                })
-                .boxed();
-            let c: BoxFuture<'_, Result<Vec<PgRow>, Error>> = f.try_collect().boxed();
-            let v = c.await?;
-            let mut data: Vec<Box<dyn Row>> = Vec::with_capacity(v.len());
-            for x in v {
-                data.push(Box::new(x));
-            }
-            Ok(data)
+                    .boxed();
+                pin_mut!(f);
+                while let Some(row) = f.try_next().await? {
+                    r#yield!(Box::new(row) as Box<dyn Row>);
+                }
+                Ok(())
+            };
+            Ok(Box::new(stream) as Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin>)
         })
     }
 

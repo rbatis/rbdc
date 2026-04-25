@@ -2,13 +2,13 @@ use rbdc::pool::Pool;
 use rbdc_pool_fast::FastPool;
 
 mod mock {
-    use std::pin::Pin;
     use futures_core::future::BoxFuture;
     use futures_core::stream::BoxStream;
     use rbdc::db::{ConnectOptions, Connection, Driver, ExecResult, Row};
     use rbdc::try_stream;
     use rbdc::Error;
     use rbs::Value;
+    use std::pin::Pin;
 
     #[derive(Debug)]
     pub struct Opt {}
@@ -40,7 +40,9 @@ mod mock {
                     }
                     Ok(())
                 };
-                let stream: Pin<Box<dyn futures_core::Stream<Item = Result<Box<dyn Row>, Error>> + Send>> = Box::pin(stream);
+                let stream: Pin<
+                    Box<dyn futures_core::Stream<Item = Result<Box<dyn Row>, Error>> + Send>,
+                > = Box::pin(stream);
                 Ok(stream)
             })
         }

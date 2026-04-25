@@ -243,7 +243,8 @@ impl Connection for MssqlConnection {
                     match item {
                         tiberius::QueryItem::Row(r) => {
                             let mut columns = Vec::with_capacity(r.columns().len());
-                            let mut datas: Vec<ColumnData<'static>> = Vec::with_capacity(r.columns().len());
+                            let mut datas: Vec<ColumnData<'static>> =
+                                Vec::with_capacity(r.columns().len());
                             for x in r.columns() {
                                 columns.push(x.clone());
                             }
@@ -259,7 +260,6 @@ impl Connection for MssqlConnection {
                     }
                 })
                 .boxed();
-
             Ok(stream as BoxStream<Result<Box<dyn Row>, Error>>)
         })
     }

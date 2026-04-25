@@ -1,7 +1,7 @@
 use futures_util::stream;
+use rbdc::Error;
 use rbdc::db::{MetaData, Row};
 use rbdc::util::Scan;
-use rbdc::Error;
 use rbs::Value;
 use std::fmt::Debug;
 
@@ -58,7 +58,10 @@ impl Row for MockRow {
     }
 
     fn get(&mut self, i: usize) -> Result<Value, Error> {
-        self.values.get(i).cloned().ok_or_else(|| Error::from("index out of bounds"))
+        self.values
+            .get(i)
+            .cloned()
+            .ok_or_else(|| Error::from("index out of bounds"))
     }
 }
 

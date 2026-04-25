@@ -234,15 +234,15 @@ impl Connection for ConnProxy {
 
 #[cfg(test)]
 mod test {
-    use std::pin::Pin;
     use crate::FastPool;
     use futures_core::future::BoxFuture;
+    use futures_core::stream::BoxStream;
     use rbdc::db::{ConnectOptions, Connection, Driver, ExecResult, Row};
     use rbdc::pool::ConnectionManager;
     use rbdc::pool::Pool;
     use rbdc::try_stream;
     use rbs::{Error, Value};
-    use futures_core::stream::BoxStream;
+    use std::pin::Pin;
 
     #[derive(Debug)]
     pub struct Opt {}
@@ -273,7 +273,9 @@ mod test {
                     }
                     Ok(())
                 };
-                let stream: Pin<Box<dyn futures_core::Stream<Item = Result<Box<dyn Row>, Error>> + Send>> = Box::pin(stream);
+                let stream: Pin<
+                    Box<dyn futures_core::Stream<Item = Result<Box<dyn Row>, Error>> + Send>,
+                > = Box::pin(stream);
                 Ok(stream)
             })
         }

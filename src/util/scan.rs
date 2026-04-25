@@ -1,8 +1,8 @@
-use crate::db::Row;
 use crate::Error;
+use crate::db::Row;
 use futures_util::Stream;
-use rbs::value::map::ValueMap;
 use rbs::Value;
+use rbs::value::map::ValueMap;
 use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
 
@@ -80,7 +80,10 @@ where
 {
     type Item = Result<Value, Error>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
         // Pin the stream inside
         let stream = Pin::new(&mut self.stream);
         futures_util::pin_mut!(stream);

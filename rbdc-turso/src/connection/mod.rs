@@ -43,9 +43,7 @@ impl Connection for TursoConnection {
         let sql = sql.to_owned();
         Box::pin(async move {
             let rows = self.execute_query(&sql, params).await?;
-            let stream = futures_util::stream::iter(rows)
-                .map(Ok)
-                .boxed();
+            let stream = futures_util::stream::iter(rows).map(Ok).boxed();
             Ok(stream as BoxStream<'_, Result<Box<dyn Row>, Error>>)
         })
     }

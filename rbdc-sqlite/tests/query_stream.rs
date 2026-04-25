@@ -1,9 +1,9 @@
 //! Tests for exec_rows() streaming interface with SQLite
 //! Processing rows one by one without collecting all results into memory first.
 
-use rbs::Value;
 use rbdc::db::Connection;
 use rbdc_sqlite::{SqliteConnectOptions, SqliteConnection};
+use rbs::Value;
 
 async fn create_conn() -> SqliteConnection {
     SqliteConnectOptions::new()
@@ -20,15 +20,24 @@ async fn setup(conn: &mut SqliteConnection) {
     )
     .await
     .expect("create table");
-    conn.exec("INSERT OR IGNORE INTO test_stream VALUES (1, 'Alice', 100)", vec![])
-        .await
-        .expect("insert 1");
-    conn.exec("INSERT OR IGNORE INTO test_stream VALUES (2, 'Bob', 85)", vec![])
-        .await
-        .expect("insert 2");
-    conn.exec("INSERT OR IGNORE INTO test_stream VALUES (3, 'Charlie', 92)", vec![])
-        .await
-        .expect("insert 3");
+    conn.exec(
+        "INSERT OR IGNORE INTO test_stream VALUES (1, 'Alice', 100)",
+        vec![],
+    )
+    .await
+    .expect("insert 1");
+    conn.exec(
+        "INSERT OR IGNORE INTO test_stream VALUES (2, 'Bob', 85)",
+        vec![],
+    )
+    .await
+    .expect("insert 2");
+    conn.exec(
+        "INSERT OR IGNORE INTO test_stream VALUES (3, 'Charlie', 92)",
+        vec![],
+    )
+    .await
+    .expect("insert 3");
 }
 
 #[tokio::test]

@@ -216,13 +216,13 @@ impl Row for MssqlRow {
 }
 
 impl Connection for MssqlConnection {
-    fn exec_rows<'a>(
-        &'a mut self,
-        sql: &'a str,
+    fn exec_rows(
+        &mut self,
+        sql: &str,
         params: Vec<Value>,
     ) -> BoxFuture<
-        'a,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+        '_,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
     > {
         let sql = MssqlDriver {}.exchange(sql);
         Box::pin(async move {
@@ -273,11 +273,11 @@ impl Connection for MssqlConnection {
         })
     }
 
-    fn exec_decode<'a>(
-        &'a mut self,
-        sql: &'a str,
+    fn exec_decode(
+        &mut self,
+        sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<'a, Result<Value, Error>> {
+    ) -> BoxFuture<'_, Result<Value, Error>> {
         let v = self.exec_rows(sql, params);
         Box::pin(async move {
             use futures_util::StreamExt;

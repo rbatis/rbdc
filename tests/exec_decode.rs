@@ -86,13 +86,13 @@ impl MockConnection {
 }
 
 impl Connection for MockConnection {
-    fn exec_rows<'a>(
-        &'a mut self,
-        _sql: &'a str,
+    fn exec_rows(
+        &mut self,
+        _sql: &str,
         _params: Vec<Value>,
     ) -> BoxFuture<
-        'a,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, rbdc::Error>> + Send + Unpin + 'a>, rbdc::Error>,
+        '_,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, rbdc::Error>> + Send + Unpin + '_>, rbdc::Error>,
     > {
         let rows: Vec<Box<dyn Row>> = self.rows.lock().unwrap().drain(..).collect();
         Box::pin(async move {

@@ -35,13 +35,13 @@ impl std::fmt::Debug for TursoConnection {
 }
 
 impl Connection for TursoConnection {
-    fn exec_rows<'a>(
-        &'a mut self,
-        sql: &'a str,
+    fn exec_rows(
+        &mut self,
+        sql: &str,
         params: Vec<Value>,
     ) -> BoxFuture<
-        'a,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+        '_,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
     > {
         let sql = sql.to_owned();
         Box::pin(async move {

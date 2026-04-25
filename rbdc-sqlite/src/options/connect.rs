@@ -51,13 +51,13 @@ impl SqliteConnectOptions {
 }
 
 impl Connection for SqliteConnection {
-    fn exec_rows<'a>(
-        &'a mut self,
-        sql: &'a str,
+    fn exec_rows(
+        &mut self,
+        sql: &str,
         params: Vec<Value>,
     ) -> BoxFuture<
-        'a,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+        '_,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
     > {
         let sql = sql.to_owned();
         let row_channel_size = self.row_channel_size;

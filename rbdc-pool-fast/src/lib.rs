@@ -169,22 +169,22 @@ impl fast_pool::Manager for ConnManagerProxy {
 }
 
 impl Connection for ConnProxy {
-    fn exec_rows<'a>(
-        &'a mut self,
-        sql: &'a str,
+    fn exec_rows(
+        &mut self,
+        sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<'a, Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>> {
+    ) -> BoxFuture<'_, Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>> {
         match &mut self.conn {
             Some(conn) => conn.exec_rows(sql, params),
             None => Box::pin(async { Err(Error::from("conn is drop")) }),
         }
     }
 
-    fn exec_decode<'a>(
-        &'a mut self,
-        sql: &'a str,
+    fn exec_decode(
+        &mut self,
+        sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<'a, Result<Value, Error>> {
+    ) -> BoxFuture<'_, Result<Value, Error>> {
         match &mut self.conn {
             Some(conn) => conn.exec_decode(sql, params),
             None => Box::pin(async { Err(Error::from("conn is drop")) }),
@@ -259,11 +259,11 @@ mod test {
     pub struct Conn {}
 
     impl Connection for Conn {
-        fn exec_rows<'a>(
-            &'a mut self,
-            _sql: &'a str,
+        fn exec_rows(
+            &mut self,
+            _sql: &str,
             _params: Vec<Value>,
-        ) -> BoxFuture<'a, Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>> {
+        ) -> BoxFuture<'_, Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>> {
             Box::pin(async move {
                 let rows: Vec<Box<dyn Row>> = vec![];
                 let stream = try_stream! {

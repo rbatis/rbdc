@@ -86,23 +86,23 @@ impl From<(u64, Value)> for ExecResult {
 pub trait Connection: Send + Sync {
     /// Execute a query and return results as an async stream of rows.
     /// This allows processing rows one by one without loading all results into memory.
-    fn exec_rows<'a>(
-        &'a mut self,
-        sql: &'a str,
+    fn exec_rows(
+        &mut self,
+        sql: &str,
         params: Vec<Value>,
     ) -> BoxFuture<
-        'a,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+        '_,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
     >;
 
     /// Execute a query that is expected to return a result set, such as a `SELECT` statement.
     /// you can use `let result:Vec<Table>=rbs::from_value(v)?;` to decode this result.
     /// return csv format Value [['column'],['value']].
-    fn exec_decode<'a>(
-        &'a mut self,
-        sql: &'a str,
+    fn exec_decode(
+        &mut self,
+        sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<'a, Result<Value, Error>> {
+    ) -> BoxFuture<'_, Result<Value, Error>> {
         let v = self.exec_rows(sql, params);
         Box::pin(async move {
             use futures_util::StreamExt;
@@ -165,22 +165,22 @@ pub trait Connection: Send + Sync {
 }
 
 impl Connection for Box<dyn Connection> {
-    fn exec_rows<'a>(
-        &'a mut self,
-        sql: &'a str,
+    fn exec_rows(
+        &mut self,
+        sql: &str,
         params: Vec<Value>,
     ) -> BoxFuture<
-        'a,
-        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + 'a>, Error>,
+        '_,
+        Result<Box<dyn Stream<Item = Result<Box<dyn Row>, Error>> + Send + Unpin + '_>, Error>,
     > {
         self.deref_mut().exec_rows(sql, params)
     }
 
-    fn exec_decode<'a>(
-        &'a mut self,
-        sql: &'a str,
+    fn exec_decode(
+        &mut self,
+        sql: &str,
         params: Vec<Value>,
-    ) -> BoxFuture<'a, Result<Value, Error>> {
+    ) -> BoxFuture<'_, Result<Value, Error>> {
         self.deref_mut().exec_decode(sql, params)
     }
 

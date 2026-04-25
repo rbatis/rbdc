@@ -25,11 +25,11 @@ mod mock {
     pub struct Conn {}
 
     impl Connection for Conn {
-        fn exec_rows<'a>(
-            &'a mut self,
-            _sql: &'a str,
+        fn exec_rows(
+            &mut self,
+            _sql: &str,
             _params: Vec<Value>,
-        ) -> BoxFuture<'a, Result<Box<dyn Stream<Item = Result<Box<dyn Row>, rbs::Error>> + Send + Unpin + 'a>, rbs::Error>> {
+        ) -> BoxFuture<'_, Result<Box<dyn Stream<Item = Result<Box<dyn Row>, rbs::Error>> + Send + Unpin + '_>, rbs::Error>> {
             Box::pin(async move {
                 let rows: Vec<Box<dyn Row>> = vec![];
                 let stream = try_stream! {

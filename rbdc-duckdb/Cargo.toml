@@ -1,0 +1,23 @@
+[package]
+name = "rbdc-duckdb"
+version = "4.9.0"
+edition = "2021"
+description = "DuckDB database driver for RBDC"
+license = "MIT"
+repository = "https://github.com/rbatis/rbatis"
+keywords = ["database", "duckdb", "rbatis", "rbdc"]
+
+[dependencies]
+duckdb = { version = "1.10502", features = ["bundled"] }
+futures-core = { version = "0.3.19", default-features = false }
+futures-util = { version = "0.3.21", features = ["alloc", "sink"] }
+rbdc = { path = "..", version = "4.9" }
+rbs = { version = "4.8" }
+log = "0.4"
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["sync", "rt-multi-thread", "macros"] }
+async-trait = "0.1.56"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }

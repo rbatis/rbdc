@@ -1,5 +1,5 @@
 [workspace]
-members = ["rbdc-pool-fast","rbdc-sqlite","rbdc-mysql","rbdc-pg","rbdc-mssql","rbdc-turso", "example"]
+members = ["rbdc-pool-fast","rbdc-sqlite","rbdc-mysql","rbdc-pg","rbdc-mssql","rbdc-turso", "rbdc-duckdb", "example"]
 [package]
 name = "rbdc"
 version = "4.9.6"

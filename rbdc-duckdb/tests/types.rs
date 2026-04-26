@@ -6,6 +6,7 @@ use rbdc::db::Connection;
 use rbdc::types::{Date, DateTime, Decimal, Time, Timestamp, Uuid};
 use rbdc_duckdb::{DuckDbConnectOptions, DuckDbConnection};
 use rbs::Value;
+use serde::Deserialize;
 
 async fn create_conn() -> DuckDbConnection {
     let opts = DuckDbConnectOptions::new().path(":memory:");
@@ -179,4 +180,44 @@ async fn test_uuid_insert_and_query() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["id"].as_f64().unwrap(), 1.0);
     assert_eq!(rows[0]["val"].as_str().unwrap(), "550e8400-e29b-41d4-a716-446655440000");
+}
+
+#[derive(Debug, Deserialize, PartialEq)]
+struct TestTable {
+    id: String,
+    create_time: DateTime,
+}
+
+#[tokio::test]
+async fn test_struct_table_insert_and_query() {
+    let mut conn = create_conn().await;
+
+    // Create table with VARCHAR columns
+    conn.exec(
+        "CREATE TABLE test_table (id VARCHAR, create_time VARCHAR)",
+        vec![],
+    )
+    .await
+    .expect("create table");
+
+    // Insert a row
+    let datetime_str = "2024-01-15 12:30:45";
+    let create_time: Value = DateTime::from_str(datetime_str).unwrap().into();
+    conn.exec(
+        "INSERT INTO test_table (id, create_time) VALUES (?, ?)",
+        vec![Value::String("test001".to_string()), create_time],
+    )
+    .await
+    .expect("insert struct table");
+
+    // Query and deserialize to Vec<TestTable>
+    let value = conn
+        .exec_decode("SELECT id, create_time FROM test_table WHERE id = 'test001'", vec![])
+        .await
+        .expect("select struct table");
+
+    let tables: Vec<TestTable> = rbs::from_value(value).unwrap();
+    assert_eq!(tables.len(), 1);
+    assert_eq!(tables[0].id, "test001");
+    assert_eq!(tables[0].create_time.to_string(), "2024-01-15T12:30:45+08:00");
 }

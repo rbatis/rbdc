@@ -29,14 +29,17 @@ impl Connection for DuckDbConnection {
                 let mut stmt = conn.prepare(&sql).map_err(DuckDbError::from)?;
 
                 let rows: Vec<Box<dyn Row>> = if params.is_empty() {
+                    // Execute first to populate schema for column_names
+                    let _ = stmt.execute([]).map_err(DuckDbError::from)?;
+                    let col_names: Vec<String> = stmt.column_names();
                     let mut rows_iter = stmt.query([]).map_err(DuckDbError::from)?;
-                    let mut rows = Vec::new();
+                    let mut rows: Vec<Box<dyn Row>> = Vec::new();
                     loop {
                         match rows_iter.next() {
                             Ok(Some(row)) => {
                                 let values = extract_row_values(&row);
                                 let col_count = values.len();
-                                rows.push(Box::new(DuckDbRow::new(values, col_count)) as Box<dyn Row>);
+                                rows.push(Box::new(DuckDbRow::new(values, col_count, col_names.clone())) as Box<dyn Row>);
                             }
                             Ok(None) => break,
                             Err(_) => break,
@@ -44,15 +47,16 @@ impl Connection for DuckDbConnection {
                     }
                     rows
                 } else {
-                    let duckdb_params: Vec<DuckDbParam> = params.iter().map(|p| value_to_param(p)).collect();
+                    let duckdb_params: Vec<DuckDbParam> = params.into_iter().map(value_to_param).collect();
+                    let col_names: Vec<String> = stmt.column_names();
                     let mut rows_iter = stmt.query(duckdb::params_from_iter(duckdb_params)).map_err(DuckDbError::from)?;
-                    let mut rows = Vec::new();
+                    let mut rows: Vec<Box<dyn Row>> = Vec::new();
                     loop {
                         match rows_iter.next() {
                             Ok(Some(row)) => {
                                 let values = extract_row_values(&row);
                                 let col_count = values.len();
-                                rows.push(Box::new(DuckDbRow::new(values, col_count)) as Box<dyn Row>);
+                                rows.push(Box::new(DuckDbRow::new(values, col_count, col_names.clone())) as Box<dyn Row>);
                             }
                             Ok(None) => break,
                             Err(_) => break,
@@ -84,7 +88,7 @@ impl Connection for DuckDbConnection {
                 let affected = if params.is_empty() {
                     conn.execute(&sql, []).map_err(DuckDbError::from)?
                 } else {
-                    let duckdb_params: Vec<DuckDbParam> = params.iter().map(|p| value_to_param(p)).collect();
+                    let duckdb_params: Vec<DuckDbParam> = params.into_iter().map(value_to_param).collect();
                     conn.execute(&sql, duckdb::params_from_iter(duckdb_params)).map_err(DuckDbError::from)?
                 };
                 Ok(ExecResult {

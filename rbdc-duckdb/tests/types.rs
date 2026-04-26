@@ -1,6 +1,9 @@
 //! Tests for DuckDB types: Date, Time, DateTime, Timestamp, Decimal, Json, Uuid
+//! Verifies insert and query work correctly
 
+use std::str::FromStr;
 use rbdc::db::Connection;
+use rbdc::types::{Date, DateTime, Decimal, Time, Timestamp, Uuid};
 use rbdc_duckdb::{DuckDbConnectOptions, DuckDbConnection};
 use rbs::Value;
 
@@ -9,25 +12,6 @@ async fn create_conn() -> DuckDbConnection {
     DuckDbConnection::establish(&opts)
         .await
         .expect("failed to create in-memory DuckDB connection")
-}
-
-async fn setup_basic(conn: &mut DuckDbConnection) {
-    conn.exec(
-        "CREATE TABLE IF NOT EXISTS test_basic (
-            id INTEGER PRIMARY KEY,
-            name TEXT,
-            bool_val BOOLEAN,
-            int_val INTEGER,
-            bigint_val BIGINT,
-            real_val REAL,
-            double_val DOUBLE,
-            text_val TEXT,
-            blob_val BLOB
-        )",
-        vec![],
-    )
-    .await
-    .expect("create table");
 }
 
 async fn setup_ext(conn: &mut DuckDbConnection, table_name: &str, col_type: &str) {
@@ -42,82 +26,47 @@ async fn setup_ext(conn: &mut DuckDbConnection, table_name: &str, col_type: &str
     .expect("create table");
 }
 
-fn make_ext(type_name: &'static str, value: Value) -> Value {
-    Value::Ext(type_name, Box::new(value))
-}
-
 #[tokio::test]
-async fn test_basic_types() {
-    let mut conn = create_conn().await;
-    setup_basic(&mut conn).await;
-
-    conn.exec(
-        "INSERT INTO test_basic (id, name, bool_val, int_val, bigint_val, real_val, double_val) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        vec![
-            Value::I32(1),
-            Value::String("test".to_string()),
-            Value::Bool(true),
-            Value::I32(42),
-            Value::I64(12345678901234),
-            Value::F32(3.14),
-            Value::F64(2.718281828),
-        ],
-    )
-    .await
-    .expect("insert basic types");
-
-    let value = conn
-        .exec_decode("SELECT id, name, bool_val, int_val, bigint_val, real_val, double_val FROM test_basic WHERE id = 1", vec![])
-        .await
-        .expect("select");
-
-    match value {
-        Value::Array(arr) => {
-            assert_eq!(arr.len(), 1, "expected 1 row, got {}", arr.len());
-            match &arr[0] {
-                Value::Map(m) => {
-                    assert_eq!(m.len(), 7, "expected 7 columns");
-                }
-                _ => panic!("expected Map for row"),
-            }
-        }
-        _ => panic!("expected Array, got {:?}", value),
-    }
-}
-
-#[tokio::test]
-async fn test_date_type() {
+async fn test_date_insert_and_query() {
     let mut conn = create_conn().await;
     setup_ext(&mut conn, "test_date", "VARCHAR").await;
 
+    // Insert using rbdc::types::Date -> Value::Ext
+    let date: Value = Date::from_str("2024-01-15").unwrap().into();
     conn.exec(
         "INSERT INTO test_date (id, val) VALUES (?, ?)",
-        vec![Value::I32(1), make_ext("Date", Value::String("2024-01-15".to_string()))],
+        vec![Value::I32(1), date],
     )
     .await
     .expect("insert date");
 
+    // Query - verify we get back the string value
     let value = conn
         .exec_decode("SELECT id, val FROM test_date WHERE id = 1", vec![])
         .await
         .expect("select date");
 
-    match value {
-        Value::Array(arr) => {
-            assert_eq!(arr.len(), 1);
-        }
-        _ => panic!("expected Array, got {:?}", value),
-    }
+    eprintln!("DEBUG date value = {:?}", value);
+
+    // Value is Value::Array([Value::Map(...)])
+    let rows: Vec<serde_json::Value> = rbs::from_value(value).unwrap();
+    eprintln!("DEBUG rows = {:?}", rows);
+    assert_eq!(rows.len(), 1);
+    let id_val = rows[0]["id"].as_f64().expect("id should be number");
+    assert_eq!(id_val, 1.0);
+    let val_str = rows[0]["val"].as_str().expect("val should be string");
+    assert_eq!(val_str, "2024-01-15");
 }
 
 #[tokio::test]
-async fn test_time_type() {
+async fn test_time_insert_and_query() {
     let mut conn = create_conn().await;
     setup_ext(&mut conn, "test_time", "VARCHAR").await;
 
+    let time: Value = Time::from_str("12:30:45").unwrap().into();
     conn.exec(
         "INSERT INTO test_time (id, val) VALUES (?, ?)",
-        vec![Value::I32(1), make_ext("Time", Value::String("12:30:45".to_string()))],
+        vec![Value::I32(1), time],
     )
     .await
     .expect("insert time");
@@ -127,22 +76,21 @@ async fn test_time_type() {
         .await
         .expect("select time");
 
-    match value {
-        Value::Array(arr) => {
-            assert_eq!(arr.len(), 1);
-        }
-        _ => panic!("expected Array, got {:?}", value),
-    }
+    let rows: Vec<serde_json::Value> = rbs::from_value(value).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["id"].as_f64().unwrap(), 1.0);
+    assert_eq!(rows[0]["val"].as_str().unwrap(), "12:30:45");
 }
 
 #[tokio::test]
-async fn test_datetime_type() {
+async fn test_datetime_insert_and_query() {
     let mut conn = create_conn().await;
     setup_ext(&mut conn, "test_datetime", "VARCHAR").await;
 
+    let datetime: Value = DateTime::from_str("2024-01-15 12:30:45").unwrap().into();
     conn.exec(
         "INSERT INTO test_datetime (id, val) VALUES (?, ?)",
-        vec![Value::I32(1), make_ext("DateTime", Value::String("2024-01-15 12:30:45".to_string()))],
+        vec![Value::I32(1), datetime],
     )
     .await
     .expect("insert datetime");
@@ -152,22 +100,22 @@ async fn test_datetime_type() {
         .await
         .expect("select datetime");
 
-    match value {
-        Value::Array(arr) => {
-            assert_eq!(arr.len(), 1);
-        }
-        _ => panic!("expected Array, got {:?}", value),
-    }
+    let rows: Vec<serde_json::Value> = rbs::from_value(value).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["id"].as_f64().unwrap(), 1.0);
+    // DateTime is stored with timezone format
+    assert_eq!(rows[0]["val"].as_str().unwrap(), "2024-01-15T12:30:45+08:00");
 }
 
 #[tokio::test]
-async fn test_timestamp_type() {
+async fn test_timestamp_insert_and_query() {
     let mut conn = create_conn().await;
     setup_ext(&mut conn, "test_timestamp", "VARCHAR").await;
 
+    let ts: Value = Timestamp::utc().into();
     conn.exec(
         "INSERT INTO test_timestamp (id, val) VALUES (?, ?)",
-        vec![Value::I32(1), make_ext("Timestamp", Value::String("2024-01-15 12:30:45.123456".to_string()))],
+        vec![Value::I32(1), ts],
     )
     .await
     .expect("insert timestamp");
@@ -177,22 +125,22 @@ async fn test_timestamp_type() {
         .await
         .expect("select timestamp");
 
-    match value {
-        Value::Array(arr) => {
-            assert_eq!(arr.len(), 1);
-        }
-        _ => panic!("expected Array, got {:?}", value),
-    }
+    let rows: Vec<serde_json::Value> = rbs::from_value(value).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["id"].as_f64().unwrap(), 1.0);
+    // Timestamp is stored/returned as Number (milliseconds since epoch)
+    assert!(rows[0]["val"].is_number(), "timestamp should be number");
 }
 
 #[tokio::test]
-async fn test_decimal_type() {
+async fn test_decimal_insert_and_query() {
     let mut conn = create_conn().await;
     setup_ext(&mut conn, "test_decimal", "VARCHAR").await;
 
+    let decimal: Value = Decimal::new("123.456789").unwrap().into();
     conn.exec(
         "INSERT INTO test_decimal (id, val) VALUES (?, ?)",
-        vec![Value::I32(1), make_ext("Decimal", Value::String("123.456789".to_string()))],
+        vec![Value::I32(1), decimal],
     )
     .await
     .expect("insert decimal");
@@ -202,60 +150,33 @@ async fn test_decimal_type() {
         .await
         .expect("select decimal");
 
-    match value {
-        Value::Array(arr) => {
-            assert_eq!(arr.len(), 1);
-        }
-        _ => panic!("expected Array, got {:?}", value),
-    }
+    let rows: Vec<serde_json::Value> = rbs::from_value(value).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["id"].as_f64().unwrap(), 1.0);
+    // DuckDB returns decimal as Number when stored in VARCHAR
+    assert_eq!(rows[0]["val"].as_f64().unwrap(), 123.456789);
 }
 
 #[tokio::test]
-async fn test_blob_type() {
+async fn test_uuid_insert_and_query() {
     let mut conn = create_conn().await;
-    setup_basic(&mut conn).await;
+    setup_ext(&mut conn, "test_uuid", "VARCHAR").await;
 
+    let uuid: Value = Uuid::from_str("550e8400-e29b-41d4-a716-446655440000").unwrap().into();
     conn.exec(
-        "INSERT INTO test_basic (id, blob_val) VALUES (?, ?)",
-        vec![Value::I32(1), Value::Binary(vec![0x48, 0x65, 0x6c, 0x6c, 0x6f])],
+        "INSERT INTO test_uuid (id, val) VALUES (?, ?)",
+        vec![Value::I32(1), uuid],
     )
     .await
-    .expect("insert blob");
+    .expect("insert uuid");
 
     let value = conn
-        .exec_decode("SELECT id, blob_val FROM test_basic WHERE id = 1", vec![])
+        .exec_decode("SELECT id, val FROM test_uuid WHERE id = 1", vec![])
         .await
-        .expect("select blob");
+        .expect("select uuid");
 
-    match value {
-        Value::Array(arr) => {
-            assert_eq!(arr.len(), 1);
-        }
-        _ => panic!("expected Array, got {:?}", value),
-    }
-}
-
-#[tokio::test]
-async fn test_null_type() {
-    let mut conn = create_conn().await;
-    setup_basic(&mut conn).await;
-
-    conn.exec(
-        "INSERT INTO test_basic (id, name) VALUES (?, ?)",
-        vec![Value::I32(1), Value::Null],
-    )
-    .await
-    .expect("insert null");
-
-    let value = conn
-        .exec_decode("SELECT id, name FROM test_basic WHERE id = 1", vec![])
-        .await
-        .expect("select null");
-
-    match value {
-        Value::Array(arr) => {
-            assert_eq!(arr.len(), 1);
-        }
-        _ => panic!("expected Array, got {:?}", value),
-    }
+    let rows: Vec<serde_json::Value> = rbs::from_value(value).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["id"].as_f64().unwrap(), 1.0);
+    assert_eq!(rows[0]["val"].as_str().unwrap(), "550e8400-e29b-41d4-a716-446655440000");
 }

@@ -35,7 +35,8 @@ impl Connection for DuckDbConnection {
                         match rows_iter.next() {
                             Ok(Some(row)) => {
                                 let values = extract_row_values(&row);
-                                rows.push(Box::new(DuckDbRow::new(values)) as Box<dyn Row>);
+                                let col_count = values.len();
+                                rows.push(Box::new(DuckDbRow::new(values, col_count)) as Box<dyn Row>);
                             }
                             Ok(None) => break,
                             Err(_) => break,
@@ -50,7 +51,8 @@ impl Connection for DuckDbConnection {
                         match rows_iter.next() {
                             Ok(Some(row)) => {
                                 let values = extract_row_values(&row);
-                                rows.push(Box::new(DuckDbRow::new(values)) as Box<dyn Row>);
+                                let col_count = values.len();
+                                rows.push(Box::new(DuckDbRow::new(values, col_count)) as Box<dyn Row>);
                             }
                             Ok(None) => break,
                             Err(_) => break,

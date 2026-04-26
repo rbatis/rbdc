@@ -6,11 +6,12 @@ use std::fmt::Debug;
 
 pub struct DuckDbRow {
     pub values: Vec<Value>,
+    pub column_count: usize,
 }
 
 impl DuckDbRow {
-    pub fn new(values: Vec<Value>) -> Self {
-        Self { values }
+    pub fn new(values: Vec<Value>, column_count: usize) -> Self {
+        Self { values, column_count }
     }
 }
 
@@ -24,7 +25,7 @@ impl Row for DuckDbRow {
     fn meta_data(&self) -> Box<dyn MetaData> {
         Box::new(DuckDbMetaData {
             column_names: vec![],
-            column_count: self.values.len(),
+            column_count: self.column_count,
         })
     }
 

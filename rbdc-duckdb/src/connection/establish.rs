@@ -11,10 +11,11 @@ pub struct DuckDbConnection {
 
 impl DuckDbConnection {
     pub async fn establish(options: &DuckDbConnectOptions) -> Result<Self, Error> {
+        let config = duckdb::Config::default();
         let conn = if options.path == ":memory:" {
-            duckdb::Connection::open_in_memory()
+            duckdb::Connection::open_in_memory_with_flags(config)
         } else {
-            duckdb::Connection::open(&options.path)
+            duckdb::Connection::open_with_flags(&options.path, config)
         }
         .map_err(DuckDbError::from)?;
 

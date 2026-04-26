@@ -5,6 +5,7 @@ use std::ffi::{CStr, CString};
 use std::ptr;
 use std::thread;
 
+use crate::connection::conn::DuckDbConnectionHandle;
 use crate::types::Encode;
 use crate::DuckDbRow;
 use rbs::Value;
@@ -60,6 +61,9 @@ impl DuckDbWorker {
                     return;
                 }
 
+                // Create RAII handle that will clean up on drop
+                let handle = DuckDbConnectionHandle::new(db, con);
+
                 if establish_tx.send(Ok(Self { command_tx })).is_err() {
                     return;
                 }
@@ -76,7 +80,7 @@ impl DuckDbWorker {
                             let mut stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
                             let sql_cstr = CString::new(&*sql).unwrap();
                             let r = unsafe {
-                                libduckdb_sys::duckdb_prepare(con, sql_cstr.as_ptr(), &mut stmt)
+                                libduckdb_sys::duckdb_prepare(handle.con, sql_cstr.as_ptr(), &mut stmt)
                             };
                             if r != libduckdb_sys::DuckDBSuccess {
                                 tx.send(Err(Error::from("prepare failed"))).ok();
@@ -156,7 +160,7 @@ impl DuckDbWorker {
                             let mut stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
                             let sql_cstr = CString::new(&*sql).unwrap();
                             let r = unsafe {
-                                libduckdb_sys::duckdb_prepare(con, sql_cstr.as_ptr(), &mut stmt)
+                                libduckdb_sys::duckdb_prepare(handle.con, sql_cstr.as_ptr(), &mut stmt)
                             };
                             if r != libduckdb_sys::DuckDBSuccess {
                                 tx.send(Err(Error::from("prepare failed"))).ok();
@@ -209,21 +213,22 @@ impl DuckDbWorker {
                         }
                         Command::Ping { tx } => {
                             let sql_cstr = CString::new("SELECT 1").unwrap();
-                            let r = unsafe { libduckdb_sys::duckdb_query(con, sql_cstr.as_ptr(), ptr::null_mut()) };
+                            let r = unsafe { libduckdb_sys::duckdb_query(handle.con, sql_cstr.as_ptr(), ptr::null_mut()) };
                             if r == libduckdb_sys::DuckDBSuccess {
                                 tx.send(()).ok();
                             }
                         }
                         Command::Shutdown { tx } => {
-                            unsafe {
-                                libduckdb_sys::duckdb_disconnect(&mut con);
-                                libduckdb_sys::duckdb_close(&mut db);
-                            }
+                            // Drop the handle explicitly before sending response
+                            // This will call duckdb_disconnect and duckdb_close via Drop impl
+                            drop(handle);
                             let _ = tx.send(());
                             return;
                         }
                     }
                 }
+                // When loop exits (break), handle goes out of scope and Drop impl
+                // will call duckdb_disconnect and duckdb_close automatically
             })?;
 
         establish_rx

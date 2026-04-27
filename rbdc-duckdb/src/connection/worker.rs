@@ -12,6 +12,7 @@ use rbs::Value;
 
 pub(crate) struct DuckDbWorker {
     pub command_tx: AsyncTx<crossfire::spsc::Array<Command>>,
+    pub(crate) row_channel_size: usize,
 }
 
 unsafe impl Send for DuckDbWorker {}
@@ -37,13 +38,13 @@ pub(crate) enum Command {
 }
 
 impl DuckDbWorker {
-    pub(crate) async fn establish(_path: String) -> Result<Self, Error> {
+    pub(crate) async fn establish(_path: String, thread_name: String, command_channel_size: usize, row_channel_size: usize) -> Result<Self, Error> {
         let (establish_tx, establish_rx) = oneshot::channel();
 
         thread::Builder::new()
-            .name("rbdc-duckdb".to_string())
+            .name(thread_name)
             .spawn(move || {
-                let (command_tx, command_rx) = spsc::bounded_async_blocking(16);
+                let (command_tx, command_rx) = spsc::bounded_async_blocking(command_channel_size);
 
                 // Open database using raw FFI
                 let mut db: libduckdb_sys::duckdb_database = ptr::null_mut();
@@ -64,7 +65,7 @@ impl DuckDbWorker {
                 // Create RAII handle that will clean up on drop
                 let handle = DuckDbConnectionHandle::new(db, con);
 
-                if establish_tx.send(Ok(Self { command_tx })).is_err() {
+                if establish_tx.send(Ok(Self { command_tx, row_channel_size })).is_err() {
                     return;
                 }
 
@@ -241,7 +242,7 @@ impl DuckDbWorker {
         sql: String,
         params: Vec<Value>,
     ) -> Result<crossfire::AsyncRx<crossfire::spsc::Array<Result<DuckDbRow, Error>>>, Error> {
-        let (tx, rx) = spsc::bounded_blocking_async(16);
+        let (tx, rx) = spsc::bounded_blocking_async(self.row_channel_size);
 
         self.command_tx
             .send(Command::ExecRows {

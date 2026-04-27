@@ -1,40 +1,38 @@
 # rbdc-mssql
 
-rbdc-mssql 是一个基于 [tiberius](https://github.com/prisma/tiberius) 的 SQL Server 数据库驱动，为 rbdc 框架提供 Microsoft SQL Server 连接支持。
+Microsoft SQL Server database driver for the [rbdc](https://github.com/rbatis/rbatis) database abstraction layer, based on [tiberius](https://github.com/prisma/tiberius).
 
-## 特性
+## Features
 
-- 支持多种连接字符串格式
-- 基于 tiberius 的高性能异步连接
-- 完整的 SQL Server 数据类型支持
-- 连接池支持
-- 零拷贝序列化/反序列化
+- Multiple connection string format support
+- High-performance async connection based on tiberius
+- Full SQL Server data type support
+- Connection pooling support
+- Zero-copy serialization/deserialization
 
-## 支持的连接字符串格式
+## Supported Connection String Formats
 
-rbdc-mssql 现在支持以下四种连接字符串格式：
-
-### 1. JDBC 格式 (原有支持)
+### 1. JDBC format
 ```
 jdbc:sqlserver://localhost:1433;User=SA;Password={TestPass!123456};Database=master;
 ```
 
-### 2. mssql:// URL 格式 (新增)
+### 2. mssql:// URL format
 ```
 mssql://SA:TestPass!123456@localhost:1433/master
 ```
 
-### 3. sqlserver:// URL 格式 (新增)
+### 3. sqlserver:// URL format
 ```
 sqlserver://SA:TestPass!123456@localhost:1433/master
 ```
 
-### 4. ADO.NET 格式 (原有支持)
+### 4. ADO.NET format
 ```
 Server=localhost,1433;User Id=SA;Password=TestPass!123456;Database=master;
 ```
 
-## 使用示例
+## Usage
 
 ```rust
 use rbdc::pool::ConnectionManager;
@@ -42,61 +40,62 @@ use rbdc_mssql::MssqlDriver;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 使用任意支持的连接字符串格式
+    // Use any supported connection string format
     let uri = "mssql://SA:TestPass!123456@localhost:1433/master";
 
-    // 创建连接管理器
+    // Create connection manager
     let manager = ConnectionManager::new(MssqlDriver {}, uri)?;
 
-    // 使用连接池
+    // Use connection pool
     let pool = rbdc_pool_fast::FastPool::new(manager)?;
     let mut conn = pool.get().await?;
 
-    // 执行查询
+    // Execute query
     let result = conn.exec_decode("SELECT 1 as test", vec![]).await?;
-    println!("查询结果: {:?}", result);
+    println!("Result: {:?}", result);
 
     Ok(())
 }
 ```
 
-## URL 格式说明
+## URL Format说明
 
-URL 格式的连接字符串遵循标准的 URL 结构：
+URL format connection strings follow the standard URL structure:
 
 ```
 scheme://[username[:password]@]host[:port][/database][?parameters]
 ```
 
-- **scheme**: `mssql` 或 `sqlserver`
-- **username**: 数据库用户名
-- **password**: 数据库密码（可选）
-- **host**: 服务器主机名或 IP 地址
-- **port**: 端口号（默认 1433）
-- **database**: 数据库名称（可选）
+- **scheme**: `mssql` or `sqlserver`
+- **username**: Database username
+- **password**: Database password (optional)
+- **host**: Server hostname or IP address
+- **port**: Port number (default 1433)
+- **database**: Database name (optional)
 
-### 特殊字符处理
+### Special Character Handling
 
-URL 格式会自动处理用户名和密码中的特殊字符（URL 编码/解码）。
+URL format automatically handles special characters in username and password (URL encoding/decoding).
 
-## RBDC 架构
+## RBDC Architecture
 
-* 数据库驱动抽象层
-* 支持零拷贝序列化/反序列化
+- Database driver abstraction layer
+- Zero-copy serialization/deserialization
 
-数据流：Database -> bytes -> rbs::Value -> Struct(User Define)
-反向流：Struct(User Define) -> rbs::ValueRef -> ref clone() -> Database
+Data flow: Database -> bytes -> rbs::Value -> Struct(User Define)
+Reverse: Struct(User Define) -> rbs::ValueRef -> ref clone() -> Database
 
-### 如何定义自定义驱动？
-需要实现相关 trait 并加载驱动：
-* impl trait rbdc::db::{Driver, MetaData, Row, Connection, ConnectOptions, Placeholder};
+### How to Define a Custom Driver?
 
-## 依赖
+Implement the following traits and load the driver:
+* `impl trait rbdc::db::{Driver, MetaData, Row, Connection, ConnectOptions, Placeholder}`
 
-- [tiberius](https://github.com/prisma/tiberius) - 底层 SQL Server 客户端
-- [url](https://github.com/servo/rust-url) - URL 解析
-- [percent-encoding](https://github.com/servo/rust-url/tree/master/percent_encoding) - URL 编码处理
+## Dependencies
 
-## 许可证
+- [tiberius](https://github.com/prisma/tiberius) - SQL Server client
+- [url](https://github.com/servo/rust-url) - URL parsing
+- [percent-encoding](https://github.com/servo/rust-url/tree/master/percent_encoding) - URL encoding
 
-本项目采用与 rbdc 相同的许可证。
+## License
+
+This project is licensed under the same license as rbdc.

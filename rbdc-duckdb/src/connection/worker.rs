@@ -176,19 +176,18 @@ impl DuckDbWorker {
 
                     match cmd {
                         Command::ExecRows { sql, params, tx } => {
-                            let sql_str = (*sql).to_string();
                             let cache_enabled = conn_guard.cache_enabled;
 
                             // Get or prepare statement (only if caching is enabled)
                             let mut stmt: libduckdb_sys::duckdb_prepared_statement = if cache_enabled {
-                                if let Some(cached_stmt) = conn_guard.statements.get_mut(&sql_str) {
+                                if let Some(cached_stmt) = conn_guard.statements.get_mut(&sql) {
                                     // Clear previous bindings
                                     unsafe { libduckdb_sys::duckdb_clear_bindings(*cached_stmt) };
                                     *cached_stmt
                                 } else {
                                     // Need to prepare new statement
                                     let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
-                                    let sql_cstr = CString::new(&*sql).unwrap();
+                                    let sql_cstr = CString::new(&*sql).unwrap_or_default();
                                     let r = unsafe {
                                         libduckdb_sys::duckdb_prepare(conn_guard.handle.con, sql_cstr.as_ptr(), &mut new_stmt)
                                     };
@@ -209,7 +208,7 @@ impl DuckDbWorker {
                                         continue;
                                     }
                                     // Insert into LRU cache - StatementCache::insert returns evicted item if any
-                                    if let Some(mut evicted_stmt) = conn_guard.statements.insert(&sql_str, new_stmt) {
+                                    if let Some(mut evicted_stmt) = conn_guard.statements.insert(&sql, new_stmt) {
                                         // Destroy the evicted statement to prevent resource leak
                                         unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut evicted_stmt) };
                                     }
@@ -219,7 +218,7 @@ impl DuckDbWorker {
                             } else {
                                 // Caching disabled - always prepare fresh
                                 let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
-                                let sql_cstr = CString::new(&*sql).unwrap();
+                                let sql_cstr = CString::new(&*sql).unwrap_or_default();
                                 let r = unsafe {
                                     libduckdb_sys::duckdb_prepare(conn_guard.handle.con, sql_cstr.as_ptr(), &mut new_stmt)
                                 };
@@ -262,7 +261,10 @@ impl DuckDbWorker {
                                             unsafe { libduckdb_sys::duckdb_bind_double(stmt, idx, *v) };
                                         }
                                         crate::types::DuckDbArgumentValue::Text(v) => {
-                                            let cstr = CString::new(v.as_str()).unwrap();
+                                            // Keep CString alive until after duckdb_execute_prepared completes.
+                                            // DuckDB's duckdb_bind_varchar may read the pointer lazily during execute,
+                                            // so we must not drop the CString until execution finishes.
+                                            let cstr = CString::new(v.as_str()).unwrap_or_default();
                                             unsafe { libduckdb_sys::duckdb_bind_varchar(stmt, idx, cstr.as_ptr()) };
                                         }
                                         crate::types::DuckDbArgumentValue::Blob(v) => {
@@ -318,7 +320,6 @@ impl DuckDbWorker {
                             }
                         }
                         Command::Exec { sql, params, tx } => {
-                            let sql_str = (*sql).to_string();
                             let cache_enabled = conn_guard.cache_enabled;
 
                             // Get or prepare statement (using LRU cache if enabled, same as ExecRows).
@@ -328,13 +329,13 @@ impl DuckDbWorker {
                             // because DuckDB's internal allocator accumulates metadata between
                             // alloc/free cycles. Caching the statement fixes this.
                             let mut stmt: libduckdb_sys::duckdb_prepared_statement = if cache_enabled {
-                                if let Some(cached_stmt) = conn_guard.statements.get_mut(&sql_str) {
+                                if let Some(cached_stmt) = conn_guard.statements.get_mut(&sql) {
                                     // Clear previous bindings before reuse
                                     unsafe { libduckdb_sys::duckdb_clear_bindings(*cached_stmt) };
                                     *cached_stmt
                                 } else {
                                     let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
-                                    let sql_cstr = CString::new(&*sql).unwrap();
+                                    let sql_cstr = CString::new(&*sql).unwrap_or_default();
                                     let r = unsafe {
                                         libduckdb_sys::duckdb_prepare(conn_guard.handle.con, sql_cstr.as_ptr(), &mut new_stmt)
                                     };
@@ -355,7 +356,7 @@ impl DuckDbWorker {
                                         continue;
                                     }
                                     // Insert into LRU cache; destroy any evicted statement
-                                    if let Some(mut evicted_stmt) = conn_guard.statements.insert(&sql_str, new_stmt) {
+                                    if let Some(mut evicted_stmt) = conn_guard.statements.insert(&sql, new_stmt) {
                                         unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut evicted_stmt) };
                                     }
                                     shared.cached_statements_size.store(conn_guard.statements.len(), Ordering::Release);
@@ -364,7 +365,7 @@ impl DuckDbWorker {
                             } else {
                                 // Caching disabled - always prepare fresh
                                 let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
-                                let sql_cstr = CString::new(&*sql).unwrap();
+                                let sql_cstr = CString::new(&*sql).unwrap_or_default();
                                 let r = unsafe {
                                     libduckdb_sys::duckdb_prepare(conn_guard.handle.con, sql_cstr.as_ptr(), &mut new_stmt)
                                 };
@@ -407,7 +408,10 @@ impl DuckDbWorker {
                                             unsafe { libduckdb_sys::duckdb_bind_double(stmt, idx, *v) };
                                         }
                                         crate::types::DuckDbArgumentValue::Text(v) => {
-                                            let cstr = CString::new(v.as_str()).unwrap();
+                                            // Keep CString alive until after duckdb_execute_prepared completes.
+                                            // DuckDB's duckdb_bind_varchar may read the pointer lazily during execute,
+                                            // so we must not drop the CString until execution finishes.
+                                            let cstr = CString::new(v.as_str()).unwrap_or_default();
                                             unsafe { libduckdb_sys::duckdb_bind_varchar(stmt, idx, cstr.as_ptr()) };
                                         }
                                         crate::types::DuckDbArgumentValue::Blob(v) => {
@@ -442,7 +446,7 @@ impl DuckDbWorker {
                             }
                         }
                         Command::Ping { tx } => {
-                            let sql_cstr = CString::new("SELECT 1").unwrap();
+                            let sql_cstr = CString::new("SELECT 1").unwrap_or_default();
                             let r = unsafe { libduckdb_sys::duckdb_query(conn_guard.handle.con, sql_cstr.as_ptr(), ptr::null_mut()) };
                             if r == libduckdb_sys::DuckDBSuccess {
                                 tx.send(()).ok();

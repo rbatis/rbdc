@@ -259,57 +259,57 @@ pub fn extract_row_values(result: &mut libduckdb_sys::duckdb_result, row_idx: us
         match ty {
             DuckDbType::TinyInt => {
                 let ptr = unsafe { libduckdb_sys::duckdb_column_data(result, col_idx as u64) } as *const i8;
-                let v = unsafe { *ptr };
+                let v = unsafe { *ptr.add(row_idx) };
                 values.push(Value::I32(v as i32));
             }
             DuckDbType::SmallInt => {
                 let ptr = unsafe { libduckdb_sys::duckdb_column_data(result, col_idx as u64) } as *const i16;
-                let v = unsafe { *ptr };
+                let v = unsafe { *ptr.add(row_idx) };
                 values.push(Value::I32(v as i32));
             }
             DuckDbType::Int => {
                 let ptr = unsafe { libduckdb_sys::duckdb_column_data(result, col_idx as u64) } as *const i32;
-                let v = unsafe { *ptr };
+                let v = unsafe { *ptr.add(row_idx) };
                 values.push(Value::I32(v));
             }
             DuckDbType::BigInt => {
                 let ptr = unsafe { libduckdb_sys::duckdb_column_data(result, col_idx as u64) } as *const i64;
-                let v = unsafe { *ptr };
+                let v = unsafe { *ptr.add(row_idx) };
                 values.push(Value::I64(v));
             }
             DuckDbType::UTinyInt => {
                 let ptr = unsafe { libduckdb_sys::duckdb_column_data(result, col_idx as u64) } as *const u8;
-                let v = unsafe { *ptr };
+                let v = unsafe { *ptr.add(row_idx) };
                 values.push(Value::I32(v as i32));
             }
             DuckDbType::USmallInt => {
                 let ptr = unsafe { libduckdb_sys::duckdb_column_data(result, col_idx as u64) } as *const u16;
-                let v = unsafe { *ptr };
+                let v = unsafe { *ptr.add(row_idx) };
                 values.push(Value::I32(v as i32));
             }
             DuckDbType::UInt => {
                 let ptr = unsafe { libduckdb_sys::duckdb_column_data(result, col_idx as u64) } as *const u32;
-                let v = unsafe { *ptr };
+                let v = unsafe { *ptr.add(row_idx) };
                 values.push(Value::I64(v as i64));
             }
             DuckDbType::UBigInt => {
                 let ptr = unsafe { libduckdb_sys::duckdb_column_data(result, col_idx as u64) } as *const u64;
-                let v = unsafe { *ptr };
+                let v = unsafe { *ptr.add(row_idx) };
                 values.push(Value::I64(v as i64));
             }
             DuckDbType::Float => {
                 let ptr = unsafe { libduckdb_sys::duckdb_column_data(result, col_idx as u64) } as *const f32;
-                let v = unsafe { *ptr };
+                let v = unsafe { *ptr.add(row_idx) };
                 values.push(Value::F64(v as f64));
             }
             DuckDbType::Double => {
                 let ptr = unsafe { libduckdb_sys::duckdb_column_data(result, col_idx as u64) } as *const f64;
-                let v = unsafe { *ptr };
+                let v = unsafe { *ptr.add(row_idx) };
                 values.push(Value::F64(v));
             }
             DuckDbType::Boolean => {
                 let ptr = unsafe { libduckdb_sys::duckdb_column_data(result, col_idx as u64) } as *const i8;
-                let v = unsafe { *ptr };
+                let v = unsafe { *ptr.add(row_idx) };
                 values.push(Value::Bool(v != 0));
             }
             DuckDbType::Varchar | DuckDbType::Enum | DuckDbType::UUID | DuckDbType::Bit => {

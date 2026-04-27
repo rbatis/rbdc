@@ -180,7 +180,7 @@ impl DuckDbWorker {
                             let sql_str = (*sql).to_string();
 
                             // Get or prepare statement
-                            let mut stmt = if let Some(&stmt) = conn_guard.statements.get(&sql_str) {
+                            let stmt = if let Some(&stmt) = conn_guard.statements.get(&sql_str) {
                                 // Clear previous bindings
                                 unsafe { libduckdb_sys::duckdb_clear_bindings(stmt) };
                                 stmt
@@ -265,7 +265,11 @@ impl DuckDbWorker {
                                 }
 
                                 unsafe { libduckdb_sys::duckdb_destroy_result(&mut result) };
-                                unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut stmt) };
+                                // Do NOT call duckdb_destroy_prepare here: the statement is owned by
+                                // conn_guard.statements (the cache) and will be destroyed when the
+                                // cache is cleared or the connection is dropped.  Calling destroy
+                                // here would leave a dangling pointer in the cache (use-after-free)
+                                // and cause a double-free in DuckDbConnectionState::drop.
                             } else {
                                 let err_ptr = unsafe { libduckdb_sys::duckdb_result_error(&mut result) };
                                 if !err_ptr.is_null() {

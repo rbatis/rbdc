@@ -30,7 +30,7 @@ impl Drop for DuckDbDatabase {
 /// Implements Drop to ensure resources are properly released.
 #[derive(Debug)]
 pub(crate) struct DuckDbConnectionHandle {
-    // db 是可选的，因为共享数据库不应被单个连接关闭
+    // db is optional because a shared database should not be closed by a single connection
     pub db: Option<libduckdb_sys::duckdb_database>,
     pub con: libduckdb_sys::duckdb_connection,
 }

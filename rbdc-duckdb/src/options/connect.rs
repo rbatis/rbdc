@@ -19,7 +19,7 @@ pub struct DuckDbConnectOptions {
     /// Maximum number of prepared statements to cache per connection.
     /// Uses LRU eviction when limit is reached.
     pub(crate) statement_cache_size: usize,
-    /// 共享的数据库实例，由第一个连接创建，后续连接复用
+    /// Shared database instance, created by the first connection and reused by subsequent connections
     pub(crate) shared_database: Arc<ParkingMutex<Option<DuckDbDatabase>>>,
 }
 

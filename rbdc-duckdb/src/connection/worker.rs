@@ -107,7 +107,6 @@ impl DuckDbWorker {
                 }
 
                 // 获取或创建共享的数据库实例
-                log::debug!("DuckDB getting/creating shared database: path={}", path);
                 let db_raw = {
                     let mut guard = shared_database.lock().unwrap();
                     if let Some(ref db) = *guard {
@@ -129,7 +128,6 @@ impl DuckDbWorker {
                         if !db_path.is_null() && path != ":memory:" && !path.is_empty() {
                             drop(unsafe { std::ffi::CString::from_raw(db_path as *mut std::os::raw::c_char) });
                         }
-
                         if r != libduckdb_sys::DuckDBSuccess {
                             let _ = establish_tx.send(Err(Error::from("duckdb_open failed")));
                             return;
@@ -139,8 +137,6 @@ impl DuckDbWorker {
                         db
                     }
                 };
-                log::debug!("DuckDB database obtained: path={}", path);
-
                 // 为这个 Worker 创建独立的连接
                 let mut con: libduckdb_sys::duckdb_connection = ptr::null_mut();
                 let r = unsafe { libduckdb_sys::duckdb_connect(db_raw, &mut con) };
@@ -148,14 +144,10 @@ impl DuckDbWorker {
                     let _ = establish_tx.send(Err(Error::from("duckdb_connect failed")));
                     return;
                 }
-                log::debug!("DuckDB connection created for thread: {}", thread_name);
-
                 let handle = DuckDbConnectionHandle::new_shared_db(db_raw, con);
-
                 // Create LRU cache - use at least 1 even if caching is disabled (StatementCache requires non-zero)
                 let cache_capacity = statement_cache_size.max(1);
                 let statements = StatementCache::new(cache_capacity);
-
                 let shared = Arc::new(DuckDbWorkerSharedState {
                     cached_statements_size: AtomicUsize::new(0),
                     conn: ParkingMutex::new(DuckDbConnectionState {
@@ -164,10 +156,8 @@ impl DuckDbWorker {
                         cache_enabled: statement_cache_size > 0,
                     }),
                 });
-
                 // Lock connection for the worker thread
                 let mut conn_guard = shared.conn.lock();
-
                 let worker = Self {
                     command_tx,
                     row_channel_size,
@@ -329,9 +319,6 @@ impl DuckDbWorker {
                         }
                         Command::Exec { sql, params, tx } => {
                             let sql_str = (*sql).to_string();
-
-                            log::debug!("DuckDB Exec: sql_str length={}, sql={}", sql_str.len(), sql_str);
-
                             // Always prepare a new statement to avoid caching issues with DuckDB
                             let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
                             let sql_cstr = CString::new(&*sql).unwrap();

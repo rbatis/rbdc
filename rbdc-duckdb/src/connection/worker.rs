@@ -318,7 +318,6 @@ impl DuckDbWorker {
                             }
                         }
                         Command::Exec { sql, params, tx } => {
-                            let sql_str = (*sql).to_string();
                             // Always prepare a new statement to avoid caching issues with DuckDB
                             let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
                             let sql_cstr = CString::new(&*sql).unwrap();

@@ -1,5 +1,6 @@
 use crate::options::DuckDbConnectOptions;
-use crate::connection::worker::DuckDbWorker;
+use crate::connection::worker::{Command, DuckDbWorker};
+use futures_channel::oneshot;
 use rbdc::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -7,6 +8,14 @@ static THREAD_ID: AtomicU64 = AtomicU64::new(0);
 
 pub struct DuckDbConnection {
     pub(crate) worker: DuckDbWorker,
+}
+
+impl Drop for DuckDbConnection {
+    fn drop(&mut self) {
+        // 通知 worker 线程关闭（忽略结果，因为 Drop 中无法 await）
+        let (tx, _rx) = oneshot::channel();
+        let _ = self.worker.command_tx.send(Command::Shutdown { tx });
+    }
 }
 
 impl DuckDbConnection {

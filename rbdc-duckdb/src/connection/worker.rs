@@ -47,6 +47,14 @@ pub(crate) struct DuckDbWorker {
 unsafe impl Send for DuckDbWorker {}
 unsafe impl Sync for DuckDbWorker {}
 
+impl Drop for DuckDbWorker {
+    fn drop(&mut self) {
+        // 发送 Shutdown 命令通知 worker 线程关闭
+        let (tx, _rx) = oneshot::channel();
+        let _ = self.command_tx.try_send(Command::Shutdown { tx });
+    }
+}
+
 #[allow(unused)]
 pub(crate) enum Command {
     ExecRows {
@@ -172,7 +180,7 @@ impl DuckDbWorker {
                             let sql_str = (*sql).to_string();
 
                             // Get or prepare statement
-                            let stmt = if let Some(&stmt) = conn_guard.statements.get(&sql_str) {
+                            let mut stmt = if let Some(&stmt) = conn_guard.statements.get(&sql_str) {
                                 // Clear previous bindings
                                 unsafe { libduckdb_sys::duckdb_clear_bindings(stmt) };
                                 stmt
@@ -257,6 +265,7 @@ impl DuckDbWorker {
                                 }
 
                                 unsafe { libduckdb_sys::duckdb_destroy_result(&mut result) };
+                                unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut stmt) };
                             } else {
                                 let err_ptr = unsafe { libduckdb_sys::duckdb_result_error(&mut result) };
                                 if !err_ptr.is_null() {
@@ -296,7 +305,7 @@ impl DuckDbWorker {
                                 continue;
                             }
 
-                            let stmt = new_stmt;
+                            let mut stmt = new_stmt;
 
                             // Bind parameters
                             let mut args = Vec::new();
@@ -346,6 +355,7 @@ impl DuckDbWorker {
                             }
 
                             unsafe { libduckdb_sys::duckdb_destroy_result(&mut result) };
+                            unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut stmt) };
                         }
                         Command::Ping { tx } => {
                             let sql_cstr = CString::new("SELECT 1").unwrap();
@@ -372,7 +382,11 @@ impl DuckDbWorker {
                 }
             })?;
 
-        establish_rx.await.map_err(|_| Error::from("WorkerCrashed"))?
+        let result = establish_rx.await;
+        match result {
+            Ok(worker) => worker,
+            Err(_) => return Err(Error::from("WorkerCrashed")),
+        }
     }
 
     pub(crate) async fn exec_rows(

@@ -150,7 +150,7 @@ impl Encode for Value {
                 args.push(DuckDbArgumentValue::Text(serde_json::to_string(&v).unwrap_or_default()));
                 Ok(IsNull::No)
             }
-            Value::Ext(t, v) => match &*t {
+            Value::Ext(t, v) => match t {
                 "Date" => {
                     args.push(DuckDbArgumentValue::Text(v.into_string().unwrap_or_default()));
                     Ok(IsNull::No)
@@ -222,7 +222,7 @@ pub fn value_to_param(v: Value) -> DuckDbArgumentValue {
         Value::Map(m) => DuckDbArgumentValue::Text(serde_json::to_string(&m).unwrap_or_default()),
         Value::Ext(type_name, box_value) => {
             let s = box_value.into_string().unwrap_or_default();
-            match &*type_name {
+            match type_name {
                 "Date" => DuckDbArgumentValue::Text(s),
                 "Time" => DuckDbArgumentValue::Text(s),
                 "DateTime" | "Datetime" => DuckDbArgumentValue::Text(s),

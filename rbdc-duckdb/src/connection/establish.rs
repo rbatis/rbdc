@@ -50,7 +50,8 @@ impl DuckDbConnection {
 impl Drop for DuckDbConnection {
     fn drop(&mut self) {
         // 通知 worker 线程关闭（忽略结果，因为 Drop 中无法 await）
+        // 必须使用 try_send！AsyncTx::send 返回的 SendFuture 若未 poll 则消息永远不会被发送
         let (tx, _rx) = oneshot::channel();
-        let _ = self.worker.command_tx.send(Command::Shutdown { tx });
+        let _ = self.worker.command_tx.try_send(Command::Shutdown { tx });
     }
 }

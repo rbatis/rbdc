@@ -16,15 +16,31 @@ use rbdc::error::Error;
 use rbs::Value;
 
 /// Connection state containing the handle and cached statements
+///
+/// IMPORTANT: `statements` MUST be declared before `handle` so that Rust drops
+/// prepared statements (duckdb_destroy_prepare) BEFORE disconnecting
+/// (duckdb_disconnect). If handle drops first, we'd call duckdb_destroy_prepare
+/// on a dead connection, which may leak DuckDB internal resources.
 pub(crate) struct DuckDbConnectionState {
-    pub(crate) handle: crate::connection::conn::DuckDbConnectionHandle,
     pub(crate) statements: DuckDbStatements,
+    pub(crate) handle: crate::connection::conn::DuckDbConnectionHandle,
 }
 
 /// Statements manager following rbdc-sqlite architecture.
 ///
 /// Manages an LRU cache of prepared statements plus a temp slot for non-cached statements.
 /// Cache insertion happens only after successful prepare - failed prepares are never cached.
+///
+/// ## Negative caching (memory leak prevention)
+///
+/// When `duckdb_prepare` (or `duckdb_prepare_extracted_statement`) fails for a SQL string,
+/// DuckDB may not fully release all associated memory even after `duckdb_destroy_prepare`.
+/// Repeated prepare/destroy cycles for the same failing SQL cause unbounded memory growth.
+///
+/// To prevent this, `failed_stmt` tracks SQL strings whose prepare failed. On subsequent
+/// calls with the same SQL, the cached error is returned immediately — no DuckDB API call
+/// is made. The failed cache is cleared on any successful prepare, on `clear_cache()`,
+/// or on `remove()`.
 pub(crate) struct DuckDbStatements {
     /// LRU cached prepared statements for persistent queries
     cached: StatementCache<VirtualStatement>,
@@ -32,6 +48,10 @@ pub(crate) struct DuckDbStatements {
     temp: Option<VirtualStatement>,
     /// Whether caching is enabled (set to false when statement_cache_size is 0)
     cache_enabled: bool,
+    /// Negative cache: SQL strings whose prepare failed. Prevents repeated prepare/destroy
+    /// cycles that leak memory in DuckDB for statements that cannot succeed (e.g. INSERT
+    /// into non-existent table).
+    failed_stmt: std::collections::HashSet<String>,
 }
 
 impl DuckDbStatements {
@@ -40,16 +60,17 @@ impl DuckDbStatements {
             cached: StatementCache::new(cache_capacity.max(1)),
             temp: None,
             cache_enabled: cache_capacity > 0,
+            failed_stmt: std::collections::HashSet::new(),
         }
     }
 
     /// Get or prepare a statement, managing cache lifecycle.
     ///
     /// - If cached: returns the cached raw pointer (resets bindings first).
+    /// - If in failed_stmt cache: returns cached error immediately (avoids repeated
+    ///   DuckDB prepare/destroy cycle that leaks memory).
     /// - If not cached: creates a new VirtualStatement, prepares it via DuckDB, inserts into
     ///   cache (if enabled), and returns the raw pointer.
-    ///
-    /// This eliminates the previous clone+drop+re-fetch pattern.
     pub(crate) fn prepare(
         &mut self,
         query: &str,
@@ -62,19 +83,40 @@ impl DuckDbStatements {
             return Ok(stmt.handle_mut().unwrap().as_ptr());
         }
 
-        // Prepare a new statement
-        let mut vstmt = VirtualStatement::new(query, self.cache_enabled);
-        vstmt.prepare(conn)?;
-        let ptr = vstmt.handle_mut().unwrap().as_ptr();
-
-        // Insert into cache (or temp if caching disabled)
-        if self.cache_enabled {
-            self.cached.insert(query, vstmt);
-        } else {
-            self.temp = Some(vstmt);
+        // Negative cache: this SQL previously failed to prepare; return cached error
+        // to avoid repeated DuckDB prepare/destroy cycle that leaks memory.
+        if self.failed_stmt.contains(query) {
+            return Err(Error::from(format!(
+                "Statement previously failed to prepare (negative cache): {}",
+                query
+            )));
         }
 
-        Ok(ptr)
+        // Prepare a new statement
+        let mut vstmt = VirtualStatement::new(query, self.cache_enabled);
+        let prepare_result = vstmt.prepare(conn);
+        match prepare_result {
+            Ok(_) => {
+                // Any successful prepare means the schema may have changed; clear
+                // the negative cache so previously-failed SQL can be retried.
+                self.failed_stmt.clear();
+                let ptr = vstmt.handle_mut().unwrap().as_ptr();
+
+                // Insert into cache (or temp if caching disabled)
+                if self.cache_enabled {
+                    self.cached.insert(query, vstmt);
+                } else {
+                    self.temp = Some(vstmt);
+                }
+
+                Ok(ptr)
+            }
+            Err(e) => {
+                // Prepare failed: record in negative cache to avoid repeated prepare/destroy
+                self.failed_stmt.insert(query.to_string());
+                Err(e)
+            }
+        }
     }
 
     /// Remove a statement from the cache (used when execution fails and the handle is corrupted).
@@ -83,6 +125,8 @@ impl DuckDbStatements {
             self.cached.remove(query);
         }
         self.temp = None;
+        // Also clear negative cache so the statement can be re-prepared
+        self.failed_stmt.clear();
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -92,6 +136,7 @@ impl DuckDbStatements {
     pub(crate) fn clear(&mut self) {
         self.cached.clear();
         self.temp = None;
+        self.failed_stmt.clear();
     }
 }
 

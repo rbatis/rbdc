@@ -122,7 +122,6 @@ impl DuckDbWorker {
                         statements: crate::connection::DuckDbStatements::new(statement_cache_size),
                     })),
                 });
-
                 let worker = Self {
                     command_tx,
                     row_channel_size,

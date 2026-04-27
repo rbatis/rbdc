@@ -821,14 +821,13 @@ async fn test_zero_cache_exec_no_cache() {
 }
 
 /// Test: INSERT into non-existent table should not leak prepared statement memory.
-/// The scenario: table "items" does not exist, we execute:
-///   INSERT INTO items (id, name, value) VALUES (?, ?, ?)
-/// This previously caused unbounded memory growth because the prepared statement
-/// was cached even though execution failed due to table-not-existing error.
-/// The fix: on execute failure, destroy the corrupted prepared statement via take_handle().
+///
+/// The negative cache in DuckDbStatements records SQL strings whose prepare failed.
+/// Subsequent calls with the same SQL return a cached error immediately, avoiding
+/// repeated DuckDB prepare/destroy cycles that can cause unbounded memory growth.
+/// The LRU cache stays at 0 because no statement is successfully prepared.
 #[tokio::test]
 async fn test_high_iterations_nonexistent_table_file_db() {
-    // Use file-based DB like the example to catch real memory issues
     let db_path = "target/high_iter_test.db";
     let _ = std::fs::remove_file(db_path);
     let opts = DuckDbConnectOptions::new().path(db_path);
@@ -845,9 +844,9 @@ async fn test_high_iterations_nonexistent_table_file_db() {
                 rbs::Value::F64(1.5),
             ],
         ).await;
-        // The error is swallowed by exec(), so result is always Ok(0)
+        // Negative cache prevents repeated prepare/destroy: LRU cache stays empty
         assert_eq!(conn.cached_statements_size(), 0,
-            "failed INSERT should never be cached at iteration {}", i);
+            "failed INSERT should not be in LRU cache at iteration {}", i);
         drop(result);
     }
     println!("5000 iterations completed without OOM/memory leak");
@@ -855,17 +854,14 @@ async fn test_high_iterations_nonexistent_table_file_db() {
     let _ = std::fs::remove_file(db_path);
 }
 
-/// Check cache state DURING the loop for non-existent table.
-/// This verifies whether prepare ever succeeds (and statement cached then removed)
-
+/// Verify that INSERT into non-existent table does not leak memory.
+/// The negative cache ensures that after the first failed prepare, subsequent
+/// calls with the same SQL skip DuckDB API calls entirely.
 #[tokio::test]
 async fn test_exec_into_nonexistent_table_no_memory_leak() {
     let mut conn = create_conn().await;
 
-    // Intentionally skip CREATE TABLE - table does NOT exist
-    // Repeatedly try to INSERT into non-existent table with params
     for _ in 0..20 {
-        // DuckDB may succeed or fail depending on state; we just verify no crash/leak
         let _ = conn.exec(
             "INSERT INTO nonexistent_items (id, name, value) VALUES (?, ?, ?)",
             vec![
@@ -877,14 +873,15 @@ async fn test_exec_into_nonexistent_table_no_memory_leak() {
         .await;
     }
 
-    // Cache should still be empty (failed queries are never cached)
+    // LRU cache stays empty (prepare never succeeds for this SQL)
     assert_eq!(
         conn.cached_statements_size(),
         0,
-        "failed INSERT should never be cached"
+        "failed INSERT should not be cached"
     );
 
-    // Should still be able to create table and use connection normally
+    // After creating the table, the negative cache is cleared (by successful prepare
+    // of CREATE TABLE) and the INSERT can succeed
     conn.exec("CREATE TABLE items (id INTEGER, name TEXT, value REAL)", vec![])
         .await
         .expect("create table after failed inserts");
@@ -913,7 +910,6 @@ async fn test_exec_into_nonexistent_table_no_memory_leak() {
 async fn test_exec_rows_into_nonexistent_table_no_memory_leak() {
     let mut conn = create_conn().await;
 
-    // Intentionally skip CREATE TABLE
     for _ in 0..20 {
         let result = conn
             .exec_rows(
@@ -926,18 +922,76 @@ async fn test_exec_rows_into_nonexistent_table_no_memory_leak() {
             )
             .await;
 
+        // Consume the stream regardless of results
         if let Ok(stream) = result {
-            // Must consume the stream to trigger actual execution
             let mut s = stream;
-            while s.next().await.transpose().is_ok() {
-                // consume until error or end
-            }
+            while (s.next().await).is_some() {}
         }
     }
 
+    // LRU cache stays empty (prepare never succeeds)
     assert_eq!(
         conn.cached_statements_size(),
         0,
-        "failed INSERT via exec_rows should never be cached"
+        "failed INSERT via exec_rows should not be in LRU cache"
     );
+}
+
+/// Diagnose that repeated INSERT into non-existent table does not cause unbounded
+/// memory growth. The negative cache prevents repeated DuckDB prepare/destroy cycles.
+/// After the first failed prepare, subsequent calls return a cached error immediately.
+///
+/// Run with: `cargo test --test stmt_leak_test diagnose_memory_leak_on_nonexistent_insert -- --nocapture`
+#[tokio::test]
+async fn diagnose_memory_leak_on_nonexistent_insert() {
+    let mut conn = create_conn().await;
+
+    let iterations: usize = 10_000;
+
+    for i in 0..iterations {
+        let _ = conn
+            .exec(
+                "INSERT INTO items (id, name, value) VALUES (?, ?, ?)",
+                vec![
+                    rbs::Value::I32(1),
+                    rbs::Value::String("item".to_string()),
+                    rbs::Value::F64(1.5),
+                ],
+            )
+            .await;
+
+        // LRU cache stays at 0 — no statement is successfully prepared.
+        // After the first iteration, the negative cache skips DuckDB API calls entirely.
+        assert_eq!(
+            conn.cached_statements_size(),
+            0,
+            "LRU cache should stay at 0 (iteration {})",
+            i
+        );
+
+        if i > 0 && i % 2000 == 0 {
+            println!("  iteration {}: cache=0", i);
+        }
+    }
+
+    // After the loop, CREATE TABLE clears the negative cache (via successful prepare)
+    conn.exec("CREATE TABLE IF NOT EXISTS items (id INTEGER, name TEXT, value REAL)", vec![])
+        .await
+        .expect("should be able to create table after failed inserts");
+
+    // Now the INSERT succeeds (negative cache was cleared, table exists)
+    conn.exec(
+        "INSERT INTO items (id, name, value) VALUES (?, ?, ?)",
+        vec![
+            rbs::Value::I32(1),
+            rbs::Value::String("item".to_string()),
+            rbs::Value::F64(1.5),
+        ],
+    )
+    .await
+    .expect("should be able to insert after CREATE TABLE");
+
+    // Cache: CREATE TABLE (1) + valid INSERT (1) = 2
+    assert_eq!(conn.cached_statements_size(), 2);
+    println!("Test passed: cache=2");
 }

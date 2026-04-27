@@ -15,6 +15,88 @@ use crate::types::Encode;
 use crate::DuckDbRow;
 use rbs::Value;
 
+// ============ Newtype wrapper for DuckDB pointers ============
+struct DuckDbInstanceCache(libduckdb_sys::duckdb_instance_cache);
+struct DuckDbDatabase(libduckdb_sys::duckdb_database);
+
+// SAFETY: DuckDB 的实例缓存和数据库指针本身是线程安全的
+unsafe impl Send for DuckDbInstanceCache {}
+unsafe impl Sync for DuckDbInstanceCache {}
+unsafe impl Send for DuckDbDatabase {}
+unsafe impl Sync for DuckDbDatabase {}
+
+// ============ 全局共享的数据库实例缓存 ============
+static INSTANCE_CACHE: Mutex<Option<DuckDbInstanceCache>> = Mutex::new(None);
+static SHARED_DATABASE: Mutex<Option<DuckDbDatabase>> = Mutex::new(None);
+
+/// 获取或创建全局共享的数据库实例（进程级别，只创建一次）
+fn get_or_create_shared_database(path: &str) -> Result<libduckdb_sys::duckdb_database, Error> {
+    // 先尝试获取已存在的数据库
+    {
+        let guard = SHARED_DATABASE.lock().unwrap();
+        if let Some(db) = guard.as_ref() {
+            return Ok(db.0);
+        }
+    }
+
+    // 初始化 instance cache
+    {
+        let mut guard = INSTANCE_CACHE.lock().unwrap();
+        if guard.is_none() {
+            let cache = unsafe { libduckdb_sys::duckdb_create_instance_cache() };
+            *guard = Some(DuckDbInstanceCache(cache));
+        }
+    }
+
+    let cache = {
+        let guard = INSTANCE_CACHE.lock().unwrap();
+        guard.as_ref().unwrap().0
+    };
+
+    let path_cstr = CString::new(path).map_err(|e| Error::from(format!("Invalid path: {}", e)))?;
+    let mut db: libduckdb_sys::duckdb_database = ptr::null_mut();
+    let error_msg: *mut *mut std::os::raw::c_char = ptr::null_mut();
+
+    let result = unsafe {
+        libduckdb_sys::duckdb_get_or_create_from_cache(
+            cache,
+            path_cstr.as_ptr(),
+            &mut db,
+            ptr::null_mut(),
+            error_msg,
+        )
+    };
+
+    if result != libduckdb_sys::DuckDBSuccess {
+        let err_str = if !error_msg.is_null() {
+            let msg = unsafe { CStr::from_ptr(*error_msg).to_string_lossy().into_owned() };
+            unsafe { libduckdb_sys::duckdb_free(*error_msg as *mut std::ffi::c_void) };
+            format!("duckdb_get_or_create_from_cache failed: {}", msg)
+        } else {
+            "duckdb_get_or_create_from_cache failed".to_string()
+        };
+        return Err(Error::from(err_str));
+    }
+
+    // 存储到全局 Mutex
+    {
+        let mut guard = SHARED_DATABASE.lock().unwrap();
+        *guard = Some(DuckDbDatabase(db));
+    }
+    Ok(db)
+}
+
+/// 从共享数据库创建新的连接（每个线程独立）
+fn create_connection_from_shared(db: libduckdb_sys::duckdb_database) -> Result<libduckdb_sys::duckdb_connection, Error> {
+    let mut con: libduckdb_sys::duckdb_connection = ptr::null_mut();
+    let result = unsafe { libduckdb_sys::duckdb_connect(db, &mut con) };
+
+    if result != libduckdb_sys::DuckDBSuccess {
+        return Err(Error::from("duckdb_connect failed"));
+    }
+    Ok(con)
+}
+
 /// Connection state containing the handle and cached statements
 pub(crate) struct DuckDbConnectionState {
     pub(crate) handle: DuckDbConnectionHandle,
@@ -40,12 +122,14 @@ pub(crate) struct DuckDbWorkerSharedState {
 pub(crate) struct DuckDbWorker {
     pub command_tx: AsyncTx<crossfire::spsc::Array<Command>>,
     pub(crate) row_channel_size: usize,
+    #[allow(unused)]
     pub(crate) shared: Arc<DuckDbWorkerSharedState>,
 }
 
 unsafe impl Send for DuckDbWorker {}
 unsafe impl Sync for DuckDbWorker {}
 
+#[allow(unused)]
 pub(crate) enum Command {
     ExecRows {
         sql: Box<str>,
@@ -73,60 +157,42 @@ impl DuckDbWorker {
         let (establish_tx, establish_rx) = oneshot::channel();
 
         thread::Builder::new()
-            .name(thread_name)
+            .name(thread_name.clone())
             .spawn(move || {
                 let (command_tx, command_rx) = spsc::bounded_async_blocking(command_channel_size);
 
-                // Open database using raw FFI
-                let mut db: libduckdb_sys::duckdb_database = ptr::null_mut();
-                let mut con: libduckdb_sys::duckdb_connection = ptr::null_mut();
-
-                // Determine database path: ":memory:" for in-memory database, otherwise use the path
-                let db_path: *const std::os::raw::c_char = if path == ":memory:" || path.is_empty() {
-                    ptr::null_mut()
-                } else {
-                    // Create parent directory if it doesn't exist for file-based database
+                // 确保父目录存在（仅对文件数据库）
+                if path != ":memory:" && !path.is_empty() {
                     if let Some(parent) = std::path::Path::new(&path).parent() {
                         if !parent.as_os_str().is_empty() {
                             let _ = std::fs::create_dir_all(parent);
                         }
                     }
-                    // For file-based database, need to convert string to C string
-                    // DuckDB expects the path to be persistent, so we need to keep it alive
-                    std::ffi::CString::new(path.clone())
-                        .map(|s| s.into_raw())
-                        .unwrap_or(ptr::null_mut())
+                }
+
+                // 获取全局共享的数据库实例
+                log::debug!("DuckDB getting/creating shared database: path={}", path);
+                let db = match get_or_create_shared_database(&path) {
+                    Ok(db) => db,
+                    Err(e) => {
+                        let _ = establish_tx.send(Err(e));
+                        return;
+                    }
                 };
 
-                log::debug!("DuckDB opening database: path={}", path);
-                let mut error_msg: *mut std::os::raw::c_char = ptr::null_mut();
-                let r = unsafe { libduckdb_sys::duckdb_open_ext(db_path, &mut db, ptr::null_mut(), &mut error_msg) };
-                log::debug!("DuckDB open result: r={}", r);
+                // 为这个 Worker 创建独立的连接
+                let con = match create_connection_from_shared(db) {
+                    Ok(con) => con,
+                    Err(e) => {
+                        let _ = establish_tx.send(Err(e));
+                        return;
+                    }
+                };
 
-                // If we allocated a CString, free it now (DuckDB copies the path internally)
-                if !db_path.is_null() && path != ":memory:" && !path.is_empty() {
-                    drop(unsafe { std::ffi::CString::from_raw(db_path as *mut std::os::raw::c_char) });
-                }
+                log::debug!("DuckDB connection created for thread: {}", thread_name);
 
-                if r != libduckdb_sys::DuckDBSuccess {
-                    let err_str = if !error_msg.is_null() {
-                        let msg = unsafe { CStr::from_ptr(error_msg).to_string_lossy().into_owned() };
-                        unsafe { libduckdb_sys::duckdb_free(error_msg as *mut std::ffi::c_void) };
-                        format!("duckdb_open failed: {}", msg)
-                    } else {
-                        "duckdb_open failed".to_string()
-                    };
-                    let _ = establish_tx.send(Err(Error::from(err_str)));
-                    return;
-                }
-
-                let r = unsafe { libduckdb_sys::duckdb_connect(db, &mut con) };
-                if r != libduckdb_sys::DuckDBSuccess {
-                    let _ = establish_tx.send(Err(Error::from("duckdb_connect failed")));
-                    return;
-                }
-
-                let handle = DuckDbConnectionHandle::new(db, con);
+                // 使用 new_without_db，因为 db 是全局共享的，不应该被 drop
+                let handle = DuckDbConnectionHandle::new_without_db(con);
 
                 let shared = Arc::new(DuckDbWorkerSharedState {
                     cached_statements_size: AtomicUsize::new(0),
@@ -262,7 +328,6 @@ impl DuckDbWorker {
                             log::debug!("DuckDB Exec: sql_str length={}, sql={}", sql_str.len(), sql_str);
 
                             // Always prepare a new statement to avoid caching issues with DuckDB
-                            // DuckDB's prepared statements may become invalid after certain operations
                             let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
                             let sql_cstr = CString::new(&*sql).unwrap();
                             let r = unsafe {
@@ -351,7 +416,7 @@ impl DuckDbWorker {
                             tx.send(()).ok();
                         }
                         Command::Shutdown { tx } => {
-                            // Drop connection state (which destroys statements)
+                            // 只销毁当前连接和语句，不关闭共享的 db
                             drop(conn_guard);
                             drop(shared);
                             let _ = tx.send(());
@@ -413,6 +478,7 @@ impl DuckDbWorker {
         rx.await.map_err(|_| Error::from("WorkerCrashed"))
     }
 
+    #[allow(unused)]
     pub(crate) async fn clear_cache(&mut self) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
 
@@ -435,6 +501,7 @@ impl DuckDbWorker {
         rx.await.map_err(|_| Error::from("WorkerCrashed"))
     }
 
+    #[allow(unused)]
     pub fn cached_statements_size(&self) -> usize {
         self.shared.cached_statements_size.load(Ordering::Acquire)
     }

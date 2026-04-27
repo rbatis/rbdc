@@ -1,7 +1,8 @@
-mod conn;
-mod establish;
+pub mod conn;
+pub mod establish;
 pub mod worker;
 
+pub use conn::DuckDbDatabase;
 pub use establish::DuckDbConnection;
 
 use futures_core::future::BoxFuture;

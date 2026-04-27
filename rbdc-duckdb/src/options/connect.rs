@@ -1,9 +1,10 @@
+use crate::connection::DuckDbDatabase;
 use crate::DuckDbConnection;
 use futures_core::future::BoxFuture;
 use rbdc::common::DebugFn;
 use rbdc::db::ConnectOptions;
 use rbdc::Error;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct DuckDbConnectOptions {
@@ -11,6 +12,8 @@ pub struct DuckDbConnectOptions {
     pub(crate) thread_name: Arc<DebugFn<dyn Fn(u64) -> String + Send + Sync + 'static>>,
     pub(crate) command_channel_size: usize,
     pub(crate) row_channel_size: usize,
+    /// 共享的数据库实例，由第一个连接创建，后续连接复用
+    pub(crate) shared_database: Arc<Mutex<Option<DuckDbDatabase>>>,
 }
 
 impl Default for DuckDbConnectOptions {
@@ -20,6 +23,7 @@ impl Default for DuckDbConnectOptions {
             thread_name: Arc::new(DebugFn(|id| format!("rbdc-duckdb-worker-{}", id))),
             command_channel_size: 16,
             row_channel_size: 16,
+            shared_database: Arc::new(Mutex::new(None)),
         }
     }
 }

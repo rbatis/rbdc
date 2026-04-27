@@ -48,10 +48,14 @@ pub(crate) struct DuckDbStatements {
     temp: Option<VirtualStatement>,
     /// Whether caching is enabled (set to false when statement_cache_size is 0)
     cache_enabled: bool,
-    /// Negative cache: SQL strings whose prepare failed. Prevents repeated prepare/destroy
-    /// cycles that leak memory in DuckDB for statements that cannot succeed (e.g. INSERT
-    /// into non-existent table).
-    failed_stmt: std::collections::HashSet<String>,
+    /// Negative cache: SQL strings whose prepare failed, backed by LRU.
+    ///
+    /// Prevents repeated prepare/destroy cycles that leak memory in DuckDB for
+    /// statements that cannot succeed (e.g. INSERT into non-existent table).
+    /// LRU eviction automatically provides bounded size + retry: when the cache
+    /// is full, the least recently inserted SQL is evicted, and the next time
+    /// that SQL appears it gets one fresh try at DuckDB prepare.
+    failed_stmt: StatementCache<()>,
 }
 
 impl DuckDbStatements {
@@ -60,7 +64,7 @@ impl DuckDbStatements {
             cached: StatementCache::new(cache_capacity.max(1)),
             temp: None,
             cache_enabled: cache_capacity > 0,
-            failed_stmt: std::collections::HashSet::new(),
+            failed_stmt: StatementCache::new(cache_capacity.max(1)),
         }
     }
 
@@ -85,7 +89,7 @@ impl DuckDbStatements {
 
         // Negative cache: this SQL previously failed to prepare; return cached error
         // to avoid repeated DuckDB prepare/destroy cycle that leaks memory.
-        if self.failed_stmt.contains(query) {
+        if self.failed_stmt.contains_key(query) {
             return Err(Error::from(format!(
                 "Statement previously failed to prepare (negative cache): {}",
                 query
@@ -112,8 +116,10 @@ impl DuckDbStatements {
                 Ok(ptr)
             }
             Err(e) => {
-                // Prepare failed: record in negative cache to avoid repeated prepare/destroy
-                self.failed_stmt.insert(query.to_string());
+                // Prepare failed: record in negative cache to avoid repeated prepare/destroy.
+                // LRU eviction handles bounded size automatically: when full, the oldest entry
+                // is evicted and will get one fresh try at DuckDB prepare next time it appears.
+                self.failed_stmt.insert(query, ());
                 Err(e)
             }
         }

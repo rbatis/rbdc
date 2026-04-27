@@ -2,7 +2,7 @@
 //!
 //! These tests verify that:
 //! 1. exec_rows properly caches prepared statements
-//! 2. exec does NOT cache (always creates and destroys)
+//! 2. exec also caches prepared statements (fixes the memory leak from repeated prepare/destroy)
 //! 3. clear_cache properly releases all cached statements
 //! 4. Connection drop releases all resources
 //! 5. Error handling does not cause double-free or cache corruption
@@ -71,28 +71,40 @@ async fn test_stmt_cache_grows_on_repeated_exec_rows() {
     assert_eq!(cache_size, 1, "exec_rows should cache the statement");
 }
 
-/// Test: verify exec (non-cached) does NOT grow the cache
+/// Test: verify exec uses the statement cache (same as exec_rows).
+/// This is the fix for the memory leak: previously exec always prepared and
+/// destroyed a statement on every call; now it reuses the cached prepared
+/// statement, avoiding repeated DuckDB alloc/free cycles.
 #[tokio::test]
-async fn test_exec_does_not_cache_statement() {
+async fn test_exec_uses_statement_cache() {
     let mut conn = create_conn().await;
 
-    conn.exec("CREATE TABLE test_no_cache (id INTEGER)", vec![])
+    conn.exec("CREATE TABLE test_exec_cache (id INTEGER)", vec![])
         .await
         .expect("create table");
 
-    // Multiple exec calls (not using cache)
-    for i in 0..3 {
+    // Multiple exec calls with the same SQL reuse the cached statement
+    for i in 0..5 {
         conn.exec(
-            "INSERT INTO test_no_cache VALUES (?)",
+            "INSERT INTO test_exec_cache VALUES (?)",
             vec![rbs::Value::I64(i)],
         )
         .await
         .expect("insert");
     }
 
-    // exec does not use statement cache (always prepares new and destroys)
+    // exec now caches the prepared statement (prevents repeated alloc/free of DuckDB internals)
     let cache_size = conn.cached_statements_size();
-    assert_eq!(cache_size, 0, "exec should NOT cache statements");
+    assert_eq!(cache_size, 1, "exec should cache the INSERT statement");
+
+    // Verify all rows were actually inserted
+    use futures_util::StreamExt;
+    let stream = conn
+        .exec_rows("SELECT COUNT(*) FROM test_exec_cache", vec![])
+        .await
+        .expect("count");
+    let count = consume_all_rows(stream).await;
+    assert_eq!(count, 1, "should return 1 row from COUNT(*)");
 }
 
 /// Test: verify clear_cache destroys all cached statements
@@ -653,4 +665,148 @@ async fn test_all_rows_returned_correctly() {
 
     let count = consume_all_rows(stream).await;
     assert_eq!(count, 10, "should return all 10 rows");
+}
+
+/// Test: mirrors the user's exact reported scenario.
+/// exec() with INTEGER + TEXT + REAL params in a loop should not leak memory.
+/// With the fix, the prepared statement is compiled once and cached; subsequent
+/// calls reuse it via duckdb_clear_bindings + new param binding.
+#[tokio::test]
+async fn test_exec_user_scenario_int_text_real_params() {
+    let mut conn = create_conn().await;
+
+    conn.exec(
+        "CREATE TABLE IF NOT EXISTS items (id INTEGER, name TEXT, value REAL)",
+        vec![],
+    )
+    .await
+    .expect("create table");
+
+    // Run enough iterations to expose any per-call resource accumulation
+    for _ in 0..50 {
+        conn.exec(
+            "INSERT INTO items (id, name, value) VALUES (?, ?, ?)",
+            vec![
+                rbs::Value::I32(1),
+                rbs::Value::String("item".to_string()),
+                rbs::Value::F64(1.5),
+            ],
+        )
+        .await
+        .expect("insert should succeed on every iteration");
+    }
+
+    // The INSERT statement should be cached exactly once
+    assert_eq!(
+        conn.cached_statements_size(),
+        1,
+        "INSERT statement should be in cache after first execution"
+    );
+
+    // Verify all 50 rows were actually inserted
+    let stream = conn
+        .exec_rows("SELECT COUNT(*) FROM items", vec![])
+        .await
+        .expect("count query");
+    let count = consume_all_rows(stream).await;
+    assert_eq!(count, 1, "COUNT(*) should return exactly 1 result row");
+}
+
+/// Test: exec() correctly reports rows_affected for INSERT.
+#[tokio::test]
+async fn test_exec_rows_affected_count() {
+    let mut conn = create_conn().await;
+
+    conn.exec(
+        "CREATE TABLE test_affected (id INTEGER PRIMARY KEY, val TEXT)",
+        vec![],
+    )
+    .await
+    .expect("create table");
+
+    // Single INSERT should report 1 row affected
+    let result = conn
+        .exec(
+            "INSERT INTO test_affected VALUES (?, ?)",
+            vec![
+                rbs::Value::I32(1),
+                rbs::Value::String("hello".to_string()),
+            ],
+        )
+        .await
+        .expect("insert");
+
+    assert_eq!(result.rows_affected, 1, "INSERT should affect exactly 1 row");
+
+    // Second INSERT with a different key
+    let result2 = conn
+        .exec(
+            "INSERT INTO test_affected VALUES (?, ?)",
+            vec![
+                rbs::Value::I32(2),
+                rbs::Value::String("world".to_string()),
+            ],
+        )
+        .await
+        .expect("second insert");
+
+    assert_eq!(result2.rows_affected, 1, "second INSERT should affect exactly 1 row");
+
+    // Statement should be cached (only 1 unique SQL)
+    assert_eq!(conn.cached_statements_size(), 1);
+}
+
+/// Test: exec() and exec_rows() share the same LRU cache, so the same SQL
+/// prepared via exec() is reused when exec_rows() encounters it and vice versa.
+#[tokio::test]
+async fn test_exec_and_exec_rows_share_cache() {
+    let mut conn = create_conn().await;
+
+    conn.exec("CREATE TABLE test_shared_cache (id INTEGER, val TEXT)", vec![])
+        .await
+        .expect("create table");
+
+    // Insert via exec()
+    conn.exec(
+        "INSERT INTO test_shared_cache VALUES (?, ?)",
+        vec![rbs::Value::I32(1), rbs::Value::String("a".to_string())],
+    )
+    .await
+    .expect("insert via exec");
+
+    assert_eq!(conn.cached_statements_size(), 1, "exec should have cached the INSERT");
+
+    // Query via exec_rows() with different SQL - cache grows to 2
+    let stream = conn
+        .exec_rows("SELECT * FROM test_shared_cache WHERE id = ?", vec![rbs::Value::I32(1)])
+        .await
+        .expect("exec_rows");
+    let count = consume_all_rows(stream).await;
+    assert_eq!(count, 1);
+    assert_eq!(conn.cached_statements_size(), 2, "both exec and exec_rows add to the same cache");
+}
+
+/// Test: zero cache size disables caching for exec() too.
+#[tokio::test]
+async fn test_zero_cache_exec_no_cache() {
+    let mut conn = create_conn_with_cache_size(0).await;
+
+    conn.exec("CREATE TABLE test_zero_exec (id INTEGER)", vec![])
+        .await
+        .expect("create table");
+
+    for i in 0..5 {
+        conn.exec(
+            "INSERT INTO test_zero_exec VALUES (?)",
+            vec![rbs::Value::I64(i)],
+        )
+        .await
+        .expect("insert");
+    }
+
+    assert_eq!(
+        conn.cached_statements_size(),
+        0,
+        "exec should not cache when cache size is 0"
+    );
 }

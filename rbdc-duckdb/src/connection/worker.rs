@@ -318,30 +318,74 @@ impl DuckDbWorker {
                             }
                         }
                         Command::Exec { sql, params, tx } => {
-                            // Always prepare a new statement to avoid caching issues with DuckDB
-                            let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
-                            let sql_cstr = CString::new(&*sql).unwrap();
-                            let r = unsafe {
-                                libduckdb_sys::duckdb_prepare(conn_guard.handle.con, sql_cstr.as_ptr(), &mut new_stmt)
-                            };
-                            if r != libduckdb_sys::DuckDBSuccess {
-                                let err_msg = if new_stmt.is_null() {
-                                    "prepare failed: statement is null".to_string()
-                                } else {
-                                    let err_ptr = unsafe { libduckdb_sys::duckdb_prepare_error(new_stmt) };
-                                    if err_ptr.is_null() {
-                                        "prepare failed: unknown error".to_string()
-                                    } else {
-                                        let err_str = unsafe { CStr::from_ptr(err_ptr).to_string_lossy().into_owned() };
-                                        format!("prepare failed: {}", err_str)
-                                    }
-                                };
-                                unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut new_stmt) };
-                                tx.send(Err(Error::from(err_msg))).ok();
-                                continue;
-                            }
+                            let sql_str = (*sql).to_string();
+                            let cache_enabled = conn_guard.cache_enabled;
 
-                            let mut stmt = new_stmt;
+                            // Get or prepare statement (using LRU cache if enabled, same as ExecRows).
+                            // Previously this path always prepared fresh and immediately destroyed the
+                            // statement, causing DuckDB to repeatedly compile the same query plan on
+                            // every call. In a tight loop with identical SQL this causes memory to grow
+                            // because DuckDB's internal allocator accumulates metadata between
+                            // alloc/free cycles. Caching the statement fixes this.
+                            let mut stmt: libduckdb_sys::duckdb_prepared_statement = if cache_enabled {
+                                if let Some(cached_stmt) = conn_guard.statements.get_mut(&sql_str) {
+                                    // Clear previous bindings before reuse
+                                    unsafe { libduckdb_sys::duckdb_clear_bindings(*cached_stmt) };
+                                    *cached_stmt
+                                } else {
+                                    let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
+                                    let sql_cstr = CString::new(&*sql).unwrap();
+                                    let r = unsafe {
+                                        libduckdb_sys::duckdb_prepare(conn_guard.handle.con, sql_cstr.as_ptr(), &mut new_stmt)
+                                    };
+                                    if r != libduckdb_sys::DuckDBSuccess {
+                                        let err_msg = if new_stmt.is_null() {
+                                            "prepare failed: statement is null".to_string()
+                                        } else {
+                                            let err_ptr = unsafe { libduckdb_sys::duckdb_prepare_error(new_stmt) };
+                                            if err_ptr.is_null() {
+                                                "prepare failed: unknown error".to_string()
+                                            } else {
+                                                let err_str = unsafe { CStr::from_ptr(err_ptr).to_string_lossy().into_owned() };
+                                                format!("prepare failed: {}", err_str)
+                                            }
+                                        };
+                                        unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut new_stmt) };
+                                        tx.send(Err(Error::from(err_msg))).ok();
+                                        continue;
+                                    }
+                                    // Insert into LRU cache; destroy any evicted statement
+                                    if let Some(mut evicted_stmt) = conn_guard.statements.insert(&sql_str, new_stmt) {
+                                        unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut evicted_stmt) };
+                                    }
+                                    shared.cached_statements_size.store(conn_guard.statements.len(), Ordering::Release);
+                                    new_stmt
+                                }
+                            } else {
+                                // Caching disabled - always prepare fresh
+                                let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
+                                let sql_cstr = CString::new(&*sql).unwrap();
+                                let r = unsafe {
+                                    libduckdb_sys::duckdb_prepare(conn_guard.handle.con, sql_cstr.as_ptr(), &mut new_stmt)
+                                };
+                                if r != libduckdb_sys::DuckDBSuccess {
+                                    let err_msg = if new_stmt.is_null() {
+                                        "prepare failed: statement is null".to_string()
+                                    } else {
+                                        let err_ptr = unsafe { libduckdb_sys::duckdb_prepare_error(new_stmt) };
+                                        if err_ptr.is_null() {
+                                            "prepare failed: unknown error".to_string()
+                                        } else {
+                                            let err_str = unsafe { CStr::from_ptr(err_ptr).to_string_lossy().into_owned() };
+                                            format!("prepare failed: {}", err_str)
+                                        }
+                                    };
+                                    unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut new_stmt) };
+                                    tx.send(Err(Error::from(err_msg))).ok();
+                                    continue;
+                                }
+                                new_stmt
+                            };
 
                             // Bind parameters
                             let mut args = Vec::new();
@@ -391,7 +435,11 @@ impl DuckDbWorker {
                             }
 
                             unsafe { libduckdb_sys::duckdb_destroy_result(&mut result) };
-                            unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut stmt) };
+                            // Only destroy if caching is disabled; cached statements are owned by
+                            // conn_guard.statements and will be destroyed on eviction or shutdown.
+                            if !cache_enabled {
+                                unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut stmt) };
+                            }
                         }
                         Command::Ping { tx } => {
                             let sql_cstr = CString::new("SELECT 1").unwrap();

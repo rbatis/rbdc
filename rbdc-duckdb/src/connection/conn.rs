@@ -37,12 +37,10 @@ pub(crate) struct DuckDbConnectionHandle {
 
 impl DuckDbConnectionHandle {
     #[allow(unused)]
-    // 用于独立模式（db 和 connection 都归自己管理）
     pub fn new(db: libduckdb_sys::duckdb_database, con: libduckdb_sys::duckdb_connection) -> Self {
         Self { db: Some(db), con }
     }
 
-    // 用于共享模式（只管理 connection，db 归全局管理）
     pub fn new_shared_db(_db: libduckdb_sys::duckdb_database, con: libduckdb_sys::duckdb_connection) -> Self {
         Self { db: None, con }
     }
@@ -54,7 +52,6 @@ impl Drop for DuckDbConnectionHandle {
             if !self.con.is_null() {
                 libduckdb_sys::duckdb_disconnect(&mut self.con);
             }
-            // 只关闭 db（如果是 Some），共享的 db 由全局管理器管理，不在这里关闭
             if let Some(mut db) = self.db.take() {
                 libduckdb_sys::duckdb_close(&mut db);
             }

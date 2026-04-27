@@ -9,10 +9,10 @@ keywords = ["database", "duckdb", "rbatis", "rbdc"]
 
 [dependencies]
 crossfire = { version = "3.1", default-features = false }
+either = "1.15"
 futures-channel = { version = "0.3.19", default-features = false }
 futures-core = { version = "0.3.19", default-features = false }
 futures-util = { version = "0.3.21", features = ["alloc", "sink"] }
-hashlink = "0.10"
 parking_lot = "0.12"
 rbdc = { path = "..", version = "4.9" }
 rbs = { version = "4.8" }

@@ -1,10 +1,11 @@
 use crate::connection::DuckDbDatabase;
 use crate::DuckDbConnection;
 use futures_core::future::BoxFuture;
+use parking_lot::Mutex as ParkingMutex;
 use rbdc::common::DebugFn;
 use rbdc::db::ConnectOptions;
 use rbdc::Error;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// Default maximum number of cached prepared statements per connection.
 pub const DEFAULT_STATEMENT_CACHE_SIZE: usize = 128;
@@ -19,7 +20,7 @@ pub struct DuckDbConnectOptions {
     /// Uses LRU eviction when limit is reached.
     pub(crate) statement_cache_size: usize,
     /// 共享的数据库实例，由第一个连接创建，后续连接复用
-    pub(crate) shared_database: Arc<Mutex<Option<DuckDbDatabase>>>,
+    pub(crate) shared_database: Arc<ParkingMutex<Option<DuckDbDatabase>>>,
 }
 
 impl Default for DuckDbConnectOptions {
@@ -30,7 +31,7 @@ impl Default for DuckDbConnectOptions {
             command_channel_size: 16,
             row_channel_size: 16,
             statement_cache_size: DEFAULT_STATEMENT_CACHE_SIZE,
-            shared_database: Arc::new(Mutex::new(None)),
+            shared_database: Arc::new(ParkingMutex::new(None)),
         }
     }
 }

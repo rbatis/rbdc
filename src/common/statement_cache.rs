@@ -57,6 +57,11 @@ impl<T> StatementCache<T> {
         self.inner.pop_lru().map(|v| v.1)
     }
 
+    /// Removes the item with the given key from the cache, returning it if present.
+    pub fn remove(&mut self, k: &str) -> Option<T> {
+        self.inner.pop_entry(k).map(|v| v.1)
+    }
+
     /// Clear all cached statements from the cache.
     pub fn clear(&mut self) {
         self.inner.clear();

@@ -66,9 +66,9 @@ async fn test_stmt_cache_grows_on_repeated_exec_rows() {
         assert_eq!(count, 1);
     }
 
-    // Cache should have exactly 1 statement for this query
+    // ALL unique SQL statements are cached: CREATE TABLE + INSERT + SELECT = 3
     let cache_size = conn.cached_statements_size();
-    assert_eq!(cache_size, 1, "exec_rows should cache the statement");
+    assert_eq!(cache_size, 3, "exec_rows should cache all unique SQL statements");
 }
 
 /// Test: verify exec uses the statement cache (same as exec_rows).
@@ -93,12 +93,11 @@ async fn test_exec_uses_statement_cache() {
         .expect("insert");
     }
 
-    // exec now caches the prepared statement (prevents repeated alloc/free of DuckDB internals)
+    // exec caches both CREATE TABLE and the INSERT statement = 2
     let cache_size = conn.cached_statements_size();
-    assert_eq!(cache_size, 1, "exec should cache the INSERT statement");
+    assert_eq!(cache_size, 2, "exec should cache the INSERT and CREATE TABLE statements");
 
     // Verify all rows were actually inserted
-    use futures_util::StreamExt;
     let stream = conn
         .exec_rows("SELECT COUNT(*) FROM test_exec_cache", vec![])
         .await
@@ -123,7 +122,8 @@ async fn test_clear_cache_releases_statements() {
         .expect("exec_rows");
     let _count = consume_all_rows(stream).await;
 
-    assert_eq!(conn.cached_statements_size(), 1);
+    // CREATE TABLE + SELECT = 2
+    assert_eq!(conn.cached_statements_size(), 2);
 
     // Clear the cache
     conn.clear_cache().await.expect("clear_cache");
@@ -153,7 +153,8 @@ async fn test_connection_drop_releases_resources() {
         let _ = consume_all_rows(stream).await;
 
         cache_size_before = conn.cached_statements_size();
-        assert_eq!(cache_size_before, 1);
+        // CREATE TABLE + SELECT = 2
+        assert_eq!(cache_size_before, 2);
 
         // Close connection
         conn.close().await.expect("close");
@@ -192,7 +193,8 @@ async fn test_cache_size_matches_unique_queries() {
         let _ = consume_all_rows(stream).await;
     }
 
-    assert_eq!(conn.cached_statements_size(), queries.len());
+    // CREATE TABLE + INSERT with params + 3 unique SELECT literals = 5
+    assert_eq!(conn.cached_statements_size(), queries.len() + 2);
 }
 
 /// Test: error in exec_rows should not leak/double-free statement
@@ -211,7 +213,8 @@ async fn test_invalid_query_does_not_corrupt_cache() {
         .expect("exec_rows");
     let _ = consume_all_rows(stream).await;
 
-    assert_eq!(conn.cached_statements_size(), 1);
+    // CREATE TABLE + SELECT = 2
+    assert_eq!(conn.cached_statements_size(), 2);
 
     // Now try invalid query - should error, not corrupt cache
     // Must consume the stream to trigger the error
@@ -225,8 +228,8 @@ async fn test_invalid_query_does_not_corrupt_cache() {
     // DuckDB might return 0 rows for nonexistent table without error, or error on consumption
     // The key is it should not crash or corrupt the cache
 
-    // Cache should be unchanged (the invalid query is NOT cached)
-    assert_eq!(conn.cached_statements_size(), 1);
+    // Cache should be unchanged (the invalid query is NOT cached): CREATE + SELECT = 2
+    assert_eq!(conn.cached_statements_size(), 2);
 
     // Should still be able to use the valid cached statement
     let stream = conn
@@ -274,8 +277,8 @@ async fn test_error_with_params_does_not_corrupt_cache() {
     let count = consume_all_rows(stream).await;
     assert_eq!(count, 1);
 
-    // Cache should still have 1 statement
-    assert_eq!(conn.cached_statements_size(), 1);
+    // Cache: CREATE(1) + SELECT_with_param(2) + INSERT_literal(3) = 3
+    assert_eq!(conn.cached_statements_size(), 3);
 }
 
 /// Test: verify rapid connection cycling does not leak
@@ -335,7 +338,8 @@ async fn test_reuse_connection_after_clear_cache() {
         .expect("exec_rows");
     let _ = consume_all_rows(stream).await;
 
-    assert_eq!(conn.cached_statements_size(), 1);
+    // CREATE(1) + INSERT_VALUES_1(2) + SELECT_with_param(3) = 3
+    assert_eq!(conn.cached_statements_size(), 3);
 
     // Clear cache
     conn.clear_cache().await.expect("clear_cache");
@@ -356,7 +360,8 @@ async fn test_reuse_connection_after_clear_cache() {
     let count = consume_all_rows(stream).await;
     assert_eq!(count, 1);
 
-    assert_eq!(conn.cached_statements_size(), 1);
+    // After clear + 2 new statements (INSERT_VALUES_2, SELECT_with_param) = 2
+    assert_eq!(conn.cached_statements_size(), 2);
 }
 
 /// Test: multiple params binding works correctly and doesn't leak
@@ -395,7 +400,8 @@ async fn test_multiple_params_binding() {
     let count = consume_all_rows(stream).await;
     assert_eq!(count, 1, "should return 1 row where id=1 and score > 90.0");
 
-    assert_eq!(conn.cached_statements_size(), 1);
+    // CREATE(1) + INSERT_with_params(2) + SELECT_with_params(3) = 3
+    assert_eq!(conn.cached_statements_size(), 3);
 }
 
 /// Test: LRU eviction when cache size is exceeded
@@ -552,14 +558,15 @@ async fn test_ping_does_not_affect_cache() {
         .expect("exec_rows");
     let _ = consume_all_rows(stream).await;
 
-    assert_eq!(conn.cached_statements_size(), 1);
+    // CREATE + SELECT = 2
+    assert_eq!(conn.cached_statements_size(), 2);
 
     // Multiple pings should not affect cache
     conn.ping().await.expect("ping");
     conn.ping().await.expect("ping");
     conn.ping().await.expect("ping");
 
-    assert_eq!(conn.cached_statements_size(), 1, "ping should not affect cache");
+    assert_eq!(conn.cached_statements_size(), 2, "ping should not affect cache");
 }
 
 /// Test: shutdown properly releases all cached statements
@@ -587,7 +594,8 @@ async fn test_shutdown_releases_all_cached_statements() {
         }
 
         cache_size_before = conn.cached_statements_size();
-        assert_eq!(cache_size_before, 5);
+        // CREATE(1) + 5 INSERTs + 5 SELECTs = 11
+        assert_eq!(cache_size_before, 11);
 
         // Shutdown
         conn.close().await.expect("shutdown");
@@ -631,11 +639,11 @@ async fn test_same_sql_different_params_reuses_cache() {
         assert_eq!(count, 1);
     }
 
-    // Should only have 1 cached statement (same SQL)
+    // CREATE(1) + 3 literal INSERTs(2,3,4) + SELECT_with_param(5) = 5
     assert_eq!(
         conn.cached_statements_size(),
-        1,
-        "same SQL with different params should reuse cached statement"
+        5,
+        "all unique SQL strings are cached"
     );
 }
 
@@ -696,11 +704,11 @@ async fn test_exec_user_scenario_int_text_real_params() {
         .expect("insert should succeed on every iteration");
     }
 
-    // The INSERT statement should be cached exactly once
+    // CREATE TABLE(1) + INSERT_with_params(2) = 2
     assert_eq!(
         conn.cached_statements_size(),
-        1,
-        "INSERT statement should be in cache after first execution"
+        2,
+        "CREATE TABLE and INSERT should both be cached"
     );
 
     // Verify all 50 rows were actually inserted
@@ -752,8 +760,8 @@ async fn test_exec_rows_affected_count() {
 
     assert_eq!(result2.rows_affected, 1, "second INSERT should affect exactly 1 row");
 
-    // Statement should be cached (only 1 unique SQL)
-    assert_eq!(conn.cached_statements_size(), 1);
+    // CREATE(1) + INSERT_with_params(2) = 2 (same INSERT SQL reused)
+    assert_eq!(conn.cached_statements_size(), 2);
 }
 
 /// Test: exec() and exec_rows() share the same LRU cache, so the same SQL
@@ -774,16 +782,17 @@ async fn test_exec_and_exec_rows_share_cache() {
     .await
     .expect("insert via exec");
 
-    assert_eq!(conn.cached_statements_size(), 1, "exec should have cached the INSERT");
+    // CREATE(1) + INSERT_with_params(2) = 2
+    assert_eq!(conn.cached_statements_size(), 2, "CREATE TABLE and INSERT should be cached");
 
-    // Query via exec_rows() with different SQL - cache grows to 2
+    // Query via exec_rows() with different SQL - cache grows to 3
     let stream = conn
         .exec_rows("SELECT * FROM test_shared_cache WHERE id = ?", vec![rbs::Value::I32(1)])
         .await
         .expect("exec_rows");
     let count = consume_all_rows(stream).await;
     assert_eq!(count, 1);
-    assert_eq!(conn.cached_statements_size(), 2, "both exec and exec_rows add to the same cache");
+    assert_eq!(conn.cached_statements_size(), 3, "both exec and exec_rows add to the same cache");
 }
 
 /// Test: zero cache size disables caching for exec() too.
@@ -808,5 +817,127 @@ async fn test_zero_cache_exec_no_cache() {
         conn.cached_statements_size(),
         0,
         "exec should not cache when cache size is 0"
+    );
+}
+
+/// Test: INSERT into non-existent table should not leak prepared statement memory.
+/// The scenario: table "items" does not exist, we execute:
+///   INSERT INTO items (id, name, value) VALUES (?, ?, ?)
+/// This previously caused unbounded memory growth because the prepared statement
+/// was cached even though execution failed due to table-not-existing error.
+/// The fix: on execute failure, destroy the corrupted prepared statement via take_handle().
+#[tokio::test]
+async fn test_high_iterations_nonexistent_table_file_db() {
+    // Use file-based DB like the example to catch real memory issues
+    let db_path = "target/high_iter_test.db";
+    let _ = std::fs::remove_file(db_path);
+    let opts = DuckDbConnectOptions::new().path(db_path);
+    let mut conn = DuckDbConnection::establish(&opts)
+        .await
+        .expect("create connection");
+
+    for i in 0..5000 {
+        let result = conn.exec(
+            "INSERT INTO items (id, name, value) VALUES (?, ?, ?)",
+            vec![
+                rbs::Value::I32(1),
+                rbs::Value::String("item".to_string()),
+                rbs::Value::F64(1.5),
+            ],
+        ).await;
+        // The error is swallowed by exec(), so result is always Ok(0)
+        assert_eq!(conn.cached_statements_size(), 0,
+            "failed INSERT should never be cached at iteration {}", i);
+        drop(result);
+    }
+    println!("5000 iterations completed without OOM/memory leak");
+    conn.close().await.ok();
+    let _ = std::fs::remove_file(db_path);
+}
+
+/// Check cache state DURING the loop for non-existent table.
+/// This verifies whether prepare ever succeeds (and statement cached then removed)
+
+#[tokio::test]
+async fn test_exec_into_nonexistent_table_no_memory_leak() {
+    let mut conn = create_conn().await;
+
+    // Intentionally skip CREATE TABLE - table does NOT exist
+    // Repeatedly try to INSERT into non-existent table with params
+    for _ in 0..20 {
+        // DuckDB may succeed or fail depending on state; we just verify no crash/leak
+        let _ = conn.exec(
+            "INSERT INTO nonexistent_items (id, name, value) VALUES (?, ?, ?)",
+            vec![
+                rbs::Value::I32(1),
+                rbs::Value::String("item".to_string()),
+                rbs::Value::F64(1.5),
+            ],
+        )
+        .await;
+    }
+
+    // Cache should still be empty (failed queries are never cached)
+    assert_eq!(
+        conn.cached_statements_size(),
+        0,
+        "failed INSERT should never be cached"
+    );
+
+    // Should still be able to create table and use connection normally
+    conn.exec("CREATE TABLE items (id INTEGER, name TEXT, value REAL)", vec![])
+        .await
+        .expect("create table after failed inserts");
+
+    conn.exec(
+        "INSERT INTO items (id, name, value) VALUES (?, ?, ?)",
+        vec![
+            rbs::Value::I32(1),
+            rbs::Value::String("item".to_string()),
+            rbs::Value::F64(1.5),
+        ],
+    )
+    .await
+    .expect("insert after table created");
+
+    let stream = conn
+        .exec_rows("SELECT * FROM items", vec![])
+        .await
+        .expect("query after recovery");
+    consume_all_rows(stream).await;
+}
+
+/// Test: repeated INSERT into non-existent table using exec_rows (streaming).
+/// Same as above but via exec_rows path to ensure both code paths are covered.
+#[tokio::test]
+async fn test_exec_rows_into_nonexistent_table_no_memory_leak() {
+    let mut conn = create_conn().await;
+
+    // Intentionally skip CREATE TABLE
+    for _ in 0..20 {
+        let result = conn
+            .exec_rows(
+                "INSERT INTO nonexistent_items (id, name, value) VALUES (?, ?, ?)",
+                vec![
+                    rbs::Value::I32(1),
+                    rbs::Value::String("item".to_string()),
+                    rbs::Value::F64(1.5),
+                ],
+            )
+            .await;
+
+        if let Ok(stream) = result {
+            // Must consume the stream to trigger actual execution
+            let mut s = stream;
+            while s.next().await.transpose().is_ok() {
+                // consume until error or end
+            }
+        }
+    }
+
+    assert_eq!(
+        conn.cached_statements_size(),
+        0,
+        "failed INSERT via exec_rows should never be cached"
     );
 }

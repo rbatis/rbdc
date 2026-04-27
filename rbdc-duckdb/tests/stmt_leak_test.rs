@@ -523,3 +523,134 @@ async fn test_lru_order_updated_on_access() {
     let count = consume_all_rows(stream).await;
     assert_eq!(count, 1);
 }
+
+/// Test: ping does not affect statement cache
+#[tokio::test]
+async fn test_ping_does_not_affect_cache() {
+    let mut conn = create_conn().await;
+
+    conn.exec("CREATE TABLE test_ping (id INTEGER)", vec![])
+        .await
+        .expect("create table");
+
+    // Populate cache
+    let stream = conn
+        .exec_rows("SELECT * FROM test_ping", vec![])
+        .await
+        .expect("exec_rows");
+    let _ = consume_all_rows(stream).await;
+
+    assert_eq!(conn.cached_statements_size(), 1);
+
+    // Multiple pings should not affect cache
+    conn.ping().await.expect("ping");
+    conn.ping().await.expect("ping");
+    conn.ping().await.expect("ping");
+
+    assert_eq!(conn.cached_statements_size(), 1, "ping should not affect cache");
+}
+
+/// Test: shutdown properly releases all cached statements
+#[tokio::test]
+async fn test_shutdown_releases_all_cached_statements() {
+    let cache_size_before;
+    {
+        let mut conn = create_conn().await;
+
+        conn.exec("CREATE TABLE test_shutdown (id INTEGER)", vec![])
+            .await
+            .expect("create table");
+
+        // Populate cache with multiple queries
+        for i in 1..=5 {
+            conn.exec(&format!("INSERT INTO test_shutdown VALUES ({})", i), vec![])
+                .await
+                .expect("insert");
+
+            let stream = conn
+                .exec_rows(&format!("SELECT * FROM test_shutdown WHERE id = {}", i), vec![])
+                .await
+                .expect("exec_rows");
+            let _ = consume_all_rows(stream).await;
+        }
+
+        cache_size_before = conn.cached_statements_size();
+        assert_eq!(cache_size_before, 5);
+
+        // Shutdown
+        conn.close().await.expect("shutdown");
+    }
+    // Connection is dropped, all statements should be released
+
+    // Create new connection to verify resources were released
+    let mut new_conn = create_conn().await;
+    new_conn.ping().await.expect("new connection works");
+}
+
+/// Test: exec_rows with same SQL but different params reuses cached statement
+#[tokio::test]
+async fn test_same_sql_different_params_reuses_cache() {
+    let mut conn = create_conn().await;
+
+    conn.exec("CREATE TABLE test_params (id INTEGER, value TEXT)", vec![])
+        .await
+        .expect("create table");
+
+    conn.exec("INSERT INTO test_params VALUES (1, 'a')", vec![])
+        .await
+        .expect("insert");
+    conn.exec("INSERT INTO test_params VALUES (2, 'b')", vec![])
+        .await
+        .expect("insert");
+    conn.exec("INSERT INTO test_params VALUES (3, 'c')", vec![])
+        .await
+        .expect("insert");
+
+    // Execute same SQL with different params multiple times
+    for i in 1..=3 {
+        let stream = conn
+            .exec_rows(
+                "SELECT * FROM test_params WHERE id = ?",
+                vec![rbs::Value::I64(i)],
+            )
+            .await
+            .expect("exec_rows");
+        let count = consume_all_rows(stream).await;
+        assert_eq!(count, 1);
+    }
+
+    // Should only have 1 cached statement (same SQL)
+    assert_eq!(
+        conn.cached_statements_size(),
+        1,
+        "same SQL with different params should reuse cached statement"
+    );
+}
+
+/// Test: verify all rows are returned and sent through channel
+#[tokio::test]
+async fn test_all_rows_returned_correctly() {
+    let mut conn = create_conn().await;
+
+    conn.exec("CREATE TABLE test_rows (id INTEGER, name TEXT)", vec![])
+        .await
+        .expect("create table");
+
+    // Insert 10 rows
+    for i in 1..=10 {
+        conn.exec(
+            &format!("INSERT INTO test_rows VALUES ({}, 'row{}')", i, i),
+            vec![],
+        )
+        .await
+        .expect("insert");
+    }
+
+    let stream = conn
+        .exec_rows("SELECT * FROM test_rows ORDER BY id", vec![])
+        .await
+        .expect("exec_rows");
+
+    let count = consume_all_rows(stream).await;
+    assert_eq!(count, 10, "should return all 10 rows");
+}

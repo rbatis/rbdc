@@ -219,9 +219,9 @@ impl DuckDbWorker {
                                         continue;
                                     }
                                     // Insert into LRU cache - StatementCache::insert returns evicted item if any
-                                    if let Some(evicted_stmt) = conn_guard.statements.insert(&sql_str, new_stmt) {
+                                    if let Some(mut evicted_stmt) = conn_guard.statements.insert(&sql_str, new_stmt) {
                                         // Destroy the evicted statement to prevent resource leak
-                                        unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut evicted_stmt.clone()) };
+                                        unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut evicted_stmt) };
                                     }
                                     shared.cached_statements_size.store(conn_guard.statements.len(), Ordering::Release);
                                     new_stmt

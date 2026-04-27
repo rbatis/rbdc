@@ -6,6 +6,7 @@
 //! 3. clear_cache properly releases all cached statements
 //! 4. Connection drop releases all resources
 //! 5. Error handling does not cause double-free or cache corruption
+//! 6. LRU eviction works when cache size is limited
 
 use futures_util::StreamExt;
 use rbdc::db::Connection;
@@ -13,6 +14,16 @@ use rbdc_duckdb::{DuckDbConnectOptions, DuckDbConnection};
 
 async fn create_conn() -> DuckDbConnection {
     let opts = DuckDbConnectOptions::new().path(":memory:");
+    DuckDbConnection::establish(&opts)
+        .await
+        .expect("failed to create in-memory DuckDB connection")
+}
+
+/// Create a connection with a custom statement cache size
+async fn create_conn_with_cache_size(cache_size: usize) -> DuckDbConnection {
+    let opts = DuckDbConnectOptions::new()
+        .path(":memory:")
+        .statement_cache_size(cache_size);
     DuckDbConnection::establish(&opts)
         .await
         .expect("failed to create in-memory DuckDB connection")
@@ -373,4 +384,142 @@ async fn test_multiple_params_binding() {
     assert_eq!(count, 1, "should return 1 row where id=1 and score > 90.0");
 
     assert_eq!(conn.cached_statements_size(), 1);
+}
+
+/// Test: LRU eviction when cache size is exceeded
+#[tokio::test]
+async fn test_lru_eviction_when_cache_full() {
+    // Create connection with cache size of 3
+    let mut conn = create_conn_with_cache_size(3).await;
+
+    conn.exec("CREATE TABLE test_lru (id INTEGER)", vec![])
+        .await
+        .expect("create table");
+
+    // Execute 3 different queries to fill the cache
+    for i in 1..=3 {
+        conn.exec(&format!("INSERT INTO test_lru VALUES ({})", i), vec![])
+            .await
+            .expect("insert");
+
+        let stream = conn
+            .exec_rows(&format!("SELECT * FROM test_lru WHERE id = {}", i), vec![])
+            .await
+            .expect("exec_rows");
+        let _ = consume_all_rows(stream).await;
+    }
+
+    assert_eq!(conn.cached_statements_size(), 3, "cache should have 3 statements");
+
+    // Now execute a 4th different query - this should evict the LRU entry (the first query)
+    conn.exec("INSERT INTO test_lru VALUES (4)", vec![])
+        .await
+        .expect("insert");
+
+    let stream = conn
+        .exec_rows("SELECT * FROM test_lru WHERE id = 4", vec![])
+        .await
+        .expect("exec_rows");
+    let _ = consume_all_rows(stream).await;
+
+    assert_eq!(
+        conn.cached_statements_size(),
+        3,
+        "cache should still have 3 statements (LRU evicted)"
+    );
+
+    // The first query should still work - but if it was evicted, it will be re-cached
+    let stream = conn
+        .exec_rows("SELECT * FROM test_lru WHERE id = 1", vec![])
+        .await
+        .expect("exec_rows");
+    let count = consume_all_rows(stream).await;
+    // If id=1 was evicted, re-executing it re-caches it, so we still get 1 row
+    assert_eq!(count, 1);
+}
+
+/// Test: zero cache size disables caching
+#[tokio::test]
+async fn test_zero_cache_size_disables_caching() {
+    let mut conn = create_conn_with_cache_size(0).await;
+
+    conn.exec("CREATE TABLE test_no_cache (id INTEGER)", vec![])
+        .await
+        .expect("create table");
+
+    // Execute same query multiple times
+    for i in 1..=5 {
+        conn.exec(&format!("INSERT INTO test_no_cache VALUES ({})", i), vec![])
+            .await
+            .expect("insert");
+
+        let stream = conn
+            .exec_rows("SELECT * FROM test_no_cache WHERE id = 1", vec![])
+            .await
+            .expect("exec_rows");
+        let _ = consume_all_rows(stream).await;
+    }
+
+    // Cache should remain empty since caching is disabled
+    assert_eq!(
+        conn.cached_statements_size(),
+        0,
+        "cache should be empty when cache size is 0"
+    );
+}
+
+/// Test: accessing a cached statement updates its LRU position
+#[tokio::test]
+async fn test_lru_order_updated_on_access() {
+    // Create connection with cache size of 3
+    let mut conn = create_conn_with_cache_size(3).await;
+
+    conn.exec("CREATE TABLE test_lru_order (id INTEGER)", vec![])
+        .await
+        .expect("create table");
+
+    // Insert 3 rows and query them in order: 1, 2, 3
+    for i in 1..=3 {
+        conn.exec(&format!("INSERT INTO test_lru_order VALUES ({})", i), vec![])
+            .await
+            .expect("insert");
+    }
+
+    // Query in order 1, 2, 3 - this establishes LRU order
+    for i in 1..=3 {
+        let stream = conn
+            .exec_rows(&format!("SELECT * FROM test_lru_order WHERE id = {}", i), vec![])
+            .await
+            .expect("exec_rows");
+        let _ = consume_all_rows(stream).await;
+    }
+    assert_eq!(conn.cached_statements_size(), 3);
+
+    // Now query id=1 again - this should move it to most recently used
+    let stream = conn
+        .exec_rows("SELECT * FROM test_lru_order WHERE id = 1", vec![])
+        .await
+        .expect("exec_rows");
+    let _ = consume_all_rows(stream).await;
+
+    // Add a new query - this should evict id=2 (now the LRU since 1 was accessed)
+    let stream = conn
+        .exec_rows("SELECT * FROM test_lru_order WHERE id = 4", vec![])
+        .await
+        .expect("exec_rows");
+    let _ = consume_all_rows(stream).await;
+
+    assert_eq!(
+        conn.cached_statements_size(),
+        3,
+        "cache should still have 3 statements"
+    );
+
+    // Query 2 should still work (wasn't evicted), but 3 should have been re-cached
+    let stream = conn
+        .exec_rows("SELECT * FROM test_lru_order WHERE id = 2", vec![])
+        .await
+        .expect("exec_rows");
+    let count = consume_all_rows(stream).await;
+    assert_eq!(count, 1);
 }

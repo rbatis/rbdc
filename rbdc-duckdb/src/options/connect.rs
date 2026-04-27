@@ -6,12 +6,18 @@ use rbdc::db::ConnectOptions;
 use rbdc::Error;
 use std::sync::{Arc, Mutex};
 
+/// Default maximum number of cached prepared statements per connection.
+pub const DEFAULT_STATEMENT_CACHE_SIZE: usize = 128;
+
 #[derive(Debug, Clone)]
 pub struct DuckDbConnectOptions {
     pub path: String,
     pub(crate) thread_name: Arc<DebugFn<dyn Fn(u64) -> String + Send + Sync + 'static>>,
     pub(crate) command_channel_size: usize,
     pub(crate) row_channel_size: usize,
+    /// Maximum number of prepared statements to cache per connection.
+    /// Uses LRU eviction when limit is reached.
+    pub(crate) statement_cache_size: usize,
     /// 共享的数据库实例，由第一个连接创建，后续连接复用
     pub(crate) shared_database: Arc<Mutex<Option<DuckDbDatabase>>>,
 }
@@ -23,6 +29,7 @@ impl Default for DuckDbConnectOptions {
             thread_name: Arc::new(DebugFn(|id| format!("rbdc-duckdb-worker-{}", id))),
             command_channel_size: 16,
             row_channel_size: 16,
+            statement_cache_size: DEFAULT_STATEMENT_CACHE_SIZE,
             shared_database: Arc::new(Mutex::new(None)),
         }
     }
@@ -62,6 +69,17 @@ impl DuckDbConnectOptions {
     /// in order to limit CPU and memory usage.
     pub fn row_buffer_size(mut self, size: usize) -> Self {
         self.row_channel_size = size;
+        self
+    }
+
+    /// Set the maximum number of prepared statements to cache per connection.
+    ///
+    /// When the limit is reached, the least recently used statement is evicted
+    /// to make room for a new one. Set to 0 to disable caching.
+    ///
+    /// Default is 128.
+    pub fn statement_cache_size(mut self, size: usize) -> Self {
+        self.statement_cache_size = size;
         self
     }
 }

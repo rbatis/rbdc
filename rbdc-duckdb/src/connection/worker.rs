@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -8,6 +7,7 @@ use std::thread;
 use crossfire::{spsc, AsyncTx};
 use futures_channel::oneshot;
 use parking_lot::Mutex as ParkingMutex;
+use rbdc::common::StatementCache;
 use rbdc::error::Error;
 
 use crate::connection::conn::{DuckDbConnectionHandle, DuckDbDatabase};
@@ -18,14 +18,17 @@ use rbs::Value;
 /// Connection state containing the handle and cached statements
 pub(crate) struct DuckDbConnectionState {
     pub(crate) handle: DuckDbConnectionHandle,
-    /// Cached prepared statements
-    pub(crate) statements: HashMap<String, libduckdb_sys::duckdb_prepared_statement>,
+    /// LRU cached prepared statements
+    pub(crate) statements: StatementCache<libduckdb_sys::duckdb_prepared_statement>,
+    /// Whether statement caching is enabled (false when cache size is 0)
+    pub(crate) cache_enabled: bool,
 }
 
 impl Drop for DuckDbConnectionState {
     fn drop(&mut self) {
-        // Destroy all cached statements before dropping the connection
-        for (_, mut stmt) in self.statements.drain() {
+        // Must properly destroy all DuckDB prepared statements before dropping
+        // StatementCache::clear() does not call destructors, so we use remove_lru
+        while let Some(mut stmt) = self.statements.remove_lru() {
             unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut stmt) };
         }
     }
@@ -84,6 +87,7 @@ impl DuckDbWorker {
         thread_name: String,
         command_channel_size: usize,
         row_channel_size: usize,
+        statement_cache_size: usize,
         shared_database: Arc<Mutex<Option<DuckDbDatabase>>>,
     ) -> Result<DuckDbWorker, Error> {
         let (establish_tx, establish_rx) = oneshot::channel();
@@ -148,11 +152,16 @@ impl DuckDbWorker {
 
                 let handle = DuckDbConnectionHandle::new_shared_db(db_raw, con);
 
+                // Create LRU cache - use at least 1 even if caching is disabled (StatementCache requires non-zero)
+                let cache_capacity = statement_cache_size.max(1);
+                let statements = StatementCache::new(cache_capacity);
+
                 let shared = Arc::new(DuckDbWorkerSharedState {
                     cached_statements_size: AtomicUsize::new(0),
                     conn: ParkingMutex::new(DuckDbConnectionState {
                         handle,
-                        statements: HashMap::new(),
+                        statements,
+                        cache_enabled: statement_cache_size > 0,
                     }),
                 });
 
@@ -178,13 +187,47 @@ impl DuckDbWorker {
                     match cmd {
                         Command::ExecRows { sql, params, tx } => {
                             let sql_str = (*sql).to_string();
+                            let cache_enabled = conn_guard.cache_enabled;
 
-                            // Get or prepare statement
-                            let stmt = if let Some(&stmt) = conn_guard.statements.get(&sql_str) {
-                                // Clear previous bindings
-                                unsafe { libduckdb_sys::duckdb_clear_bindings(stmt) };
-                                stmt
+                            // Get or prepare statement (only if caching is enabled)
+                            let mut stmt: libduckdb_sys::duckdb_prepared_statement = if cache_enabled {
+                                if let Some(cached_stmt) = conn_guard.statements.get_mut(&sql_str) {
+                                    // Clear previous bindings
+                                    unsafe { libduckdb_sys::duckdb_clear_bindings(*cached_stmt) };
+                                    *cached_stmt
+                                } else {
+                                    // Need to prepare new statement
+                                    let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
+                                    let sql_cstr = CString::new(&*sql).unwrap();
+                                    let r = unsafe {
+                                        libduckdb_sys::duckdb_prepare(conn_guard.handle.con, sql_cstr.as_ptr(), &mut new_stmt)
+                                    };
+                                    if r != libduckdb_sys::DuckDBSuccess {
+                                        let err_msg = if new_stmt.is_null() {
+                                            "prepare failed: statement is null".to_string()
+                                        } else {
+                                            let err_ptr = unsafe { libduckdb_sys::duckdb_prepare_error(new_stmt) };
+                                            if err_ptr.is_null() {
+                                                "prepare failed: unknown error".to_string()
+                                            } else {
+                                                let err_str = unsafe { CStr::from_ptr(err_ptr).to_string_lossy().into_owned() };
+                                                format!("prepare failed: {}", err_str)
+                                            }
+                                        };
+                                        unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut new_stmt) };
+                                        tx.send(Err(Error::from(err_msg))).ok();
+                                        continue;
+                                    }
+                                    // Insert into LRU cache - StatementCache::insert returns evicted item if any
+                                    if let Some(evicted_stmt) = conn_guard.statements.insert(&sql_str, new_stmt) {
+                                        // Destroy the evicted statement to prevent resource leak
+                                        unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut evicted_stmt.clone()) };
+                                    }
+                                    shared.cached_statements_size.store(conn_guard.statements.len(), Ordering::Release);
+                                    new_stmt
+                                }
                             } else {
+                                // Caching disabled - always prepare fresh
                                 let mut new_stmt: libduckdb_sys::duckdb_prepared_statement = ptr::null_mut();
                                 let sql_cstr = CString::new(&*sql).unwrap();
                                 let r = unsafe {
@@ -206,8 +249,6 @@ impl DuckDbWorker {
                                     tx.send(Err(Error::from(err_msg))).ok();
                                     continue;
                                 }
-                                conn_guard.statements.insert(sql_str, new_stmt);
-                                shared.cached_statements_size.store(conn_guard.statements.len(), Ordering::Release);
                                 new_stmt
                             };
 
@@ -265,11 +306,12 @@ impl DuckDbWorker {
                                 }
 
                                 unsafe { libduckdb_sys::duckdb_destroy_result(&mut result) };
-                                // Do NOT call duckdb_destroy_prepare here: the statement is owned by
-                                // conn_guard.statements (the cache) and will be destroyed when the
-                                // cache is cleared or the connection is dropped.  Calling destroy
-                                // here would leave a dangling pointer in the cache (use-after-free)
-                                // and cause a double-free in DuckDbConnectionState::drop.
+                                // Do NOT call duckdb_destroy_prepare here if cached:
+                                // - If caching enabled: statement is owned by conn_guard.statements (the cache)
+                                // - If caching disabled: statement is leaked! We need to destroy it.
+                                if !cache_enabled {
+                                    unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut stmt) };
+                                }
                             } else {
                                 let err_ptr = unsafe { libduckdb_sys::duckdb_result_error(&mut result) };
                                 if !err_ptr.is_null() {
@@ -279,6 +321,10 @@ impl DuckDbWorker {
                                     tx.send(Err(Error::from("execute failed"))).ok();
                                 }
                                 unsafe { libduckdb_sys::duckdb_destroy_result(&mut result) };
+                                // Also need to destroy the statement if caching is disabled
+                                if !cache_enabled {
+                                    unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut stmt) };
+                                }
                             }
                         }
                         Command::Exec { sql, params, tx } => {
@@ -369,7 +415,7 @@ impl DuckDbWorker {
                             }
                         }
                         Command::ClearCache { tx } => {
-                            for (_, mut stmt) in conn_guard.statements.drain() {
+                            while let Some(mut stmt) = conn_guard.statements.remove_lru() {
                                 unsafe { libduckdb_sys::duckdb_destroy_prepare(&mut stmt) };
                             }
                             shared.cached_statements_size.store(0, Ordering::Release);

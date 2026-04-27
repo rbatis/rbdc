@@ -32,12 +32,14 @@ impl DuckDbConnection {
         let thread_name = (options.thread_name)(THREAD_ID.fetch_add(1, Ordering::AcqRel));
         let command_channel_size = options.command_channel_size;
         let row_channel_size = options.row_channel_size;
+        let statement_cache_size = options.statement_cache_size;
         let shared_database = options.shared_database.clone();
         let worker = DuckDbWorker::establish(
             path,
             thread_name,
             command_channel_size,
             row_channel_size,
+            statement_cache_size,
             shared_database,
         )
         .await?;

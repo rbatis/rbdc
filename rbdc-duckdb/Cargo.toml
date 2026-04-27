@@ -1,6 +1,6 @@
 [package]
 name = "rbdc-duckdb"
-version = "4.9.6"
+version = "4.9.7"
 edition = "2021"
 description = "DuckDB database driver for RBDC"
 license = "MIT"
@@ -12,6 +12,7 @@ crossfire = { version = "3.1", default-features = false }
 futures-channel = { version = "0.3.19", default-features = false }
 futures-core = { version = "0.3.19", default-features = false }
 futures-util = { version = "0.3.21", features = ["alloc", "sink"] }
+hashlink = "0.10"
 parking_lot = "0.12"
 rbdc = { path = "..", version = "4.9" }
 rbs = { version = "4.8" }

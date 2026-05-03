@@ -1,51 +1,85 @@
 # rbdc-turso
 
-Turso/libSQL async database driver for the [rbdc](https://github.com/rbatis/rbatis) database abstraction layer.
+Turso/libSQL database driver for the [rbdc](https://github.com/rbatis/rbatis) database abstraction layer.
 
-This crate provides an async Turso database backend for rbdc, using the [libsql](https://crates.io/crates/libsql) native async API as the underlying client library. It supports both remote Turso databases (with auth tokens) and local/in-memory databases.
+## Basic Driver Usage
 
-## Backend Selection at Startup
-
-Backend choice is **fixed at initialization time**. The application selects Turso by wiring `TursoDriver` during startup configuration.
-
-- **No runtime backend switching** - the active backend cannot be changed while the application is serving traffic.
-- **No automatic fallback** - if Turso becomes unavailable, requests fail rather than silently falling back.
-
-Changes to backend selection take effect only after a deploy/restart cycle.
-
-## Usage
+Full example: [example/src/turso.rs](../example/src/turso.rs)
 
 ```rust
-use rbdc_turso::{TursoDriver, TursoConnectOptions};
-use rbdc::db::Driver;
+use rbdc::Error;
+use rbdc::db::Connection;
+use rbdc::pool::Pool;
+use rbdc_pool_fast::FastPool;
+use rbdc_turso::TursoDriver;
 
-// At startup: wire the Turso driver
-let driver = TursoDriver {};
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    // In-memory database example (local, no network)
+    // let pool = FastPool::new_url(TursoDriver {}, "turso://:memory:")?;
 
-// In-memory (local, no network)
-let mut conn = driver.connect("turso://:memory:").await?;
+    // Local file database example
+    let pool = FastPool::new_url(TursoDriver {}, "turso://target/turso.db")?;
 
-// Remote Turso database
-let mut conn = driver.connect("turso://?url=libsql://your-db.turso.io&token=YOUR_TOKEN").await?;
+    // Remote Turso database example (requires TURSO_URL and TURSO_TOKEN environment variables)
+    // let url = std::env::var("TURSO_URL").unwrap_or_else(|_| "libsql://your-db.turso.io".to_string());
+    // let token = std::env::var("TURSO_TOKEN").unwrap_or_default();
+    // let pool = FastPool::new_url(
+    //     TursoDriver {},
+    //     &format!("turso://?url={}&token={}", url, token)
+    // )?;
 
-// Local file database
-let mut conn = driver.connect("turso://path/to/local.db").await?;
+    let mut conn = pool.get().await?;
+
+    // Create test table
+    conn.exec(
+        "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)",
+        vec![],
+    ).await?;
+
+    // Insert data
+    conn.exec("INSERT INTO users (name) VALUES (?)", vec!["Alice".into()]).await?;
+    conn.exec("INSERT INTO users (name) VALUES (?)", vec!["Bob".into()]).await?;
+
+    // Query data
+    let v = conn.exec_decode("SELECT * FROM users", vec![]).await?;
+    println!("Query result: {}", v);
+
+    Ok(())
+}
 ```
 
-## Traits Implemented
+## Usage with rbatis ORM
 
-This crate implements the standard rbdc driver traits:
+```rust
+use rbatis::RBatis;
+use rbatis::Error;
 
-- `rbdc::db::Driver` - via `TursoDriver`
-- `rbdc::db::ConnectOptions` - via `TursoConnectOptions`
-- `rbdc::db::Connection` - via `TursoConnection`
-- `rbdc::db::Row` - via `TursoRow`
-- `rbdc::db::MetaData` - via `TursoMetaData`
-- `rbdc::db::Placeholder` - via `TursoDriver` (uses `?` placeholders)
+#[tokio::main]
+pub async fn main() -> Result<(), Error> {
+    let rb = RBatis::new();
+    rb.init(rbdc_turso::TursoDriver {}, "turso://target/turso.db")?;
+    Ok(())
+}
+```
 
-## Feature Plan
+## Supported Connection String Formats
 
-For the full feature specification, parity requirements, and deviation governance process, see:
+### 1. In-memory database
+```
+turso://:memory:
+```
 
-- `kitty-specs/001-turso-backend-parity-rollout/spec.md`
-- `kitty-specs/001-turso-backend-parity-rollout/plan.md`
+### 2. File-based database
+```
+turso://path/to/local.db
+```
+
+### 3. Remote Turso database
+```
+turso://?url=libsql://your-db.turso.io&token=YOUR_TOKEN
+```
+
+## License
+
+This project is licensed under the same license as rbdc.

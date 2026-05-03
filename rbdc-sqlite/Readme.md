@@ -2,14 +2,43 @@
 
 SQLite database driver for the [rbdc](https://github.com/rbatis/rbatis) database abstraction layer.
 
-## Features
+## Basic Driver Usage
 
-- High-performance async connection based on libsqlite3
-- Full SQLite data type support
-- Connection pooling support
-- Zero-copy serialization/deserialization
-- Bundled SQLite support (no external dependencies)
-- SQLCipher encryption support (optional)
+Full example: [example/src/sqlite.rs](../example/src/sqlite.rs)
+
+```rust
+use rbdc::Error;
+use rbdc::db::Connection;
+use rbdc::pool::Pool;
+use rbdc_pool_fast::FastPool;
+use rbdc_sqlite::SqliteDriver;
+
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    let pool = FastPool::new_url(SqliteDriver {}, "sqlite://target/sqlite.db")?;
+    let mut conn = pool.get().await?;
+    let v = conn
+        .exec_decode("select * from sqlite_master", vec![])
+        .await?;
+    println!("{}", v);
+    // if need decode use `let result:Vec<Table> = rbs::from_value(v)?;`
+    Ok(())
+}
+```
+
+## Usage with rbatis ORM
+
+```rust
+use rbatis::RBatis;
+use rbatis::Error;
+
+#[tokio::main]
+pub async fn main() -> Result<(), Error> {
+    let rb = RBatis::new();
+    rb.init(rbdc_sqlite::SqliteDriver {}, "sqlite://target/sqlite.db")?;
+    Ok(())
+}
+```
 
 ## Supported Connection String Formats
 
@@ -22,50 +51,6 @@ sqlite://:memory:
 ```
 sqlite://path/to/database.db
 ```
-
-## Usage
-
-```rust
-use rbdc::pool::ConnectionManager;
-use rbdc_sqlite::SqliteDriver;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // In-memory database
-    let uri = "sqlite://:memory:";
-
-    // Or file-based database
-    // let uri = "sqlite://path/to/database.db";
-
-    // Create connection manager
-    let manager = ConnectionManager::new(SqliteDriver {}, uri)?;
-
-    // Use connection pool
-    let pool = rbdc_pool_fast::FastPool::new(manager)?;
-    let mut conn = pool.get().await?;
-
-    // Execute query
-    let result = conn.exec_decode("SELECT 1 as test", vec![]).await?;
-    println!("Result: {:?}", result);
-
-    Ok(())
-}
-```
-
-## RBDC Architecture
-
-- Database driver abstraction layer
-- Zero-copy serialization/deserialization
-
-Data flow: Database -> bytes -> rbs::Value -> Struct(User Define)
-Reverse: Struct(User Define) -> rbs::ValueRef -> ref clone() -> Database
-
-
-## Dependencies
-
-- [libsqlite3-sys](https://github.com/rusqlite/rusqlite) - SQLite bindings
-- [url](https://github.com/servo/rust-url) - URL parsing
-- [percent-encoding](https://github.com/servo/rust-url/tree/master/percent_encoding) - URL encoding
 
 ## License
 

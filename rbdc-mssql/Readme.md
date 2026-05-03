@@ -1,14 +1,46 @@
 # rbdc-mssql
 
-Microsoft SQL Server database driver for the [rbdc](https://github.com/rbatis/rbatis) database abstraction layer, based on [tiberius](https://github.com/prisma/tiberius).
+Microsoft SQL Server database driver for the [rbdc](https://github.com/rbatis/rbatis) database abstraction layer.
 
-## Features
+## Basic Driver Usage
 
-- Multiple connection string format support
-- High-performance async connection based on tiberius
-- Full SQL Server data type support
-- Connection pooling support
-- Zero-copy serialization/deserialization
+Full example: [example/src/mssql.rs](../example/src/mssql.rs)
+
+```rust
+use rbdc::Error;
+use rbdc::pool::Pool;
+use rbdc_mssql::MssqlDriver;
+use rbdc_pool_fast::FastPool;
+
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    // Supported formats:
+    // let uri = "jdbc:sqlserver://localhost:1433;User=SA;Password={TestPass!123456};Database=master;";
+    // let uri = "sqlserver://SA:TestPass!123456@localhost:1433/master";
+    // let uri = "Server=localhost,1433;User Id=SA;Password=TestPass!123456;Database=master;";
+    let uri = "mssql://SA:TestPass!123456@localhost:1433/master";
+    let pool = FastPool::new_url(MssqlDriver {}, uri)?;
+    let mut conn = pool.get().await?;
+    let v = conn.exec_decode("SELECT DB_NAME() AS CurrentDatabase", vec![]).await?;
+    println!("{}", v);
+    // if need decode use `let result:Vec<Table> = rbs::from_value(v)?;`
+    Ok(())
+}
+```
+
+## Usage with rbatis ORM
+
+```rust
+use rbatis::RBatis;
+use rbatis::Error;
+
+#[tokio::main]
+pub async fn main() -> Result<(), Error> {
+    let rb = RBatis::new();
+    rb.init(rbdc_mssql::MssqlDriver {}, "mssql://SA:TestPass!123456@localhost:1433/master")?;
+    Ok(())
+}
+```
 
 ## Supported Connection String Formats
 
@@ -31,66 +63,6 @@ sqlserver://SA:TestPass!123456@localhost:1433/master
 ```
 Server=localhost,1433;User Id=SA;Password=TestPass!123456;Database=master;
 ```
-
-## Usage
-
-```rust
-use rbdc::pool::ConnectionManager;
-use rbdc_mssql::MssqlDriver;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Use any supported connection string format
-    let uri = "mssql://SA:TestPass!123456@localhost:1433/master";
-
-    // Create connection manager
-    let manager = ConnectionManager::new(MssqlDriver {}, uri)?;
-
-    // Use connection pool
-    let pool = rbdc_pool_fast::FastPool::new(manager)?;
-    let mut conn = pool.get().await?;
-
-    // Execute query
-    let result = conn.exec_decode("SELECT 1 as test", vec![]).await?;
-    println!("Result: {:?}", result);
-
-    Ok(())
-}
-```
-
-## URL Format说明
-
-URL format connection strings follow the standard URL structure:
-
-```
-scheme://[username[:password]@]host[:port][/database][?parameters]
-```
-
-- **scheme**: `mssql` or `sqlserver`
-- **username**: Database username
-- **password**: Database password (optional)
-- **host**: Server hostname or IP address
-- **port**: Port number (default 1433)
-- **database**: Database name (optional)
-
-### Special Character Handling
-
-URL format automatically handles special characters in username and password (URL encoding/decoding).
-
-## RBDC Architecture
-
-- Database driver abstraction layer
-- Zero-copy serialization/deserialization
-
-Data flow: Database -> bytes -> rbs::Value -> Struct(User Define)
-Reverse: Struct(User Define) -> rbs::ValueRef -> ref clone() -> Database
-
-
-## Dependencies
-
-- [tiberius](https://github.com/prisma/tiberius) - SQL Server client
-- [url](https://github.com/servo/rust-url) - URL parsing
-- [percent-encoding](https://github.com/servo/rust-url/tree/master/percent_encoding) - URL encoding
 
 ## License
 

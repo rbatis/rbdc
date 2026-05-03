@@ -2,27 +2,9 @@
 
 DuckDB database driver for the [rbdc](https://github.com/rbatis/rbatis) database abstraction layer.
 
-## Features
+## Basic Driver Usage
 
-- High-performance async connection for DuckDB
-- Full DuckDB data type support
-- Connection pooling support
-- Zero-copy serialization/deserialization
-- In-memory and file-based database support
-
-## Supported Connection String Formats
-
-### 1. In-memory database
-```
-duckdb://:memory:
-```
-
-### 2. File-based database
-```
-duckdb://path/to/database.db
-```
-
-## Usage
+Full example: [example/src/duckdb.rs](../example/src/duckdb.rs)
 
 ```rust
 use rbdc::Error;
@@ -44,19 +26,31 @@ async fn main() -> Result<(), Error> {
 }
 ```
 
-## RBDC Architecture
+## Usage with rbatis ORM
 
-- Database driver abstraction layer
-- Zero-copy serialization/deserialization
+```rust
+use rbatis::RBatis;
+use rbatis::Error;
 
-Data flow: Database -> bytes -> rbs::Value -> Struct(User Define)
-Reverse: Struct(User Define) -> rbs::ValueRef -> ref clone() -> Database
+#[tokio::main]
+pub async fn main() -> Result<(), Error> {
+    let rb = RBatis::new();
+    rb.init(rbdc_duckdb::DuckDbDriver {}, "duckdb://target/duckdb.db")?;
+    Ok(())
+}
+```
 
+## Supported Connection String Formats
 
-## Dependencies
+### 1. In-memory database
+```
+duckdb://:memory:
+```
 
-- [duckdb](https://github.com/duckdb/duckdb) - DuckDB database
-- [url](https://github.com/servo/rust-url) - URL parsing
+### 2. File-based database
+```
+duckdb://path/to/database.db
+```
 
 ## License
 

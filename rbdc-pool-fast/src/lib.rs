@@ -10,6 +10,7 @@ use rbdc::pool::Pool;
 use rbdc::Error;
 use rbs::value::map::ValueMap;
 use rbs::Value;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -145,6 +146,10 @@ impl Pool for FastPool {
         m.insert("connecting".to_string().into(), state.connecting.into());
         m.insert("checking".to_string().into(), state.checking.into());
         Value::Map(m)
+    }
+
+    fn driver(&self) -> &dyn Driver {
+        self.manager.driver.deref()
     }
 }
 

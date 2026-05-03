@@ -3,7 +3,7 @@ mod manager;
 pub use guard::ConnectionGuard;
 pub use manager::ConnectionManager;
 
-use crate::Error;
+use crate::{Driver, Error};
 use crate::db::Connection;
 use async_trait::async_trait;
 use rbs::Value;
@@ -38,4 +38,7 @@ pub trait Pool: Sync + Send + Debug {
 
     /// get driver_type from manager: ConnManager
     fn driver_type(&self) -> &str;
+
+    /// driver
+    fn driver(&self)-> &dyn Driver;
 }

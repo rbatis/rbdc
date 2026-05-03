@@ -2,6 +2,7 @@ use crate::{MssqlConnectOptions, MssqlConnection};
 use futures_core::future::BoxFuture;
 use rbdc::db::{ConnectOptions, Connection, Driver, Placeholder};
 use rbdc::{impl_exchange, Error};
+use rbs::Value;
 use tiberius::Config;
 
 #[derive(Debug)]
@@ -43,6 +44,33 @@ impl Driver for MssqlDriver {
         let mut config = Config::new();
         config.trust_cert();
         Box::new(MssqlConnectOptions(config))
+    }
+
+    fn column_type(&self, val: &Value) -> String {
+        match val {
+            Value::Null => "NULL",
+            Value::Bool(_) => "BIT",
+            Value::I32(_) => "INT",
+            Value::I64(_) => "BIGINT",
+            Value::U32(_) => "INT",
+            Value::U64(_) => "BIGINT",
+            Value::F32(_) => "REAL",
+            Value::F64(_) => "FLOAT",
+            Value::String(_) => "VARCHAR(MAX)",
+            Value::Binary(_) => "VARBINARY(MAX)",
+            Value::Array(_) => "VARCHAR(MAX)",
+            Value::Map(_) => "VARCHAR(MAX)",
+            Value::Ext(t, _) => match *t {
+                "Date" => "DATE",
+                "DateTime" => "DATETIME2",
+                "Time" => "TIME",
+                "Decimal" => "DECIMAL",
+                "Timestamp" => "BIGINT",
+                "Uuid" => "UNIQUEIDENTIFIER",
+                _ => "VARCHAR(MAX)",
+            },
+        }
+        .to_string()
     }
 }
 

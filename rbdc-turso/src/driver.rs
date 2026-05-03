@@ -2,6 +2,7 @@ use crate::TursoConnectOptions;
 use futures_core::future::BoxFuture;
 use rbdc::db::{ConnectOptions, Connection, Driver, Placeholder};
 use rbdc::Error;
+use rbs::Value;
 
 /// Turso/libSQL database driver.
 ///
@@ -48,6 +49,30 @@ impl Driver for TursoDriver {
 
     fn default_option(&self) -> Box<dyn ConnectOptions> {
         Box::new(TursoConnectOptions::default())
+    }
+
+    fn column_type(&self, val: &Value) -> String {
+        match val {
+            Value::Null => "NULL",
+            Value::Bool(_) => "INTEGER",
+            Value::I32(_) => "INTEGER",
+            Value::I64(_) => "INTEGER",
+            Value::U32(_) => "INTEGER",
+            Value::U64(_) => "INTEGER",
+            Value::F32(_) => "REAL",
+            Value::F64(_) => "REAL",
+            Value::String(_) => "TEXT",
+            Value::Binary(_) => "BLOB",
+            Value::Array(_) => "TEXT",
+            Value::Map(_) => "TEXT",
+            Value::Ext(t, _) => match *t {
+                "Date" | "DateTime" | "Time" | "Decimal" | "Uuid" => "TEXT",
+                "Timestamp" => "INTEGER",
+                "Json" => "BLOB",
+                _ => "TEXT",
+            },
+        }
+        .to_string()
     }
 }
 

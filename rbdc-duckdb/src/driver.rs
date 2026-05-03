@@ -2,6 +2,7 @@ use crate::options::DuckDbConnectOptions;
 use futures_core::future::BoxFuture;
 use rbdc::db::{ConnectOptions, Driver, Placeholder};
 use rbdc::Error;
+use rbs::Value;
 
 #[derive(Debug)]
 pub struct DuckDbDriver {}
@@ -44,6 +45,34 @@ impl Driver for DuckDbDriver {
 
     fn default_option(&self) -> Box<dyn ConnectOptions> {
         Box::new(DuckDbConnectOptions::default())
+    }
+
+    fn column_type(&self, val: &Value) -> String {
+        match val {
+            Value::Null => "NULL",
+            Value::Bool(_) => "BOOLEAN",
+            Value::I32(_) => "INTEGER",
+            Value::I64(_) => "BIGINT",
+            Value::U32(_) => "INTEGER",
+            Value::U64(_) => "BIGINT",
+            Value::F32(_) => "FLOAT",
+            Value::F64(_) => "DOUBLE",
+            Value::String(_) => "VARCHAR",
+            Value::Binary(_) => "BLOB",
+            Value::Array(_) => "VARCHAR",
+            Value::Map(_) => "VARCHAR",
+            Value::Ext(t, _) => match *t {
+                "Date" => "DATE",
+                "DateTime" | "Datetime" => "TIMESTAMP",
+                "Time" => "TIME",
+                "Timestamp" => "BIGINT",
+                "Decimal" => "DECIMAL",
+                "Json" => "VARCHAR",
+                "Uuid" => "UUID",
+                _ => "VARCHAR",
+            },
+        }
+        .to_string()
     }
 }
 

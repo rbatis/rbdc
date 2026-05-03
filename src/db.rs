@@ -22,6 +22,12 @@ pub trait Driver: Debug + Sync + Send {
 
     /// make an default option
     fn default_option(&self) -> Box<dyn ConnectOptions>;
+
+    /// Returns the database column type name for the given rbs::Value.
+    /// Each driver can override this to provide driver-specific type mapping.
+    fn column_type(&self, _val: &Value) -> String {
+        String::new()
+    }
 }
 
 impl Driver for Box<dyn Driver> {
@@ -42,6 +48,10 @@ impl Driver for Box<dyn Driver> {
 
     fn default_option(&self) -> Box<dyn ConnectOptions> {
         self.deref().default_option()
+    }
+
+    fn column_type(&self, val: &Value) -> String {
+        self.deref().column_type(val)
     }
 }
 

@@ -2,6 +2,7 @@ use crate::SqliteConnectOptions;
 use futures_core::future::BoxFuture;
 use rbdc::db::{ConnectOptions, Connection, Driver, Placeholder};
 use rbdc::Error;
+use rbs::Value;
 
 #[derive(Debug)]
 pub struct SqliteDriver {}
@@ -40,6 +41,34 @@ impl Driver for SqliteDriver {
 
     fn default_option(&self) -> Box<dyn ConnectOptions> {
         Box::new(SqliteConnectOptions::default())
+    }
+
+    fn column_type(&self, val: &Value) -> String {
+        match val {
+            Value::Null => "NULL",
+            Value::Bool(_) => "BOOLEAN",
+            Value::I32(_) => "INTEGER",
+            Value::I64(_) => "INTEGER",
+            Value::U32(_) => "INTEGER",
+            Value::U64(_) => "INTEGER",
+            Value::F32(_) => "REAL",
+            Value::F64(_) => "REAL",
+            Value::String(_) => "TEXT",
+            Value::Binary(_) => "BLOB",
+            Value::Array(_) => "TEXT",
+            Value::Map(_) => "TEXT",
+            Value::Ext(t, _) => match *t {
+                "Date" => "TEXT",
+                "DateTime" => "TEXT",
+                "Time" => "TEXT",
+                "Timestamp" => "INTEGER",
+                "Decimal" => "NUMERIC",
+                "Json" => "BLOB",
+                "Uuid" => "TEXT",
+                _ => "NULL",
+            },
+        }
+        .to_string()
     }
 }
 

@@ -2,6 +2,7 @@ use crate::options::MySqlConnectOptions;
 use futures_core::future::BoxFuture;
 use rbdc::db::{ConnectOptions, Connection, Driver, Placeholder};
 use rbdc::Error;
+use rbs::Value;
 
 #[derive(Debug)]
 pub struct MysqlDriver {}
@@ -38,6 +39,37 @@ impl Driver for MysqlDriver {
 
     fn default_option(&self) -> Box<dyn ConnectOptions> {
         Box::new(MySqlConnectOptions::default())
+    }
+
+    fn column_type(&self, val: &Value) -> String {
+        match val {
+            Value::Null => "NULL",
+            Value::Bool(_) => "TINYINT",
+            Value::I32(_) => "INT",
+            Value::I64(_) => "BIGINT",
+            Value::U32(_) => "INT",
+            Value::U64(_) => "BIGINT",
+            Value::F32(_) => "FLOAT",
+            Value::F64(_) => "DOUBLE",
+            Value::String(_) => "TEXT",
+            Value::Binary(_) => "BLOB",
+            Value::Array(_) => "JSON",
+            Value::Map(_) => "JSON",
+            Value::Ext(t, _) => match *t {
+                "Uuid" => "TEXT",
+                "Decimal" => "DECIMAL",
+                "Year" => "YEAR",
+                "Date" => "DATE",
+                "Time" => "TIME",
+                "Timestamp" => "TIMESTAMP",
+                "DateTime" => "DATETIME",
+                "Json" => "JSON",
+                "Enum" => "TEXT",
+                "Set" => "TEXT",
+                _ => "NULL",
+            },
+        }
+        .to_string()
     }
 }
 

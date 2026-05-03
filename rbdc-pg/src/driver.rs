@@ -4,6 +4,7 @@ use crate::options::PgConnectOptions;
 use futures_core::future::BoxFuture;
 use rbdc::db::{ConnectOptions, Connection, Driver, Placeholder};
 use rbdc::{impl_exchange, Error};
+use rbs::Value;
 
 #[derive(Debug)]
 pub struct PgDriver {}
@@ -40,6 +41,73 @@ impl Driver for PgDriver {
     }
     fn default_option(&self) -> Box<dyn ConnectOptions> {
         Box::new(PgConnectOptions::default())
+    }
+
+    fn column_type(&self, val: &Value) -> String {
+        match val {
+            Value::Null => "UNKNOWN",
+            Value::Bool(_) => "BOOL",
+            Value::I32(_) => "INT4",
+            Value::I64(_) => "INT8",
+            Value::U32(_) => "INT4",
+            Value::U64(_) => "INT8",
+            Value::F32(_) => "FLOAT4",
+            Value::F64(_) => "FLOAT8",
+            Value::String(_) => "VARCHAR",
+            Value::Binary(_) => "BYTEA",
+            Value::Array(_) => "JSON",
+            Value::Map(_) => "JSON",
+            Value::Ext(t, _) => match *t {
+                "Uuid" => "UUID",
+                "Decimal" | "Numeric" => "NUMERIC",
+                "Date" => "DATE",
+                "Time" => "TIME",
+                "Timestamp" => "TIMESTAMP",
+                "DateTime" => "TIMESTAMP",
+                "Bool" => "BOOL",
+                "Bytea" => "BYTEA",
+                "Char" => "CHAR",
+                "Name" => "NAME",
+                "Int8" => "INT8",
+                "Int2" => "INT2",
+                "Int4" => "INT4",
+                "Text" => "TEXT",
+                "Oid" => "OID",
+                "Json" | "Jsonb" => "JSON",
+                "Point" => "POINT",
+                "Lseg" => "LSEG",
+                "Path" => "PATH",
+                "Box" => "BOX",
+                "Polygon" => "POLYGON",
+                "Line" => "LINE",
+                "Cidr" => "CIDR",
+                "Float4" => "FLOAT4",
+                "Float8" => "FLOAT8",
+                "Circle" => "CIRCLE",
+                "Macaddr8" => "MACADDR8",
+                "Macaddr" => "MACADDR",
+                "Inet" => "INET",
+                "Bpchar" => "BPCHAR",
+                "Varchar" => "VARCHAR",
+                "Timestamptz" => "TIMESTAMPTZ",
+                "Interval" => "INTERVAL",
+                "Timetz" => "TIMETZ",
+                "Bit" => "BIT",
+                "Varbit" => "VARBIT",
+                "Record" => "RECORD",
+                "Int4Range" => "INT4RANGE",
+                "NumRange" => "NUMRANGE",
+                "TsRange" => "TSRANGE",
+                "TstzRange" => "TSTZRANGE",
+                "DateRange" => "DATERANGE",
+                "Int8Range" => "INT8RANGE",
+                "Jsonpath" => "JSONPATH",
+                "Money" => "MONEY",
+                "Void" => "VOID",
+                _ => "UNKNOWN",
+            },
+        }
+        .to_string()
     }
 }
 

@@ -46,6 +46,14 @@ impl ConnectionManager {
         self.driver.name()
     }
 
+    pub fn driver_ref(&self) -> &dyn Driver {
+        self.driver.deref()
+    }
+
+    pub fn driver(&self) -> Arc<dyn Driver> {
+        self.driver.clone()
+    }
+
     pub async fn connect(&self) -> Result<ConnectionGuard, Error> {
         Ok(ConnectionGuard {
             conn: Some(self.driver.connect_opt(self.option.deref().deref()).await?),

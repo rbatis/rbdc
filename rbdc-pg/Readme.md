@@ -8,11 +8,6 @@ Database -> bytes -> rbs::Value -> Struct(User Define)
 Struct(User Define) -> rbs::ValueRef -> ref clone() -> Database
 
 
-### How to Define a Custom Driver?
-
-Implement the following traits and load the driver:
-* `impl trait rbdc::db::{Driver, MetaData, Row, Connection, ConnectOptions, Placeholder}`
-
 
 ## Example
 

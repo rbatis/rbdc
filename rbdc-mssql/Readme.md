@@ -85,10 +85,6 @@ URL format automatically handles special characters in username and password (UR
 Data flow: Database -> bytes -> rbs::Value -> Struct(User Define)
 Reverse: Struct(User Define) -> rbs::ValueRef -> ref clone() -> Database
 
-### How to Define a Custom Driver?
-
-Implement the following traits and load the driver:
-* `impl trait rbdc::db::{Driver, MetaData, Row, Connection, ConnectOptions, Placeholder}`
 
 ## Dependencies
 

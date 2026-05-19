@@ -21,7 +21,7 @@ enum SqliteValueData<'r> {
 pub struct SqliteValueRef<'r>(SqliteValueData<'r>);
 
 impl<'r> SqliteValueRef<'r> {
-    pub(crate) fn value(value: &'r SqliteValue) -> Self {
+    pub fn value(value: &'r SqliteValue) -> Self {
         Self(SqliteValueData::Value(value))
     }
 
@@ -96,7 +96,7 @@ unsafe impl Send for ValueHandle {}
 unsafe impl Sync for ValueHandle {}
 
 impl SqliteValue {
-    pub(crate) unsafe fn new(value: *mut sqlite3_value, type_info: SqliteTypeInfo) -> Self {
+    pub unsafe fn new(value: *mut sqlite3_value, type_info: SqliteTypeInfo) -> Self {
         debug_assert!(!value.is_null());
 
         Self {

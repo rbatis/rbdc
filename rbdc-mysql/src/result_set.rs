@@ -71,7 +71,7 @@ impl MySqlTypeInfo {
         }
     }
 
-    pub(crate) fn from_type(ty: ColumnType) -> Self {
+    pub fn from_type(ty: ColumnType) -> Self {
         Self {
             r#type: ty,
             // flags: column.flags,

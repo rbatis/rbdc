@@ -14,21 +14,21 @@ pub enum PgValueFormat {
 /// Implementation of [`ValueRef`] for PostgreSQL.
 #[derive(Clone)]
 pub struct PgValueRef<'r> {
-    pub(crate) value: Option<&'r [u8]>,
-    pub(crate) type_info: PgTypeInfo,
-    pub(crate) format: PgValueFormat,
+    pub value: Option<&'r [u8]>,
+    pub type_info: PgTypeInfo,
+    pub format: PgValueFormat,
     /// Session timezone offset in seconds from UTC, used for TIMESTAMPTZ decoding
-    pub(crate) timezone_sec: Option<i32>,
+    pub timezone_sec: Option<i32>,
 }
 
 /// Implementation of [`Value`] for PostgreSQL.
 #[derive(Clone)]
 pub struct PgValue {
-    pub(crate) value: Option<Vec<u8>>,
-    pub(crate) type_info: PgTypeInfo,
-    pub(crate) format: PgValueFormat,
+    pub value: Option<Vec<u8>>,
+    pub type_info: PgTypeInfo,
+    pub format: PgValueFormat,
     /// Session timezone offset in seconds from UTC, used for TIMESTAMPTZ decoding
-    pub(crate) timezone_sec: Option<i32>,
+    pub timezone_sec: Option<i32>,
 }
 
 impl<'r> PgValueRef<'r> {

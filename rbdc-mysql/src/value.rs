@@ -25,10 +25,10 @@ pub struct MySqlValue {
 /// Implementation of [`ValueRef`] for MySQL.
 #[derive(Clone)]
 pub struct MySqlValueRef<'r> {
-    pub(crate) value: Option<&'r [u8]>,
-    pub(crate) type_info: MySqlTypeInfo,
-    pub(crate) format: MySqlValueFormat,
-    pub(crate) option: Arc<MySqlConnectOptions>,
+    pub value: Option<&'r [u8]>,
+    pub type_info: MySqlTypeInfo,
+    pub format: MySqlValueFormat,
+    pub option: Arc<MySqlConnectOptions>,
 }
 
 impl MySqlValue {

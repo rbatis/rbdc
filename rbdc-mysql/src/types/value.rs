@@ -159,6 +159,10 @@ impl Decode for Value {
     where
         Self: Sized,
     {
+        if v.value.is_none() {
+            return Ok(Value::Null);
+        }
+
         let type_info = v.type_info.r#type;
         Ok(match type_info {
             ColumnType::Tiny => Value::I32(int_decode(v).unwrap_or_default() as i32),

@@ -48,7 +48,7 @@ impl TypeInfo for Value {
                     "Time" => PgTypeInfo::TIME,
                     //RFC3339 = "2006-01-02 15:04:05.999999"
                     "Timestamp" => PgTypeInfo::TIMESTAMP,
-                    "DateTime" => PgTypeInfo::TIMESTAMP,
+                    "DateTime" => PgTypeInfo::TIMESTAMPTZ,
                     "Bool" => PgTypeInfo::BOOL,
                     "Bytea" => PgTypeInfo::BYTEA,
                     "Char" => PgTypeInfo::CHAR,

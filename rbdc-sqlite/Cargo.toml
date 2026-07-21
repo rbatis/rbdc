@@ -31,7 +31,7 @@ sqlite-session = ["libsqlite3-sys/session"]
 bundled-sqlcipher = ["libsqlite3-sys/bundled-sqlcipher"]
 
 [dependencies]
-rbs = { version = "4.8" }
+rbs = {version="4",path="../rbs"}
 rbdc = { version = "4.9",path = "../", default-features = false, optional = true }
 serde = "1.0"
 serde_json = "1.0"

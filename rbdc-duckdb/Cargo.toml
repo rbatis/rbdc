@@ -15,7 +15,7 @@ futures-core = { version = "0.3.19", default-features = false }
 futures-util = { version = "0.3.21", features = ["alloc", "sink"] }
 parking_lot = "0.12"
 rbdc = { path = "..", version = "4.9" }
-rbs = { version = "4.8" }
+rbs = {version="4",path="../rbs"}
 log = "0.4"
 serde_json = "1"
 thiserror = "2"

@@ -24,7 +24,7 @@ path = "src/turso.rs"
 name = "duckdb"
 path = "src/duckdb.rs"
 [dependencies]
-rbs = "4"
+rbs = {version="4",path="../rbs"}
 rbdc = {version = "4.9",path = "../"}
 rbdc-sqlite = {version = "4.9",path = "../rbdc-sqlite"}
 rbdc-mssql = {version = "4.9",path = "../rbdc-mssql"}

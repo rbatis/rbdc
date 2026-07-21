@@ -44,4 +44,4 @@ async-trait = "0.1.56"
 uuid = { version = "1.1", features = ["v4"] }
 itoa = "1.0"
 bigdecimal = { version = "0.4.1", features = ["serde"] }
-lru = "0.14.0"
+lru = "0.16.3"

@@ -19,7 +19,7 @@ tls-native-tls=["rbdc/tls-native-tls","tiberius/native-tls"]
 [dependencies]
 rbs = {version="4",path="../rbs"}
 rbdc = { version = "4.9", path = "../", default-features = false, optional = true }
-tiberius = { version = "0.12", default-features = false, features = ["chrono", "bigdecimal", "rust_decimal", "tds73"], optional = true }
+tiberius = { package = "tiberius-ng", version = "0.13", default-features = false, features = ["chrono", "bigdecimal", "rust_decimal", "tds73"], optional = true }
 tokio = { version = "1", default-features = false ,features = ["net"] }
 tokio-util = { version = "0.7.1", features = ["compat"] }
 futures-core = { version = "0.3.19", default-features = false }

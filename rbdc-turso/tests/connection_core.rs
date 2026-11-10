@@ -1,3 +1,9 @@
+// libsql 0.9 segfaults inside its bundled SQLite when this binary runs under
+// LLVM coverage instrumentation on Linux (tarpaulin sets `cfg(tarpaulin)`).
+// The same tests run normally via `cargo test --workspace`; the rest of the
+// turso test suite still contributes coverage.
+#![cfg(not(tarpaulin))]
+
 //! Integration tests for the Turso adapter connection lifecycle.
 //!
 //! These tests verify the `rbdc::db::Connection` trait implementation against

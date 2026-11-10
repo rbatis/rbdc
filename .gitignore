@@ -12,7 +12,6 @@
 .vscode/
 /.vscode
 '.vscode'
-/.github
 
 
 
@@ -32,4 +31,11 @@ Cargo.lock
 .claude/
 
 
+# coverage reports (cargo tarpaulin)
 coverage/
+coverage*/
+*.profraw
+*.profdata
+
+# local cargo-tarpaulin configuration
+.tarpaulin.toml

@@ -289,7 +289,10 @@ impl From<DateTime> for SystemTime {
         if nano >= 0 {
             UNIX_EPOCH + Duration::from_nanos(nano as u64)
         } else {
-            UNIX_EPOCH - Duration::from_nanos(nano as u64)
+            // Use the magnitude: casting a negative i128 with `as u64` would
+            // produce a huge duration and overflow on platforms whose
+            // SystemTime cannot represent dates before the Unix epoch (Windows).
+            UNIX_EPOCH - Duration::from_nanos(nano.unsigned_abs() as u64)
         }
     }
 }

@@ -543,6 +543,7 @@ fn test_datetime_conversions() {
 
     let before_epoch = DateTime::from_timestamp(-1);
     let system: SystemTime = before_epoch.clone().into();
+    assert_eq!(system, UNIX_EPOCH - Duration::from_secs(1));
     assert!(system < UNIX_EPOCH);
 
     assert_eq!(

@@ -1,8 +1,14 @@
 # rbdc
 
+[![Build Status](https://github.com/rbatis/rbdc/workflows/ci/badge.svg)](https://github.com/rbatis/rbdc/actions)
+[![doc.rs](https://docs.rs/rbdc/badge.svg)](https://docs.rs/rbdc/)
 [![Crates.io](https://img.shields.io/crates/v/rbdc)](https://crates.io/crates/rbdc)
-[![Documentation](https://docs.rs/rbdc/badge.svg)](https://docs.rs/rbdc)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![crates.io downloads](https://img.shields.io/crates/d/rbdc)](https://crates.io/crates/rbdc)
+[![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
+[![codecov](https://codecov.io/gh/rbatis/rbdc/graph/badge.svg?token=VAVPXSHoff)](https://codecov.io/gh/rbatis/rbdc)
+[![GitHub release](https://img.shields.io/github/v/release/rbatis/rbdc)](https://github.com/rbatis/rbdc/releases)
+[![discussions](https://img.shields.io/github/discussions/rbatis/rbdc)](https://github.com/rbatis/rbdc/discussions)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 Database driver abstraction layer for Rust, providing a unified interface for [rbatis](https://github.com/rbatis/rbatis).
 

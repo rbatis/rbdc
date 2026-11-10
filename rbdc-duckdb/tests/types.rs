@@ -88,7 +88,10 @@ async fn test_datetime_insert_and_query() {
     let mut conn = create_conn().await;
     setup_ext(&mut conn, "test_datetime", "VARCHAR").await;
 
-    let datetime: Value = DateTime::from_str("2024-01-15 12:30:45").unwrap().into();
+    // Use an explicit UTC offset so the assertion does not depend on the host
+    // timezone (GitHub Actions runners run in UTC, development machines often
+    // do not).
+    let datetime: Value = DateTime::from_str("2024-01-15T12:30:45Z").unwrap().into();
     conn.exec(
         "INSERT INTO test_datetime (id, val) VALUES (?, ?)",
         vec![Value::I32(1), datetime],
@@ -105,7 +108,7 @@ async fn test_datetime_insert_and_query() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["id"].as_f64().unwrap(), 1.0);
     // DateTime is stored with timezone format
-    assert_eq!(rows[0]["val"].as_str().unwrap(), "2024-01-15T12:30:45+08:00");
+    assert_eq!(rows[0]["val"].as_str().unwrap(), "2024-01-15T12:30:45Z");
 }
 
 #[tokio::test]
@@ -201,7 +204,7 @@ async fn test_struct_table_insert_and_query() {
     .expect("create table");
 
     // Insert a row
-    let datetime_str = "2024-01-15 12:30:45";
+    let datetime_str = "2024-01-15T12:30:45Z";
     let create_time: Value = DateTime::from_str(datetime_str).unwrap().into();
     conn.exec(
         "INSERT INTO test_table (id, create_time) VALUES (?, ?)",
@@ -219,5 +222,5 @@ async fn test_struct_table_insert_and_query() {
     let tables: Vec<TestTable> = rbs::from_value(value).unwrap();
     assert_eq!(tables.len(), 1);
     assert_eq!(tables[0].id, "test001");
-    assert_eq!(tables[0].create_time.to_string(), "2024-01-15T12:30:45+08:00");
+    assert_eq!(tables[0].create_time.to_string(), "2024-01-15T12:30:45Z");
 }

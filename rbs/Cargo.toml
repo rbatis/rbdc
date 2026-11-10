@@ -21,7 +21,6 @@ autoexamples = false
 autotests = true
 autobenches = true
 description = "Serialization framework for ORM"
-homepage = "https://rbatis.github.io/rbatis.io"
 documentation = "https://rbatis.github.io/rbatis.io"
 readme = "Readme.md"
 keywords = [

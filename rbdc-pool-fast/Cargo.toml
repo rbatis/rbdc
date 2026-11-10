@@ -10,7 +10,6 @@ categories = ["database"]
 keywords = ["database", "orm", "mysql", "postgres", "sqlite"]
 documentation = "https://rbatis.github.io/rbatis.io"
 repository = "https://github.com/rbatis/rbatis"
-homepage = "https://rbatis.github.io/rbatis.io"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -19,7 +18,6 @@ futures-core = { version = "0.3" }
 rbs = {version="4",path="../rbs"}
 rbdc = {version = "4.9",path = "../" ,default-features = false}
 fast_pool = {version = "1.0"}
-dark-std = "0.2"
 log = "0.4.21"
 
 [dev-dependencies]

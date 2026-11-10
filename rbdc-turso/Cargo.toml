@@ -10,7 +10,6 @@ categories = ["database"]
 keywords = ["database", "orm", "turso", "libsql", "sqlite"]
 documentation = "https://rbatis.github.io/rbatis.io"
 repository = "https://github.com/rbatis/rbatis"
-homepage = "https://rbatis.github.io/rbatis.io"
 
 [features]
 default = ["tls-rustls"]

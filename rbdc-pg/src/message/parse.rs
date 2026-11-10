@@ -1,5 +1,3 @@
-use std::i16;
-
 use crate::io::PgBufMutExt;
 use crate::types::Oid;
 use rbdc::io::{BufMutExt, Encode};

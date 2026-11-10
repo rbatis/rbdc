@@ -71,3 +71,70 @@ impl MetaData for TursoMetaData {
         self.columns[i].type_info.name().to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::value::TursoDataType;
+
+    fn row_with(values: Vec<Option<TursoValue>>, json_detect: bool) -> TursoRow {
+        TursoRow {
+            values,
+            columns: Arc::new(Vec::new()),
+            json_detect,
+        }
+    }
+
+    #[test]
+    fn get_returns_value_and_respects_json_detect() {
+        let mut row = row_with(
+            vec![
+                Some(TursoValue::new(libsql::Value::Integer(7))),
+                Some(TursoValue::new(libsql::Value::Text(
+                    r#"{"a":1}"#.into(),
+                ))),
+            ],
+            true,
+        );
+        assert_eq!(row.get(0).unwrap(), Value::I64(7));
+        assert!(matches!(row.get(1).unwrap(), Value::Map(_)));
+        // Values are not consumed, so re-reading is stable.
+        assert_eq!(row.get(0).unwrap(), Value::I64(7));
+    }
+
+    #[test]
+    fn get_errors_for_out_of_range_index() {
+        let mut row = row_with(vec![], false);
+        let err = row.get(0).unwrap_err();
+        assert!(err.to_string().contains("out of range"), "got: {}", err);
+    }
+
+    #[test]
+    fn get_errors_for_already_consumed_slot() {
+        // The executor never stores `None`, but the guard must still hold:
+        // a consumed/absent slot reports a distinct error rather than
+        // panicking or returning null.
+        let mut row = row_with(vec![None], false);
+        let err = row.get(0).unwrap_err();
+        assert!(err.to_string().contains("already consumed"), "got: {}", err);
+    }
+
+    #[test]
+    fn meta_data_exposes_columns() {
+        let columns = Arc::new(vec![
+            TursoColumn::new("id".into(), 0, TursoDataType::Integer),
+            TursoColumn::new("name".into(), 1, TursoDataType::Text),
+        ]);
+        let row = TursoRow {
+            values: vec![],
+            columns: columns.clone(),
+            json_detect: false,
+        };
+        let md = row.meta_data();
+        assert_eq!(md.column_len(), 2);
+        assert_eq!(md.column_name(0), "id");
+        assert_eq!(md.column_name(1), "name");
+        assert_eq!(md.column_type(0), "INTEGER");
+        assert_eq!(md.column_type(1), "TEXT");
+    }
+}

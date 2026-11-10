@@ -170,3 +170,69 @@ impl Drop for ValueHandle {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use libsqlite3_sys::{
+        sqlite3, sqlite3_close, sqlite3_column_value, sqlite3_finalize, sqlite3_open,
+        sqlite3_prepare_v2, sqlite3_step, sqlite3_stmt, SQLITE_OK, SQLITE_ROW,
+    };
+    use std::ffi::CString;
+    use std::ptr;
+
+    fn value_for(sql: &str) -> SqliteValue {
+        let filename = CString::new(":memory:").unwrap();
+        let query = CString::new(sql).unwrap();
+        unsafe {
+            let mut db: *mut sqlite3 = ptr::null_mut();
+            assert_eq!(sqlite3_open(filename.as_ptr(), &mut db), SQLITE_OK);
+            let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
+            assert_eq!(
+                sqlite3_prepare_v2(db, query.as_ptr(), -1, &mut stmt, ptr::null_mut()),
+                SQLITE_OK
+            );
+            assert_eq!(sqlite3_step(stmt), SQLITE_ROW);
+            let raw = sqlite3_column_value(stmt, 0);
+            let value = SqliteValue::new(raw, SqliteTypeInfo::null());
+            sqlite3_finalize(stmt);
+            sqlite3_close(db);
+            value
+        }
+    }
+
+    #[test]
+    fn test_value_ref_accessors() {
+        let integer = value_for("SELECT 7");
+        let r = integer.as_ref();
+        assert_eq!(r.int(), 7);
+        assert_eq!(r.int64(), 7);
+        assert_eq!(r.double(), 7.0);
+        assert!(!r.is_null());
+        assert!(r.type_info_opt().is_some());
+        assert_eq!(r.type_info().name(), "INTEGER");
+        assert_eq!(r.to_owned().int(), 7);
+
+        let text = value_for("SELECT 'abc'");
+        assert_eq!(text.as_ref().text().unwrap(), "abc");
+        assert_eq!(text.as_ref().blob(), b"abc");
+
+        let blob = value_for("SELECT x'FF'");
+        assert_eq!(blob.as_ref().blob(), &[0xFF]);
+        assert!(blob.as_ref().text().is_err());
+
+        let null = value_for("SELECT NULL");
+        let r = null.as_ref();
+        assert!(r.is_null());
+        assert!(r.type_info_opt().is_none());
+        // NULL values fall back to the type information stored at creation.
+        assert!(r.type_info().is_null());
+        assert_eq!(r.blob(), &[] as &[u8]);
+        assert_eq!(r.text().unwrap(), "");
+        assert_eq!(r.int(), 0);
+        assert_eq!(r.int64(), 0);
+        assert_eq!(r.double(), 0.0);
+        assert_eq!(null.type_info().name(), "NULL");
+        assert_eq!(null.type_info_opt(), None);
+    }
+}

@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test ${{ matrix.rust }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - stable
+          - nightly
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macOS-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Install Rust (${{ matrix.rust }})
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - name: Run cargo test
+        run: cargo test --workspace
+      - name: Run cargo tarpaulin
+        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
+        run: |
+          cargo install cargo-tarpaulin
+          # .tarpaulin.toml is git-ignored, so create it for CI. Keeping the
+          # tarpaulin invocation below byte-for-byte identical to the project
+          # convention: cargo tarpaulin --out Xml --output-dir ./coverage
+          cat > .tarpaulin.toml <<'EOF'
+          [default]
+          workspace = true
+          exclude = ["rbdc-pg", "rbdc-mysql", "rbdc-mssql", "example"]
+          exclude-files = ["rbdc-pg/**", "rbdc-mysql/**", "rbdc-mssql/**", "example/**"]
+          timeout = "300s"
+          EOF
+          cargo tarpaulin --out Xml --output-dir ./coverage
+      - name: Upload coverage reports to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          directory: ./coverage

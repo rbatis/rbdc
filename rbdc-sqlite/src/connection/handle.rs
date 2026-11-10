@@ -105,3 +105,34 @@ impl Drop for ConnectionHandle {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use libsqlite3_sys::sqlite3_open;
+    use std::ffi::CString;
+
+    fn open_memory() -> ConnectionHandle {
+        let filename = CString::new(":memory:").unwrap();
+        unsafe {
+            let mut db: *mut sqlite3 = ptr::null_mut();
+            assert_eq!(sqlite3_open(filename.as_ptr(), &mut db), SQLITE_OK);
+            ConnectionHandle::new(db)
+        }
+    }
+
+    #[test]
+    fn test_exec_success_and_error() {
+        let mut handle = open_memory();
+        handle.exec("CREATE TABLE t (id INTEGER)").unwrap();
+        handle.exec(String::from("INSERT INTO t VALUES (1)")).unwrap();
+        assert_eq!(handle.last_insert_rowid(), 1);
+
+        let err = handle.exec("NOT SQL").unwrap_err();
+        assert!(!err.to_string().is_empty());
+
+        // Queries containing nul bytes are rejected before reaching SQLite.
+        let err = handle.exec("SELECT 1\0;").unwrap_err();
+        assert!(err.to_string().contains("nul bytes"));
+    }
+}

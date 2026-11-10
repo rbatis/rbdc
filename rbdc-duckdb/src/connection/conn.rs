@@ -60,3 +60,21 @@ impl Drop for DuckDbConnectionHandle {
 }
 
 unsafe impl Send for DuckDbConnectionHandle {}
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+
+    #[test]
+    fn null_handles_are_safe() {
+        // Deref and Drop of a null database handle must not touch DuckDB.
+        let db = DuckDbDatabase(std::ptr::null_mut());
+        assert!(db.is_null());
+        drop(db);
+
+        // Construction and Debug/Drop of a null connection handle.
+        let handle = DuckDbConnectionHandle::new(std::ptr::null_mut(), std::ptr::null_mut());
+        assert!(format!("{handle:?}").contains("DuckDbConnectionHandle"));
+        drop(handle);
+    }
+}

@@ -183,8 +183,13 @@ fn test_error_from_parse_float_error() {
 fn test_error_from_try_from_int_error() {
     let i: i64 = 1234567890123;
     let try_from_err = i32::try_from(i).unwrap_err();
+    // The exact wording of this message differs between Rust versions
+    // ("out of range integral type conversion attempted" vs
+    // "number too large to fit in target type"), so compare with the
+    // message produced by std rather than hard-coding it.
+    let expected = try_from_err.to_string();
     let err = Error::from(try_from_err);
-    assert!(err.to_string().contains("out of range"));
+    assert_eq!(err.to_string(), expected);
 }
 
 #[test]

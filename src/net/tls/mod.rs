@@ -82,6 +82,11 @@ where
         accept_invalid_hostnames: bool,
         root_cert_path: Option<&CertificateInput>,
     ) -> Result<(), Error> {
+        // Already upgraded: leave the existing TLS stream untouched.
+        if matches!(self, MaybeTlsStream::Tls(_)) {
+            return Ok(());
+        }
+
         let connector = configure_tls_connector(
             accept_invalid_certs,
             accept_invalid_hostnames,

@@ -76,3 +76,53 @@ impl From<SqliteError> for rbdc::Error {
         Self::from(e.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use libsqlite3_sys::{sqlite3_close, sqlite3_exec, sqlite3_open, SQLITE_OK};
+    use std::ffi::CString;
+    use std::ptr;
+
+    fn make_error() -> SqliteError {
+        let filename = CString::new(":memory:").unwrap();
+        let sql = CString::new("THIS IS NOT SQL").unwrap();
+        unsafe {
+            let mut db: *mut sqlite3 = ptr::null_mut();
+            assert_eq!(sqlite3_open(filename.as_ptr(), &mut db), SQLITE_OK);
+            assert_ne!(
+                sqlite3_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()),
+                SQLITE_OK
+            );
+            let err = SqliteError::new(db);
+            sqlite3_close(db);
+            err
+        }
+    }
+
+    #[test]
+    fn test_error_accessors() {
+        let err = make_error();
+        assert!(!err.message().is_empty());
+        assert!(err.code().is_some());
+        assert_eq!(err.to_string(), err.message());
+        assert!(!format!("{:?}", err).is_empty());
+
+        let as_error = err.as_error();
+        assert_eq!(as_error.to_string(), err.message());
+
+        let mut err = make_error();
+        let as_error_mut = err.as_error_mut();
+        assert!(!as_error_mut.to_string().is_empty());
+
+        let boxed: Box<dyn StdError + Send + Sync + 'static> = Box::new(make_error()).into_error();
+        assert!(!boxed.to_string().is_empty());
+
+        let converted: rbdc::Error = make_error().into();
+        assert!(!converted.to_string().is_empty());
+
+        // `source` is not implemented, so the default is used.
+        let err = make_error();
+        assert!(StdError::source(&err).is_none());
+    }
+}

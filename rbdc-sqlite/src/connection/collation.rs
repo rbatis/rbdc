@@ -144,3 +144,18 @@ where
         Ordering::Greater => 1,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_debug_and_clone() {
+        let collation = Collation::new("my-collation", |a: &str, b: &str| a.cmp(b));
+        let debug = format!("{:?}", collation);
+        assert!(debug.contains("my-collation"));
+        assert!(debug.contains("Collation"));
+        let cloned = collation.clone();
+        assert!(format!("{:?}", cloned).contains("my-collation"));
+    }
+}

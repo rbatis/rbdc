@@ -394,3 +394,195 @@ impl Notify {
         self.condvar.notify_one();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use libsqlite3_sys::{sqlite3_close, sqlite3_exec, sqlite3_open, SQLITE_RANGE};
+    use std::ffi::CString;
+
+    fn cstring(s: &str) -> CString {
+        CString::new(s).unwrap()
+    }
+
+    fn with_handle(sql: &str, f: impl FnOnce(&mut StatementHandle)) {
+        let filename = cstring(":memory:");
+        let query = cstring(sql);
+        unsafe {
+            let mut db: *mut sqlite3 = ptr::null_mut();
+            assert_eq!(sqlite3_open(filename.as_ptr(), &mut db), SQLITE_OK);
+            let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
+            assert_eq!(
+                libsqlite3_sys::sqlite3_prepare_v2(
+                    db,
+                    query.as_ptr(),
+                    -1,
+                    &mut stmt,
+                    ptr::null_mut()
+                ),
+                SQLITE_OK
+            );
+            let mut handle = StatementHandle::new(NonNull::new(stmt).unwrap());
+            f(&mut handle);
+            drop(handle);
+            sqlite3_close(db);
+        }
+    }
+
+    #[test]
+    fn test_statement_introspection() {
+        with_handle(
+            "SELECT 1 AS i, 'x' AS t, 1.5 AS f, x'00ff' AS b, NULL AS n",
+            |handle| {
+                assert!(!unsafe { handle.db_handle() }.is_null());
+                assert_eq!(handle.column_count(), 5);
+                assert_eq!(handle.column_name(0), "i");
+                assert!(handle.read_only());
+                assert!(handle.sql().contains("SELECT 1 AS i"));
+                assert_eq!(handle.bind_parameter_count(), 0);
+
+                assert!(handle.step().unwrap());
+                assert_eq!(handle.column_type_info(0).name(), "INTEGER");
+                assert_eq!(handle.column_type_info(1).name(), "TEXT");
+                assert_eq!(handle.column_type_info(2).name(), "REAL");
+                assert_eq!(handle.column_type_info(3).name(), "BLOB");
+                assert_eq!(handle.column_type_info_opt(0).unwrap().name(), "INTEGER");
+                // NULL values report no dynamic type info.
+                assert!(handle.column_type_info_opt(4).is_none());
+                assert_eq!(handle.column_int(0), 1);
+                assert_eq!(handle.column_int64(0), 1);
+                assert_eq!(handle.column_double(2), 1.5);
+                assert_eq!(handle.column_text(1).unwrap(), "x");
+                assert_eq!(handle.column_blob(3), &[0x00, 0xFF]);
+                assert_eq!(handle.column_blob(4), &[] as &[u8]);
+                assert!(!handle.step().unwrap());
+                // Expressions have no declared type.
+                assert!(handle.column_decltype(0).is_none());
+                // Column metadata may be unavailable depending on how SQLite
+                // was compiled; exercise the call either way.
+                let _ = handle.column_nullable(0);
+            },
+        );
+    }
+
+    #[test]
+    fn test_bind_parameters() {
+        // `?1` and `$2` are named parameters.
+        with_handle("SELECT ?1, $2", |handle| {
+            assert_eq!(handle.bind_parameter_count(), 2);
+            assert_eq!(handle.bind_parameter_name(1), Some("?1"));
+            assert_eq!(handle.bind_parameter_name(2), Some("$2"));
+        });
+
+        // Unnamed parameters have no name.
+        with_handle("SELECT ?", |handle| {
+            assert_eq!(handle.bind_parameter_count(), 1);
+            assert_eq!(handle.bind_parameter_name(1), None);
+        });
+
+        let filename = cstring(":memory:");
+        let create = cstring("CREATE TABLE t (a INTEGER, b INTEGER, c REAL, d TEXT, e BLOB, f TEXT)");
+        unsafe {
+            let mut db: *mut sqlite3 = ptr::null_mut();
+            assert_eq!(sqlite3_open(filename.as_ptr(), &mut db), SQLITE_OK);
+            assert_eq!(
+                sqlite3_exec(db, create.as_ptr(), None, ptr::null_mut(), ptr::null_mut()),
+                SQLITE_OK
+            );
+
+            let sql = cstring("INSERT INTO t VALUES (?, ?, ?, ?, ?, ?)");
+            let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
+            assert_eq!(
+                libsqlite3_sys::sqlite3_prepare_v2(
+                    db,
+                    sql.as_ptr(),
+                    -1,
+                    &mut stmt,
+                    ptr::null_mut()
+                ),
+                SQLITE_OK
+            );
+            let mut handle = StatementHandle::new(NonNull::new(stmt).unwrap());
+            assert_eq!(handle.bind_int(1, 1), SQLITE_OK);
+            assert_eq!(handle.bind_int64(2, 2), SQLITE_OK);
+            assert_eq!(handle.bind_double(3, 3.5), SQLITE_OK);
+            assert_eq!(handle.bind_text(4, "four"), SQLITE_OK);
+            assert_eq!(handle.bind_blob(5, &[5, 6]), SQLITE_OK);
+            assert_eq!(handle.bind_null(6), SQLITE_OK);
+
+            // Out-of-range indices produce an error and a usable message.
+            assert_eq!(handle.bind_int(99, 1), SQLITE_RANGE);
+            assert!(!handle.last_error().message().is_empty());
+
+            assert!(!handle.step().unwrap());
+            assert_eq!(handle.changes(), 1);
+            handle.clear_bindings();
+            assert!(handle.reset().is_ok());
+            drop(handle);
+            sqlite3_close(db);
+        }
+    }
+
+    #[test]
+    fn test_step_and_reset_errors() {
+        let filename = cstring(":memory:");
+        let create = cstring("CREATE TABLE t (id INTEGER PRIMARY KEY)");
+        unsafe {
+            let mut db: *mut sqlite3 = ptr::null_mut();
+            assert_eq!(sqlite3_open(filename.as_ptr(), &mut db), SQLITE_OK);
+            assert_eq!(
+                sqlite3_exec(db, create.as_ptr(), None, ptr::null_mut(), ptr::null_mut()),
+                SQLITE_OK
+            );
+
+            let sql = cstring("INSERT INTO t VALUES (1)");
+            let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
+            assert_eq!(
+                libsqlite3_sys::sqlite3_prepare_v2(
+                    db,
+                    sql.as_ptr(),
+                    -1,
+                    &mut stmt,
+                    ptr::null_mut()
+                ),
+                SQLITE_OK
+            );
+            let mut handle = StatementHandle::new(NonNull::new(stmt).unwrap());
+
+            assert!(!handle.step().unwrap());
+            handle.reset().unwrap();
+
+            // A constraint violation is reported from `step` and remembered by
+            // the next `reset`.
+            assert!(handle.step().is_err());
+            assert!(handle.reset().is_err());
+            drop(handle);
+            sqlite3_close(db);
+        }
+    }
+}
+
+#[cfg(test)]
+mod notify_tests {
+    use super::*;
+
+    #[test]
+    fn test_notify_and_callback() {
+        let notify = Notify::new();
+        assert!(!*notify.mutex.lock());
+        notify.fire();
+        assert!(*notify.mutex.lock());
+        // Already fired, so this returns immediately.
+        notify.wait();
+
+        let notify = Notify::new();
+        let list: [&Notify; 1] = [&notify];
+        unsafe {
+            unlock_notify_cb(
+                list.as_ptr() as *mut *mut c_void,
+                list.len() as c_int,
+            );
+        }
+        assert!(*notify.mutex.lock());
+    }
+}

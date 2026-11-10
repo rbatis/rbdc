@@ -238,3 +238,43 @@ fn get_extract_error(extracted: libduckdb_sys::duckdb_extracted_statements) -> S
             .into_owned()
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+
+    #[test]
+    fn statement_sql_clone_and_debug() {
+        let stmt = DuckDbStatement {
+            sql: "SELECT 1".to_string(),
+        };
+        assert_eq!(stmt.sql(), "SELECT 1");
+        let cloned = stmt.clone();
+        assert_eq!(cloned.sql(), "SELECT 1");
+        assert!(format!("{cloned:?}").contains("DuckDbStatement"));
+    }
+
+    #[test]
+    fn virtual_statement_without_handle() {
+        let mut v = VirtualStatement::new("SELECT 2", true);
+        assert!(v.handle_mut().is_none());
+        v.reset(); // no handle: must be a no-op
+
+        let cloned = v.clone();
+        assert!(cloned.persistent);
+        assert_eq!(cloned.query, "SELECT 2");
+        assert!(format!("{cloned:?}").contains("VirtualStatement"));
+    }
+
+    #[test]
+    fn error_helpers_handle_null_handles() {
+        assert_eq!(
+            get_prepare_error(std::ptr::null_mut()),
+            "prepare failed: statement is null"
+        );
+        assert_eq!(
+            get_extract_error(std::ptr::null_mut()),
+            "extract statements failed: unknown error"
+        );
+    }
+}

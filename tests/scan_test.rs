@@ -112,3 +112,55 @@ fn test_scan_debug() {
     let debug_str = format!("{:?}", scan);
     assert!(debug_str.contains("Scan"));
 }
+
+#[tokio::test]
+async fn test_scan_collect_stream_item_error() {
+    let rows = vec![Err::<Box<dyn Row>, Error>(Error::from("boom"))];
+    let scan = Scan::new(stream::iter(rows));
+    let result: Result<Vec<Value>, Error> = scan.collect().await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_scan_collect_deserialize_error() {
+    #[derive(serde::Deserialize)]
+    struct Strict {
+        #[allow(dead_code)]
+        id: i32,
+    }
+
+    let rows: Vec<Result<Box<dyn Row>, Error>> = vec![Ok(Box::new(MockRow::new(
+        vec!["id".to_string()],
+        vec![Value::String("not-an-int".to_string())],
+    )))];
+    let scan = Scan::new(stream::iter(rows));
+    let result: Result<Vec<Strict>, Error> = scan.collect().await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_scan_stream_impl() {
+    use futures_util::StreamExt;
+
+    let rows: Vec<Result<Box<dyn Row>, Error>> = vec![
+        Ok(Box::new(MockRow::new(
+            vec!["id".to_string(), "name".to_string()],
+            vec![Value::I64(1), Value::String("a".to_string())],
+        ))),
+        Ok(Box::new(MockRow::new(
+            vec!["id".to_string(), "name".to_string()],
+            vec![Value::I64(2), Value::String("b".to_string())],
+        ))),
+    ];
+    let scan = Scan::new(stream::iter(rows));
+    let collected: Vec<Result<Value, Error>> = StreamExt::collect(scan).await;
+    assert_eq!(collected.len(), 2);
+    assert!(matches!(collected[0], Ok(Value::Map(_))));
+
+    // Errors propagated through the Stream impl.
+    let rows: Vec<Result<Box<dyn Row>, Error>> = vec![Err(Error::from("stream error"))];
+    let scan = Scan::new(stream::iter(rows));
+    let collected: Vec<Result<Value, Error>> = StreamExt::collect(scan).await;
+    assert_eq!(collected.len(), 1);
+    assert!(collected[0].is_err());
+}

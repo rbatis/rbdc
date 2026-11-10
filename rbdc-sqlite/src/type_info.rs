@@ -191,5 +191,16 @@ fn test_data_type_from_str() -> Result<(), Error> {
     assert_eq!(DataType::Time, "TIME".parse()?);
     assert_eq!(DataType::Date, "DATE".parse()?);
 
+    // Unknown declared types are rejected.
+    assert!("not-a-known-type".parse::<DataType>().is_err());
+    assert!("".parse::<DataType>().is_err());
+
+    // `SqliteTypeInfo` helpers.
+    let null = SqliteTypeInfo::null();
+    assert!(null.is_null());
+    assert_eq!(null.name(), "NULL");
+    assert_eq!(null.to_string(), "NULL");
+    assert!(!SqliteTypeInfo(DataType::Text).is_null());
+
     Ok(())
 }

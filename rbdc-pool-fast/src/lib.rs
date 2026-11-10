@@ -331,3 +331,26 @@ mod test {
         println!("ok={}", pool.is_ok());
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::ConnProxy;
+    use rbdc::db::Connection;
+
+    /// A `ConnProxy` whose inner guard has already been taken/closed must return
+    /// an error for every operation instead of panicking.
+    #[test]
+    fn conn_proxy_without_inner_connection_returns_errors() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let mut proxy = ConnProxy { conn: None };
+
+        assert!(rt.block_on(proxy.exec_rows("SELECT 1", vec![])).is_err());
+        assert!(rt.block_on(proxy.exec_decode("SELECT 1", vec![])).is_err());
+        assert!(rt.block_on(proxy.exec("SELECT 1", vec![])).is_err());
+        assert!(rt.block_on(proxy.ping()).is_err());
+        assert!(rt.block_on(proxy.close()).is_err());
+        assert!(rt.block_on(proxy.begin()).is_err());
+        assert!(rt.block_on(proxy.commit()).is_err());
+        assert!(rt.block_on(proxy.rollback()).is_err());
+    }
+}

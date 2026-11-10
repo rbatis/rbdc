@@ -524,6 +524,49 @@ mod tests {
     }
 
     #[test]
+    fn test_column_nullable_for_table_columns() {
+        let filename = cstring(":memory:");
+        unsafe {
+            let mut db: *mut sqlite3 = ptr::null_mut();
+            assert_eq!(sqlite3_open(filename.as_ptr(), &mut db), SQLITE_OK);
+            let create = cstring("CREATE TABLE t (id INTEGER NOT NULL, name TEXT)");
+            assert_eq!(
+                sqlite3_exec(db, create.as_ptr(), None, ptr::null_mut(), ptr::null_mut()),
+                SQLITE_OK
+            );
+
+            let query = cstring("SELECT id, name FROM t");
+            let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
+            assert_eq!(
+                libsqlite3_sys::sqlite3_prepare_v2(
+                    db,
+                    query.as_ptr(),
+                    -1,
+                    &mut stmt,
+                    ptr::null_mut()
+                ),
+                SQLITE_OK
+            );
+            let handle = StatementHandle::new(NonNull::new(stmt).unwrap());
+            let id_nullable = handle.column_nullable(0).unwrap();
+            let name_nullable = handle.column_nullable(1).unwrap();
+            // Column-origin metadata is only available when SQLite is built
+            // with SQLITE_ENABLE_COLUMN_METADATA; otherwise both are `None`.
+            if id_nullable.is_some() || name_nullable.is_some() {
+                assert_eq!(id_nullable, Some(false));
+                assert_eq!(name_nullable, Some(true));
+            }
+            drop(handle);
+            sqlite3_close(db);
+        }
+
+        // Expression columns have no table/column origin.
+        with_handle("SELECT 1", |handle| {
+            assert_eq!(handle.column_nullable(0).unwrap(), None);
+        });
+    }
+
+    #[test]
     fn test_step_and_reset_errors() {
         let filename = cstring(":memory:");
         let create = cstring("CREATE TABLE t (id INTEGER PRIMARY KEY)");

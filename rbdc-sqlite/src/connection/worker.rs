@@ -307,3 +307,51 @@ fn prepare(conn: &mut ConnectionState, query: &str) -> Result<SqliteStatement, E
 fn update_cached_statements_size(conn: &ConnectionState, size: &AtomicUsize) {
     size.store(conn.statements.len(), Ordering::Release);
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    use crate::SqliteConnectOptions;
+    use std::time::Duration;
+
+    async fn establish_worker() -> ConnectionWorker {
+        let params = EstablishParams::from_options(
+            &SqliteConnectOptions::new().filename(":memory:"),
+        )
+        .unwrap();
+        ConnectionWorker::establish(params).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn commands_after_shutdown_report_worker_crashed() {
+        let mut worker = establish_worker().await;
+        worker.shutdown().await.unwrap();
+        // Wait for the dedicated thread to return and drop the command receiver.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let result = tokio::time::timeout(Duration::from_secs(5), async {
+            assert!(worker.prepare("SELECT 1").await.is_err());
+            assert!(worker
+                .execute("SELECT 1".to_string(), None, 1, false)
+                .await
+                .is_err());
+            assert!(worker
+                .create_collation("reverse", |a, b| a.cmp(b))
+                .await
+                .is_err());
+            assert!(worker.clear_cache().await.is_err());
+            assert!(worker.ping().await.is_err());
+            assert!(worker.shutdown().await.is_err());
+        })
+        .await;
+        result.expect("worker commands after shutdown must not hang");
+    }
+
+    #[tokio::test]
+    async fn clear_cache_and_ping_round_trip() {
+        let mut worker = establish_worker().await;
+        worker.ping().await.unwrap();
+        worker.clear_cache().await.unwrap();
+        worker.shutdown().await.unwrap();
+    }
+}

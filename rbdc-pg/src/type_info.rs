@@ -1385,3 +1385,328 @@ impl PartialEq<PgType> for PgType {
         }
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    use crate::types::Oid;
+    use rbdc::ext::ustr::UStr;
+    use std::sync::Arc;
+
+    /// Every built-in `PgType` is reachable through `try_from_oid`.
+    fn all_builtin() -> Vec<PgType> {
+        (0u32..=5000)
+            .filter_map(|oid| PgType::try_from_oid(Oid(oid)))
+            .collect()
+    }
+
+    fn custom_type(oid: u32, kind: PgTypeKind) -> PgType {
+        PgType::Custom(Arc::new(PgCustomType {
+            oid: Oid(oid),
+            name: UStr::from("my_custom_type"),
+            kind,
+        }))
+    }
+
+    #[test]
+    fn try_from_oid_covers_every_builtin_and_unknowns() {
+        let all = all_builtin();
+        assert!(all.len() >= 80, "expected all built-ins, got {}", all.len());
+
+        for oid in [0u32, 1, 22, 24, 30, 999, 5000, 10_000, u32::MAX] {
+            assert!(
+                PgType::try_from_oid(Oid(oid)).is_none(),
+                "oid {oid} should be unknown"
+            );
+        }
+
+        // Each built-in round-trips through its own OID.
+        for ty in &all {
+            let oid = ty.try_oid().expect("builtin type has an oid");
+            let round_tripped = PgType::try_from_oid(oid).expect("oid resolves");
+            assert_eq!(round_tripped, *ty);
+            assert_eq!(ty.oid(), oid);
+        }
+    }
+
+    #[test]
+    fn names_kinds_and_array_helpers_for_every_builtin() {
+        for ty in all_builtin() {
+            assert!(!ty.name().is_empty());
+            assert!(!ty.display_name().is_empty());
+            // exercise every kind() arm
+            let _ = ty.kind();
+
+            // exercise try_array_element()/to_array_element()/to_array_type()
+            let element = ty.try_array_element();
+            let to_element = ty.to_array_element();
+            let to_array = ty.to_array_type();
+
+            // sanity check a few mappings
+            if let Some(element) = element {
+                assert!(!element.name().is_empty());
+            }
+            if let Some(element) = to_element {
+                assert!(!element.name().is_empty());
+            }
+            if let Some(array) = to_array {
+                assert!(!array.name().is_empty());
+            }
+
+            let info = PgTypeInfo(ty.clone());
+            assert!(!info.is_null());
+            assert!(!info.name().is_empty());
+            assert!(!format!("{info}").is_empty());
+            assert_eq!(info.__type_feature_gate(), ty.__feature_gate_expected());
+        }
+
+        // explicit spot checks for element/array mappings
+        assert_eq!(
+            PgType::TextArray.try_array_element().as_deref(),
+            Some(&PgTypeInfo(PgType::Text))
+        );
+        assert_eq!(
+            PgType::Text.to_array_type(),
+            Some(PgTypeInfo(PgType::TextArray))
+        );
+        assert_eq!(PgType::Text.to_array_element(), Some(PgTypeInfo(PgType::Text)));
+        assert!(PgType::Text.try_array_element().is_none());
+        assert!(PgType::TextArray.to_array_type().is_none());
+        assert!(PgType::Unknown.to_array_type().is_none());
+        assert!(PgType::Void.to_array_type().is_none());
+        assert!(PgType::Unknown.to_array_element().is_none());
+        assert!(PgType::Void.to_array_element().is_none());
+        assert!(PgType::Tsvector.to_array_element().is_none());
+        assert!(PgType::Tsquery.to_array_type().is_none());
+    }
+
+    // Expected feature gate per type, mirroring the implementation but written
+    // independently so the test is meaningful.
+    trait FeatureGateExpected {
+        fn __feature_gate_expected(&self) -> Option<&'static str>;
+    }
+
+    impl FeatureGateExpected for PgType {
+        fn __feature_gate_expected(&self) -> Option<&'static str> {
+            match self {
+                PgType::Date
+                | PgType::Time
+                | PgType::Timestamp
+                | PgType::Timestamptz
+                | PgType::DateArray
+                | PgType::TimeArray
+                | PgType::TimestampArray
+                | PgType::TimestamptzArray => Some("time"),
+                PgType::Uuid | PgType::UuidArray => Some("uuid"),
+                PgType::Json
+                | PgType::Jsonb
+                | PgType::JsonArray
+                | PgType::JsonbArray => Some("json"),
+                PgType::Cidr | PgType::Inet | PgType::CidrArray | PgType::InetArray => {
+                    Some("ipnetwork")
+                }
+                PgType::Macaddr => Some("mac_address"),
+                PgType::Numeric | PgType::NumericArray => Some("bigdecimal"),
+                _ => None,
+            }
+        }
+    }
+
+    #[test]
+    fn feature_gates_and_info_accessors() {
+        for ty in all_builtin() {
+            let info = PgTypeInfo(ty.clone());
+            assert_eq!(info.__type_feature_gate(), ty.__feature_gate_expected());
+            assert!(!info.is_null());
+            assert_eq!(info.is_void(), matches!(ty, PgType::Void));
+            assert_eq!(format!("{:?}", info.kind()), format!("{:?}", ty.kind()));
+        }
+
+        // explicit gate values
+        assert_eq!(PgTypeInfo::DATE.__type_feature_gate(), Some("time"));
+        assert_eq!(PgTypeInfo::UUID.__type_feature_gate(), Some("uuid"));
+        assert_eq!(PgTypeInfo::JSONB.__type_feature_gate(), Some("json"));
+        assert_eq!(PgTypeInfo::CIDR.__type_feature_gate(), Some("ipnetwork"));
+        assert_eq!(PgTypeInfo::MACADDR.__type_feature_gate(), Some("mac_address"));
+        assert_eq!(PgTypeInfo::NUMERIC.__type_feature_gate(), Some("bigdecimal"));
+        assert_eq!(PgTypeInfo::BOOL.__type_feature_gate(), None);
+
+        assert!(PgTypeInfo::VOID.is_void());
+        assert!(!PgTypeInfo::BOOL.is_void());
+    }
+
+    #[test]
+    fn custom_types_cover_all_kinds() {
+        let kinds = [
+            PgTypeKind::Simple,
+            PgTypeKind::Pseudo,
+            PgTypeKind::Domain(PgTypeInfo(PgType::Int4)),
+            PgTypeKind::Composite(Arc::from(vec![(
+                "a".to_string(),
+                PgTypeInfo(PgType::Text),
+            )])),
+            PgTypeKind::Array(PgTypeInfo(PgType::Text)),
+            PgTypeKind::Enum(Arc::from(vec!["a".to_string(), "b".to_string()])),
+            PgTypeKind::Range(PgTypeInfo(PgType::Int4)),
+        ];
+
+        for (i, kind) in kinds.into_iter().enumerate() {
+            let ty = custom_type(1234 + i as u32, kind);
+            assert_eq!(ty.try_oid(), Some(Oid(1234 + i as u32)));
+            assert_eq!(ty.oid(), Oid(1234 + i as u32));
+            assert_eq!(ty.name(), "my_custom_type");
+            assert_eq!(ty.display_name(), "my_custom_type");
+            let _ = ty.kind();
+
+            match &ty {
+                PgType::Custom(custom) => {
+                    assert_eq!(&*custom.name, "my_custom_type");
+                }
+                _ => unreachable!(),
+            }
+
+            // only Array custom types expose an array element
+            match &ty {
+                PgType::Custom(custom) => {
+                    if matches!(custom.kind, PgTypeKind::Array(_)) {
+                        assert_eq!(
+                            ty.try_array_element().as_deref(),
+                            Some(&PgTypeInfo(PgType::Text))
+                        );
+                    } else {
+                        assert!(ty.try_array_element().is_none());
+                    }
+                }
+                _ => unreachable!(),
+            }
+            assert!(ty.to_array_element().is_none());
+            assert!(ty.to_array_type().is_none());
+        }
+
+        // PgCustomType equality is OID based.
+        let a = PgCustomType {
+            oid: Oid(7),
+            name: UStr::from("a"),
+            kind: PgTypeKind::Simple,
+        };
+        let b = PgCustomType {
+            oid: Oid(7),
+            name: UStr::from("b"),
+            kind: PgTypeKind::Enum(Arc::from(Vec::<String>::new())),
+        };
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn declared_types() {
+        let by_name = PgTypeInfo::with_name("my_type");
+        assert_eq!(by_name.name(), "my_type");
+        assert_eq!(by_name.kind_errorless_name(), "my_type");
+        assert_eq!(by_name.0.try_oid(), None);
+        assert!(by_name.__type_feature_gate().is_none());
+
+        let by_oid = PgTypeInfo::with_oid(Oid(42));
+        assert_eq!(by_oid.name(), "?");
+        assert_eq!(by_oid.0.try_oid(), Some(Oid(42)));
+        assert_eq!(by_oid.0.oid(), Oid(42));
+
+        // unknown display name for DeclareWithOid
+        assert_eq!(PgType::DeclareWithOid(Oid(1)).display_name(), "?");
+        assert_eq!(PgType::DeclareWithOid(Oid(1)).name(), "?");
+
+        // declared types cannot be converted to array types
+        assert!(PgType::DeclareWithName(UStr::from("whatever"))
+            .to_array_element()
+            .is_none());
+        assert!(PgType::DeclareWithName(UStr::from("whatever"))
+            .to_array_type()
+            .is_none());
+        assert!(PgType::DeclareWithOid(Oid(9)).to_array_element().is_none());
+        assert!(PgType::DeclareWithOid(Oid(9)).to_array_type().is_none());
+
+        // declared name and oid are considered equal in either direction
+        let name = PgType::DeclareWithName(UStr::from("whatever"));
+        let oid = PgType::DeclareWithOid(Oid(9));
+        assert!(name == oid);
+        assert!(oid == name);
+
+        // name comparison is ASCII case-insensitive
+        assert!(PgType::DeclareWithName(UStr::from("BOOL")) == PgType::Bool);
+        assert!(PgType::DeclareWithName(UStr::from("int4")) == PgType::Int4);
+        assert!(PgType::DeclareWithName(UStr::from("nope")) != PgType::Bool);
+        // built-ins compare by OID
+        assert!(PgType::Bool == PgType::Bool);
+        assert!(PgType::Bool != PgType::Int4);
+    }
+
+    // small helper so the test above can assert the declared name without
+    // touching the private `display_name` for every arm.
+    trait KindErrorlessName {
+        fn kind_errorless_name(&self) -> &str;
+    }
+
+    impl KindErrorlessName for PgTypeInfo {
+        fn kind_errorless_name(&self) -> &str {
+            self.name()
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "unresolved type declaration")]
+    fn kind_panics_for_declared_name() {
+        let _ = PgType::DeclareWithName(UStr::from("foo")).kind();
+    }
+
+    #[test]
+    #[should_panic(expected = "unresolved type declaration")]
+    fn kind_panics_for_declared_oid() {
+        let _ = PgType::DeclareWithOid(Oid(1)).kind();
+    }
+
+    #[test]
+    #[should_panic(expected = "unresolved type declaration")]
+    fn oid_panics_for_declared_name() {
+        let _ = PgType::DeclareWithName(UStr::from("foo")).oid();
+    }
+
+    #[test]
+    #[should_panic(expected = "unresolved type declaration")]
+    fn try_array_element_panics_for_declared_name() {
+        let _ = PgType::DeclareWithName(UStr::from("foo")).try_array_element();
+    }
+
+    #[test]
+    #[should_panic(expected = "unresolved type declaration")]
+    fn try_array_element_panics_for_declared_oid() {
+        let _ = PgType::DeclareWithOid(Oid(1)).try_array_element();
+    }
+
+    #[test]
+    fn serde_roundtrips() {
+        for ty in all_builtin() {
+            let info = PgTypeInfo(ty);
+            let json = serde_json::to_string(&info).unwrap();
+            let decoded: PgTypeInfo = serde_json::from_str(&json).unwrap();
+            assert_eq!(decoded, info);
+        }
+
+        // declared variants serialize too
+        let by_name = PgTypeInfo::with_name("serde_type");
+        let json = serde_json::to_string(&by_name).unwrap();
+        let decoded: PgTypeInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.name(), "serde_type");
+
+        let by_oid = PgTypeInfo::with_oid(Oid(55));
+        let json = serde_json::to_string(&by_oid).unwrap();
+        let decoded: PgTypeInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.0.try_oid(), Some(Oid(55)));
+    }
+
+    #[test]
+    fn display_uses_padded_name() {
+        assert_eq!(format!("{}", PgTypeInfo::INT4), "INT4");
+        assert_eq!(format!("{:>10}", PgTypeInfo::INT4), "      INT4");
+        assert_eq!(format!("{}", PgTypeInfo::BOOL_ARRAY), "BOOL[]");
+        assert_eq!(format!("{}", PgTypeInfo::with_name("x")), "x");
+    }
+}

@@ -120,15 +120,137 @@ impl Placeholder for PgDriver {
 #[cfg(test)]
 mod test {
     use crate::driver::PgDriver;
-    use rbdc::db::Placeholder;
+    use crate::options::PgConnectOptions;
+    use rbdc::db::{ConnectOptions, Connection, Driver, Placeholder};
+    use rbdc::Error;
+    use rbs::Value;
+
     #[test]
     fn test_default() {}
+
     #[test]
     fn test_exchange() {
         let v = "insert into biz_activity (id,name,pc_link,h5_link,pc_banner_img,h5_banner_img,sort,status,remark,create_time,version,delete_flag) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
         let d = PgDriver {};
         let sql = d.exchange(v);
         assert_eq!("insert into biz_activity (id,name,pc_link,h5_link,pc_banner_img,h5_banner_img,sort,status,remark,create_time,version,delete_flag) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", sql);
+    }
+
+    #[test]
+    fn name_and_default_option() {
+        let driver = PgDriver {};
+        assert_eq!(driver.name(), "postgres");
+        let default = driver.default_option();
+        assert!(default.downcast_ref::<PgConnectOptions>().is_some());
+    }
+
+    #[test]
+    fn column_type_for_every_value_variant() {
+        let driver = PgDriver {};
+        let cases = [
+            (Value::Null, "UNKNOWN"),
+            (Value::Bool(true), "BOOL"),
+            (Value::I32(1), "INT4"),
+            (Value::I64(1), "INT8"),
+            (Value::U32(1), "INT4"),
+            (Value::U64(1), "INT8"),
+            (Value::F32(1.0), "FLOAT4"),
+            (Value::F64(1.0), "FLOAT8"),
+            (Value::String("x".into()), "VARCHAR"),
+            (Value::Binary(vec![1]), "BYTEA"),
+            (Value::Array(vec![]), "JSON"),
+            (rbs::value!({"a": 1}), "JSON"),
+        ];
+        for (value, expected) in cases {
+            assert_eq!(driver.column_type(&value), expected);
+        }
+
+        let ext_cases = [
+            ("Uuid", "UUID"),
+            ("Decimal", "NUMERIC"),
+            ("Numeric", "NUMERIC"),
+            ("Date", "DATE"),
+            ("Time", "TIME"),
+            ("Timestamp", "TIMESTAMP"),
+            ("DateTime", "TIMESTAMP"),
+            ("Bool", "BOOL"),
+            ("Bytea", "BYTEA"),
+            ("Char", "CHAR"),
+            ("Name", "NAME"),
+            ("Int8", "INT8"),
+            ("Int2", "INT2"),
+            ("Int4", "INT4"),
+            ("Text", "TEXT"),
+            ("Oid", "OID"),
+            ("Json", "JSON"),
+            ("Jsonb", "JSON"),
+            ("Point", "POINT"),
+            ("Lseg", "LSEG"),
+            ("Path", "PATH"),
+            ("Box", "BOX"),
+            ("Polygon", "POLYGON"),
+            ("Line", "LINE"),
+            ("Cidr", "CIDR"),
+            ("Float4", "FLOAT4"),
+            ("Float8", "FLOAT8"),
+            ("Circle", "CIRCLE"),
+            ("Macaddr8", "MACADDR8"),
+            ("Macaddr", "MACADDR"),
+            ("Inet", "INET"),
+            ("Bpchar", "BPCHAR"),
+            ("Varchar", "VARCHAR"),
+            ("Timestamptz", "TIMESTAMPTZ"),
+            ("Interval", "INTERVAL"),
+            ("Timetz", "TIMETZ"),
+            ("Bit", "BIT"),
+            ("Varbit", "VARBIT"),
+            ("Record", "RECORD"),
+            ("Int4Range", "INT4RANGE"),
+            ("NumRange", "NUMRANGE"),
+            ("TsRange", "TSRANGE"),
+            ("TstzRange", "TSTZRANGE"),
+            ("DateRange", "DATERANGE"),
+            ("Int8Range", "INT8RANGE"),
+            ("Jsonpath", "JSONPATH"),
+            ("Money", "MONEY"),
+            ("Void", "VOID"),
+            ("SomethingElse", "UNKNOWN"),
+        ];
+        for (name, expected) in ext_cases {
+            let value = Value::Ext(name, Box::new(Value::Null));
+            assert_eq!(driver.column_type(&value), expected, "ext={name}");
+        }
+    }
+
+    #[test]
+    fn connect_with_invalid_uri_returns_error() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let driver = PgDriver {};
+        let result = runtime.block_on(async { driver.connect("not a valid url").await });
+        assert!(result.is_err());
+    }
+
+    #[derive(Debug)]
+    struct DummyOptions;
+
+    impl ConnectOptions for DummyOptions {
+        fn connect(
+            &self,
+        ) -> futures_core::future::BoxFuture<'_, Result<Box<dyn Connection>, Error>> {
+            Box::pin(async { Err(Error::from("dummy")) })
+        }
+
+        fn set_uri(&mut self, _uri: &str) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "requires PgConnectOptions")]
+    fn connect_opt_rejects_other_options() {
+        let driver = PgDriver {};
+        let opts = DummyOptions;
+        let _ = driver.connect_opt(&opts);
     }
 }
 

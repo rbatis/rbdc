@@ -2,7 +2,42 @@
 
 use bytes::{Bytes, BytesMut};
 use rbdc::io::{BufExt, BufMutExt, BufStream, Decode, Encode, Nothing};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::io;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
+
+/// A stream that accepts writes but always fails to flush. Used to cover the
+/// error arm of `WriteAndFlush::poll`.
+struct FlushFails;
+
+impl AsyncRead for FlushFails {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        _buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+impl AsyncWrite for FlushFails {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Poll::Ready(Ok(buf.len()))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "flush failed")))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
 
 #[test]
 fn test_buf_ext_nul() {
@@ -112,6 +147,16 @@ async fn test_buf_stream_deref() {
     let mut stream = BufStream::new(client);
     let _ = &*stream;
     let _ = &mut *stream;
+}
+
+#[tokio::test]
+async fn test_write_and_flush_propagates_flush_error() {
+    let mut stream = BufStream::new(FlushFails);
+    stream.write(b"data".as_slice());
+    let err = stream.flush().await.unwrap_err();
+    assert!(err.to_string().contains("flush failed"));
+    // The buffer is cleared by `Drop` even when flushing fails.
+    assert!(stream.wbuf.is_empty());
 }
 
 #[tokio::test]

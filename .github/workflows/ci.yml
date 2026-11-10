@@ -42,9 +42,13 @@ jobs:
           cat > .tarpaulin.toml <<'EOF'
           [default]
           workspace = true
-          exclude = ["rbdc-pg", "rbdc-mysql", "rbdc-mssql", "example"]
-          exclude-files = ["rbdc-pg/**", "rbdc-mysql/**", "rbdc-mssql/**", "example/**"]
+          exclude-files = [
+              "rbdc-pg/src/connection/**",
+              "rbdc-mysql/src/connection/**",
+              "example/**",
+          ]
           timeout = "300s"
+          args = ["--test-threads=1"]
           EOF
           cargo tarpaulin --out Xml --output-dir ./coverage
       - name: Upload coverage reports to Codecov

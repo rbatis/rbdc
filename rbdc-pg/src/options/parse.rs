@@ -289,4 +289,120 @@ mod test {
         let opts = PgConnectOptions::from_str(uri).unwrap();
         assert_eq!(Some(-14400), opts.timezone_sec);
     }
+
+    #[test]
+    fn it_rejects_invalid_uris() {
+        assert!(PgConnectOptions::from_str("not a url").is_err());
+        assert!(PgConnectOptions::from_str("").is_err());
+        // invalid UTF-8 after percent decoding
+        assert!(PgConnectOptions::from_str("postgres://%ff@localhost/db").is_err());
+        assert!(PgConnectOptions::from_str("postgres://user:%ff@localhost/db").is_err());
+    }
+
+    #[test]
+    fn it_parses_all_ssl_modes() {
+        for (raw, expected) in [
+            ("disable", PgSslMode::Disable),
+            ("allow", PgSslMode::Allow),
+            ("prefer", PgSslMode::Prefer),
+            ("require", PgSslMode::Require),
+            ("verify-ca", PgSslMode::VerifyCa),
+            ("verify-full", PgSslMode::VerifyFull),
+            ("VERIFY-FULL", PgSslMode::VerifyFull),
+        ] {
+            let opts = PgConnectOptions::from_str(&format!("postgres:///?sslmode={raw}")).unwrap();
+            assert_eq!(opts.ssl_mode, expected, "sslmode={raw}");
+        }
+        // alias spelling
+        let opts = PgConnectOptions::from_str("postgres:///?ssl-mode=require").unwrap();
+        assert_eq!(opts.ssl_mode, PgSslMode::Require);
+        assert!(PgConnectOptions::from_str("postgres:///?sslmode=bogus").is_err());
+        assert!(PgSslMode::from_str("bogus").is_err());
+    }
+
+    #[test]
+    fn it_parses_ssl_root_cert_aliases() {
+        for key in ["sslrootcert", "ssl-root-cert", "ssl-ca"] {
+            let opts =
+                PgConnectOptions::from_str(&format!("postgres:///?{key}=/tmp/ca.pem")).unwrap();
+            assert!(opts.ssl_root_cert.is_some(), "key={key}");
+        }
+    }
+
+    #[test]
+    fn it_parses_statement_cache_capacity() {
+        let opts =
+            PgConnectOptions::from_str("postgres:///?statement-cache-capacity=7").unwrap();
+        assert_eq!(opts.statement_cache_capacity, 7);
+        assert!(
+            PgConnectOptions::from_str("postgres:///?statement-cache-capacity=x").is_err()
+        );
+    }
+
+    #[test]
+    fn it_parses_host_socket_and_invalid_hostaddr() {
+        let opts = PgConnectOptions::from_str("postgres:///?host=/var/run/postgresql").unwrap();
+        assert_eq!(
+            Some(std::path::PathBuf::from("/var/run/postgresql")),
+            opts.socket
+        );
+
+        assert!(PgConnectOptions::from_str("postgres:///?hostaddr=999.1.1.1").is_err());
+        let opts = PgConnectOptions::from_str("postgres:///?hostaddr=::1").unwrap();
+        assert_eq!("::1", opts.host);
+    }
+
+    #[test]
+    fn it_rejects_invalid_numeric_parameters() {
+        assert!(PgConnectOptions::from_str("postgres:///?port=not-a-port").is_err());
+        assert!(PgConnectOptions::from_str("postgres:///?timezone_sec=not-a-number").is_err());
+    }
+
+    #[test]
+    fn it_appends_options_and_ignores_unknown_parameters() {
+        let opts = PgConnectOptions::from_str(
+            "postgres:///?options=-c%20a%3D1&options=-c%20b%3D2&unknown=value",
+        )
+        .unwrap();
+        assert_eq!(opts.options.as_deref(), Some("-c a=1 -c b=2"));
+
+        // malformed options[...] key is ignored rather than erroring
+        let opts = PgConnectOptions::from_str("postgres:///?options[foo=1").unwrap();
+        assert_eq!(opts.options, None);
+    }
+
+    #[test]
+    fn it_percent_decodes_credentials_and_database() {
+        let opts = PgConnectOptions::from_str(
+            "postgres://us%65r:p%40ss@localhost/mydb",
+        )
+        .unwrap();
+        assert_eq!("user", opts.username);
+        assert_eq!(Some("p@ss".to_string()), opts.password);
+        assert_eq!(Some("mydb".to_string()), opts.database);
+    }
+
+    #[test]
+    fn it_applies_builder_overrides_from_query() {
+        let opts = PgConnectOptions::from_str(
+            "postgres://user:pass@localhost:5433/mydb?user=other&password=secret&dbname=otherdb&port=5434",
+        )
+        .unwrap();
+        assert_eq!("other", opts.username);
+        assert_eq!(Some("secret".to_string()), opts.password);
+        assert_eq!(Some("otherdb".to_string()), opts.database);
+        assert_eq!(5434, opts.port);
+    }
+
+    #[test]
+    fn connect_options_set_uri_replaces_options() {
+        use rbdc::db::ConnectOptions;
+        let mut opts = PgConnectOptions::new();
+        opts.set_uri("postgres://user:pw@localhost:5444/db").unwrap();
+        assert_eq!("user", opts.username);
+        assert_eq!(Some("pw".to_string()), opts.password);
+        assert_eq!(Some("db".to_string()), opts.database);
+        assert_eq!(5444, opts.port);
+        assert!(opts.set_uri("not a url").is_err());
+    }
 }

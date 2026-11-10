@@ -367,6 +367,26 @@ async fn test_use_after_close_errors() {
         conn.exec_rows("SELECT 1", vec![]).await.is_err(),
         "exec_rows after close must error"
     );
+    // A second shutdown has no worker left to receive the command.
+    assert!(conn.close().await.is_err(), "second close must error");
+}
+
+#[tokio::test]
+async fn test_intermediate_statement_execution_error_is_reported() {
+    let mut conn = create_conn().await;
+    // The first (intermediate) statement of a multi-statement query prepares
+    // successfully but fails at execution time.
+    let err = conn
+        .exec("SELECT CAST('not_an_int' AS INTEGER); SELECT 1", vec![])
+        .await
+        .unwrap_err();
+    assert!(!err.to_string().is_empty());
+    // The connection remains usable after the failed intermediate statement.
+    let value = conn.exec_decode("SELECT 42", vec![]).await.unwrap();
+    assert_eq!(
+        value.as_array().unwrap()[0].as_map().unwrap()["42"].as_i64(),
+        Some(42)
+    );
 }
 
 #[tokio::test]

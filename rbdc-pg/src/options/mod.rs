@@ -491,3 +491,109 @@ fn test_options_formatting() {
     let options = PgConnectOptions::new();
     assert_eq!(options.options, None);
 }
+
+#[cfg(test)]
+mod builder_tests {
+    use super::*;
+
+    #[test]
+    fn builders_set_every_field() {
+        let opts = PgConnectOptions::new_without_pgpass()
+            .host("db.example.com")
+            .port(6543)
+            .socket("/tmp/pg")
+            .username("alice")
+            .password("secret")
+            .database("app")
+            .ssl_mode(PgSslMode::VerifyFull)
+            .ssl_root_cert("/tmp/ca.pem")
+            .ssl_root_cert_from_pem(b"pem".to_vec())
+            .statement_cache_capacity(10)
+            .application_name("my-app")
+            .extra_float_digits(3)
+            .options([("geqo", "off")])
+            .timezone_sec(28800);
+
+        assert_eq!(opts.host, "db.example.com");
+        assert_eq!(opts.port, 6543);
+        assert_eq!(opts.socket, Some(PathBuf::from("/tmp/pg")));
+        assert_eq!(opts.username, "alice");
+        assert_eq!(opts.password.as_deref(), Some("secret"));
+        assert_eq!(opts.database.as_deref(), Some("app"));
+        assert_eq!(opts.ssl_mode, PgSslMode::VerifyFull);
+        match opts.ssl_root_cert {
+            Some(CertificateInput::Inline(ref pem)) => assert_eq!(pem, b"pem"),
+            _ => panic!("expected inline certificate"),
+        }
+        assert_eq!(opts.statement_cache_capacity, 10);
+        assert_eq!(opts.application_name.as_deref(), Some("my-app"));
+        assert_eq!(opts.extra_float_digits.as_deref(), Some("3"));
+        assert_eq!(opts.options.as_deref(), Some("-c geqo=off"));
+        assert_eq!(opts.timezone_sec, Some(28800));
+
+        // extra_float_digits can be disabled
+        let opts = PgConnectOptions::new_without_pgpass().extra_float_digits(None);
+        assert_eq!(opts.extra_float_digits, None);
+        let opts = PgConnectOptions::new_without_pgpass().extra_float_digits(Some(-2));
+        assert_eq!(opts.extra_float_digits.as_deref(), Some("-2"));
+
+        // ssl_root_cert can be a file
+        let opts = PgConnectOptions::new_without_pgpass().ssl_root_cert("/tmp/x.pem");
+        assert!(matches!(
+            opts.ssl_root_cert,
+            Some(CertificateInput::File(_))
+        ));
+    }
+
+    #[test]
+    fn fetch_socket_variants() {
+        let opts = PgConnectOptions::new_without_pgpass().socket("/tmp/pg");
+        assert_eq!(opts.fetch_socket().as_deref(), Some("/tmp/pg/.s.PGSQL.5432"));
+
+        let opts = PgConnectOptions::new_without_pgpass()
+            .host("/var/run/postgresql")
+            .port(5433);
+        assert_eq!(
+            opts.fetch_socket().as_deref(),
+            Some("/var/run/postgresql/.s.PGSQL.5433")
+        );
+
+        let opts = PgConnectOptions::new_without_pgpass().host("localhost");
+        assert_eq!(opts.fetch_socket(), None);
+    }
+
+    #[test]
+    fn defaults_and_env_independent_constructor() {
+        let opts = PgConnectOptions::new_without_pgpass();
+        assert_eq!(opts.statement_cache_capacity, 100);
+        assert_eq!(opts.extra_float_digits.as_deref(), Some("3"));
+        assert!(!opts.host.is_empty());
+
+        let opts = PgConnectOptions::default();
+        assert!(opts.port > 0);
+        assert!(!opts.username.is_empty());
+
+        let opts = PgConnectOptions::new();
+        assert!(opts.port > 0);
+    }
+
+    #[test]
+    fn ssl_mode_parsing() {
+        for (raw, expected) in [
+            ("disable", PgSslMode::Disable),
+            ("allow", PgSslMode::Allow),
+            ("prefer", PgSslMode::Prefer),
+            ("require", PgSslMode::Require),
+            ("verify-ca", PgSslMode::VerifyCa),
+            ("verify-full", PgSslMode::VerifyFull),
+        ] {
+            assert_eq!(raw.parse::<PgSslMode>().unwrap(), expected);
+        }
+        assert_eq!(PgSslMode::default(), PgSslMode::Disable);
+        assert!("nope".parse::<PgSslMode>().is_err());
+
+        let json = serde_json::to_string(&PgSslMode::Require).unwrap();
+        let decoded: PgSslMode = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, PgSslMode::Require);
+    }
+}

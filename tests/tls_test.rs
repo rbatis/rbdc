@@ -15,14 +15,21 @@ const CA_PEM: &str = include_str!("fixtures/test_ca.pem");
 const SERVER_CERT_PEM: &str = include_str!("fixtures/test_server_cert.pem");
 const SERVER_KEY_PEM: &str = include_str!("fixtures/test_server_key.pem");
 
-fn acceptor() -> TlsAcceptor {
-    let certs: Vec<CertificateDer<'static>> =
-        rustls_pemfile::certs(&mut Cursor::new(SERVER_CERT_PEM.as_bytes()))
-            .collect::<Result<_, _>>()
-            .unwrap();
+fn load_cert_and_key() -> (
+    Vec<CertificateDer<'static>>,
+    rustls::pki_types::PrivateKeyDer<'static>,
+) {
+    let certs = rustls_pemfile::certs(&mut Cursor::new(SERVER_CERT_PEM.as_bytes()))
+        .collect::<Result<_, _>>()
+        .unwrap();
     let key = rustls_pemfile::private_key(&mut Cursor::new(SERVER_KEY_PEM.as_bytes()))
         .unwrap()
         .unwrap();
+    (certs, key)
+}
+
+fn acceptor() -> TlsAcceptor {
+    let (certs, key) = load_cert_and_key();
     let config = rustls::ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certs, key)
@@ -31,9 +38,12 @@ fn acceptor() -> TlsAcceptor {
 }
 
 async fn spawn_server() -> (u16, tokio::task::JoinHandle<()>) {
+    spawn_server_with(acceptor()).await
+}
+
+async fn spawn_server_with(acceptor: TlsAcceptor) -> (u16, tokio::task::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let acceptor = acceptor();
     let handle = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
         let mut tls = acceptor.accept(tcp).await.unwrap();
@@ -99,6 +109,61 @@ async fn test_tls_upgrade_twice_is_idempotent() {
     stream.upgrade("localhost", true, false, None).await.unwrap();
     // Upgrading an already-TLS stream is a no-op that preserves the stream.
     stream.upgrade("localhost", true, false, None).await.unwrap();
+    assert!(stream.is_tls());
+    assert_echo(&mut stream).await;
+
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_tls_upgrade_with_custom_root_valid_hostname() {
+    // Exercises the plain "trusted roots + no hostname override" branch of
+    // `configure_tls_connector`.
+    let (port, server) = spawn_server().await;
+    let tcp = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    let mut stream = MaybeTlsStream::Raw(tcp);
+
+    let ca: CertificateInput = CA_PEM.to_string().into();
+    stream
+        .upgrade("localhost", false, false, Some(&ca))
+        .await
+        .unwrap();
+    assert!(stream.is_tls());
+    assert_echo(&mut stream).await;
+
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_tls_upgrade_with_invalid_der_root_cert_errors() {
+    // The PEM block decodes, but its contents are not a valid X.509
+    // certificate, so adding it to the root store fails.
+    let (client, _server) = tokio::io::duplex(64);
+    let mut stream = MaybeTlsStream::Raw(client);
+    let ca: CertificateInput =
+        "-----BEGIN CERTIFICATE-----\naGVsbG8=\n-----END CERTIFICATE-----"
+            .to_string()
+            .into();
+    let err = stream
+        .upgrade("example.com", false, false, Some(&ca))
+        .await
+        .unwrap_err();
+    assert!(!err.to_string().is_empty());
+}
+
+#[tokio::test]
+async fn test_tls_upgrade_no_hostname_verifier_accepts_valid_cert() {
+    // With `accept_invalid_hostnames`, the inner verifier still runs and can
+    // succeed when the certificate is trusted and the hostname matches.
+    let (port, server) = spawn_server().await;
+    let tcp = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    let mut stream = MaybeTlsStream::Raw(tcp);
+
+    let ca: CertificateInput = CA_PEM.to_string().into();
+    stream
+        .upgrade("localhost", false, true, Some(&ca))
+        .await
+        .unwrap();
     assert!(stream.is_tls());
     assert_echo(&mut stream).await;
 

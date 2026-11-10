@@ -79,3 +79,91 @@ impl MySqlTypeInfo {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::text::{ColumnDefinition, ColumnType};
+    use rbdc::io::Decode;
+
+    /// Build a minimal ColumnDefinition packet using the length-encoded encoding.
+    fn definition_bytes(ty: ColumnType) -> Vec<u8> {
+        use crate::io::MySqlBufMutExt;
+        use bytes::BufMut;
+        let mut b = Vec::new();
+        b.put_bytes_lenenc(b"def".to_vec());
+        b.put_bytes_lenenc(b"db".to_vec());
+        b.put_bytes_lenenc(b"t".to_vec());
+        b.put_bytes_lenenc(b"t".to_vec());
+        b.put_bytes_lenenc(b"a".to_vec());
+        b.put_bytes_lenenc(b"name".to_vec());
+        b.put_uint_lenenc(12);
+        b.put_u16_le(45);
+        b.put_u32_le(255);
+        b.put_u8(ty as u8);
+        b.put_u16_le(1);
+        b.put_u8(0);
+        b
+    }
+
+    #[test]
+    fn test_type_info_constructors() {
+        let b = MySqlTypeInfo::binary(ColumnType::Blob);
+        assert_eq!(b.r#type, ColumnType::Blob);
+        assert_eq!(b.char_set, 63);
+
+        let n = MySqlTypeInfo::null();
+        assert_eq!(n.r#type, ColumnType::Null);
+        assert!(n.is_null());
+
+        let e = MySqlTypeInfo::__enum();
+        assert_eq!(e.r#type, ColumnType::Enum);
+
+        let t = MySqlTypeInfo::from_type(ColumnType::VarChar);
+        assert_eq!(t.r#type, ColumnType::VarChar);
+    }
+
+    #[test]
+    fn test_type_feature_gate() {
+        assert_eq!(
+            MySqlTypeInfo::from_type(ColumnType::Date).__type_feature_gate(),
+            Some("time")
+        );
+        assert_eq!(
+            MySqlTypeInfo::from_type(ColumnType::Time).__type_feature_gate(),
+            Some("time")
+        );
+        assert_eq!(
+            MySqlTypeInfo::from_type(ColumnType::Timestamp).__type_feature_gate(),
+            Some("time")
+        );
+        assert_eq!(
+            MySqlTypeInfo::from_type(ColumnType::Datetime).__type_feature_gate(),
+            Some("time")
+        );
+        assert_eq!(
+            MySqlTypeInfo::from_type(ColumnType::Json).__type_feature_gate(),
+            Some("json")
+        );
+        assert_eq!(
+            MySqlTypeInfo::from_type(ColumnType::NewDecimal).__type_feature_gate(),
+            Some("bigdecimal")
+        );
+        assert_eq!(
+            MySqlTypeInfo::from_type(ColumnType::Long).__type_feature_gate(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_from_column() {
+        let def = ColumnDefinition::decode_with(
+            definition_bytes(ColumnType::VarChar).into(),
+            crate::protocol::Capabilities::empty(),
+        )
+        .unwrap();
+        let info = MySqlTypeInfo::from_column(&def);
+        assert_eq!(info.r#type, ColumnType::VarChar);
+        assert_eq!(info.char_set, 45);
+    }
+}

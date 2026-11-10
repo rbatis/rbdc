@@ -562,6 +562,30 @@ async fn test_ping_flush_and_close() {
 }
 
 #[tokio::test]
+async fn test_exec_rows_after_close_reports_worker_crashed() {
+    let mut conn = memory_conn().await;
+    conn.close().await.expect("close");
+    // Let the worker thread finish so the command channel is disconnected.
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Both the bound-argument and no-argument branches map the send failure to
+    // a `WorkerCrashed` error.
+    let err = conn
+        .exec_rows("SELECT 1", vec![])
+        .await
+        .err()
+        .expect("no-arg exec_rows after close");
+    assert!(err.to_string().contains("WorkerCrashed"), "unexpected: {err}");
+
+    let err = conn
+        .exec_rows("SELECT ?", vec![Value::I64(1)])
+        .await
+        .err()
+        .expect("bound exec_rows after close");
+    assert!(err.to_string().contains("WorkerCrashed"), "unexpected: {err}");
+}
+
+#[tokio::test]
 async fn test_lock_handle_and_collations() {
     let mut conn = SqliteConnectOptions::new()
         .filename(":memory:")

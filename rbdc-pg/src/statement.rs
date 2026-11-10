@@ -49,3 +49,46 @@ impl PgStatement {
             .map(|v| *v)
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    use crate::type_info::{PgType, PgTypeInfo};
+    use either::Either;
+
+    fn statement() -> PgStatement {
+        let mut column_names = HashMap::new();
+        column_names.insert(UStr::from("id"), 0);
+        PgStatement {
+            sql: "SELECT 1".to_string(),
+            metadata: Arc::new(PgStatementMetadata {
+                columns: vec![PgColumn {
+                    ordinal: 0,
+                    name: UStr::from("id"),
+                    type_info: PgTypeInfo(PgType::Int4),
+                    relation_id: None,
+                    relation_attribute_no: None,
+                }],
+                column_names,
+                parameters: vec![PgTypeInfo(PgType::Int4)],
+            }),
+        }
+    }
+
+    #[test]
+    fn accessors_and_index() {
+        let stmt = statement();
+        assert_eq!(stmt.sql(), "SELECT 1");
+        assert_eq!(stmt.columns().len(), 1);
+        match stmt.parameters() {
+            Some(Either::Left(params)) => assert_eq!(params.len(), 1),
+            _ => panic!("expected left parameters"),
+        }
+        assert_eq!(stmt.index("id").unwrap(), 0);
+        assert!(stmt.index("missing").is_err());
+
+        let owned = stmt.to_owned();
+        assert_eq!(owned.sql(), stmt.sql());
+        assert!(Arc::ptr_eq(&owned.metadata, &stmt.metadata));
+    }
+}

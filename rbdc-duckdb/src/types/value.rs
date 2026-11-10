@@ -435,3 +435,22 @@ pub fn is_json_string(js: &str) -> bool {
         || (js.starts_with('{') && js.ends_with('}'))
         || (js.starts_with('[') && js.ends_with(']'))
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+
+    #[test]
+    fn ty_to_type_name_covers_every_mapped_variant() {
+        assert_eq!(ty_to_type_name(&DuckDbType::Date), "Date");
+        assert_eq!(ty_to_type_name(&DuckDbType::Time), "Time");
+        assert_eq!(ty_to_type_name(&DuckDbType::TimeTz), "Time");
+        assert_eq!(ty_to_type_name(&DuckDbType::Timestamp), "Timestamp");
+        assert_eq!(ty_to_type_name(&DuckDbType::TimestampS), "Timestamp");
+        assert_eq!(ty_to_type_name(&DuckDbType::TimestampMs), "Timestamp");
+        assert_eq!(ty_to_type_name(&DuckDbType::TimestampNs), "Timestamp");
+        // Everything else falls back to a plain string type name.
+        assert_eq!(ty_to_type_name(&DuckDbType::Varchar), "String");
+        assert_eq!(ty_to_type_name(&DuckDbType::Int), "String");
+    }
+}

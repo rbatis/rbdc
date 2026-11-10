@@ -197,3 +197,85 @@ impl Encode for Vec<Value> {
         Ok(IsNull::No)
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    use crate::type_info::{PgCustomType, PgTypeKind};
+    use rbdc::ext::ustr::UStr;
+    use std::sync::Arc;
+
+    fn custom(kind: PgTypeKind) -> PgTypeInfo {
+        PgTypeInfo(PgType::Custom(Arc::new(PgCustomType {
+            oid: Oid(3000),
+            name: UStr::from("custom_array"),
+            kind,
+        })))
+    }
+
+    fn text(s: &str, ty: PgTypeInfo) -> PgValueRef<'_> {
+        PgValueRef {
+            value: Some(s.as_bytes()),
+            type_info: ty,
+            format: PgValueFormat::Text,
+            timezone_sec: None,
+        }
+    }
+
+    #[test]
+    fn text_decode_handles_every_kind() {
+        for kind in [
+            PgTypeKind::Simple,
+            PgTypeKind::Pseudo,
+            PgTypeKind::Domain(PgTypeInfo(PgType::Int4)),
+            PgTypeKind::Composite(Arc::from(vec![(
+                "a".to_string(),
+                PgTypeInfo(PgType::Text),
+            )])),
+            PgTypeKind::Enum(Arc::from(vec!["a".to_string()])),
+            PgTypeKind::Range(PgTypeInfo(PgType::Int4)),
+        ] {
+            let decoded =
+                Vec::<Value>::decode(text("{1}", custom(kind))).unwrap();
+            // without an array kind the element type is UNKNOWN
+            assert_eq!(decoded, vec![Value::Null]);
+        }
+
+        // Array kind resolves the element type
+        let decoded = Vec::<Value>::decode(text(
+            "{1}",
+            custom(PgTypeKind::Array(PgTypeInfo(PgType::Int4))),
+        ))
+        .unwrap();
+        assert_eq!(decoded, vec![Value::I32(1)]);
+    }
+
+    #[test]
+    fn binary_decode_falls_back_to_custom_array_element() {
+        let mut buf = Vec::new();
+        buf.extend(1i32.to_be_bytes()); // ndim
+        buf.extend(0i32.to_be_bytes()); // flags
+        buf.extend(9999u32.to_be_bytes()); // unknown element OID
+        buf.extend(1i32.to_be_bytes()); // len
+        buf.extend(1i32.to_be_bytes()); // lower
+        buf.extend(4i32.to_be_bytes());
+        buf.extend(7i32.to_be_bytes());
+
+        let value = PgValueRef {
+            value: Some(&buf),
+            type_info: custom(PgTypeKind::Array(PgTypeInfo(PgType::Int4))),
+            format: PgValueFormat::Binary,
+            timezone_sec: None,
+        };
+        assert_eq!(Vec::<Value>::decode(value).unwrap(), vec![Value::I32(7)]);
+    }
+
+    #[test]
+    fn element_type_info_uses_first_element_or_unknown() {
+        assert_eq!(element_type_info(&Vec::<Value>::new()), PgTypeInfo::UNKNOWN);
+        assert_eq!(
+            element_type_info(&vec![Value::I32(1)]),
+            PgTypeInfo(PgType::Int4)
+        );
+    }
+}

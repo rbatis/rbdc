@@ -46,3 +46,68 @@ impl Describe {
         self.nullable.get(column).copied().and_then(identity)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rbdc::ext::ustr::UStr;
+
+    fn column(index: usize, ty: crate::protocol::text::ColumnType) -> MySqlColumn {
+        MySqlColumn {
+            ordinal: index,
+            name: UStr::new(&format!("c{index}")),
+            type_info: MySqlTypeInfo::from_type(ty),
+        }
+    }
+
+    #[test]
+    fn test_columns_and_column() {
+        let d = Describe {
+            columns: vec![
+                column(0, crate::protocol::text::ColumnType::Long),
+                column(1, crate::protocol::text::ColumnType::VarChar),
+            ],
+            parameters: None,
+            nullable: vec![],
+        };
+        assert_eq!(d.columns().len(), 2);
+        assert_eq!(&*d.column(1).name, "c1");
+    }
+
+    #[test]
+    fn test_parameters_none_left_and_right() {
+        let mut d = Describe {
+            columns: vec![],
+            parameters: None,
+            nullable: vec![],
+        };
+        assert!(d.parameters().is_none());
+
+        d.parameters = Some(Either::Left(vec![MySqlTypeInfo::from_type(
+            crate::protocol::text::ColumnType::Tiny,
+        )]));
+        match d.parameters() {
+            Some(Either::Left(params)) => assert_eq!(params.len(), 1),
+            _ => panic!("expected left parameters"),
+        }
+
+        d.parameters = Some(Either::Right(3));
+        match d.parameters() {
+            Some(Either::Right(count)) => assert_eq!(count, 3),
+            _ => panic!("expected right parameters"),
+        }
+    }
+
+    #[test]
+    fn test_nullable() {
+        let d = Describe {
+            columns: vec![],
+            parameters: None,
+            nullable: vec![Some(true), Some(false), None],
+        };
+        assert_eq!(d.nullable(0), Some(true));
+        assert_eq!(d.nullable(1), Some(false));
+        assert_eq!(d.nullable(2), None);
+        assert_eq!(d.nullable(3), None);
+    }
+}

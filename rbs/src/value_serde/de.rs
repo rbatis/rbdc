@@ -537,3 +537,102 @@ impl<'de> serde::de::VariantAccess<'de> for VariantDeserializer {
         ));
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    use serde::de::{IgnoredAny, MapAccess, SeqAccess, VariantAccess};
+    use std::marker::PhantomData;
+
+    struct OneElement;
+
+    impl<'de> Visitor<'de> for OneElement {
+        type Value = ();
+
+        fn expecting(&self, f: &mut Formatter<'_>) -> fmt::Result {
+            f.write_str("a sequence with exactly one element")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<(), A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let _: Option<Value> = seq.next_element()?;
+            Ok(())
+        }
+    }
+
+    fn value_items() -> Vec<Value> {
+        vec![Value::I32(1), Value::I32(2)]
+    }
+
+    #[test]
+    fn seq_deserializer_empty_sequence_visits_unit() {
+        let empty: Vec<&Value> = Vec::new();
+        let de = SeqDeserializer::new(empty.into_iter());
+        let _: IgnoredAny = Deserializer::deserialize_any(de, IgnoredAny).unwrap();
+    }
+
+    #[test]
+    fn seq_deserializer_consumes_every_element() {
+        let items = value_items();
+        let refs: Vec<&Value> = items.iter().collect();
+        let de = SeqDeserializer::new(refs.into_iter());
+        let _: IgnoredAny = Deserializer::deserialize_any(de, IgnoredAny).unwrap();
+    }
+
+    #[test]
+    fn seq_deserializer_reports_leftover_elements() {
+        let items = value_items();
+        let refs: Vec<&Value> = items.iter().collect();
+        let de = SeqDeserializer::new(refs.into_iter());
+        let err = Deserializer::deserialize_any(de, OneElement).unwrap_err();
+        assert!(err.to_string().contains("fewer elements in array"));
+    }
+
+    #[test]
+    fn map_deserializer_visits_entries() {
+        let mut map = ValueMap::new();
+        map.insert(Value::String("a".into()), Value::I32(1));
+        let de = MapDeserializer::new((&map).into_iter());
+        let _: IgnoredAny = Deserializer::deserialize_any(de, IgnoredAny).unwrap();
+    }
+
+    #[test]
+    fn map_deserializer_missing_value_errors() {
+        let mut map = ValueMap::new();
+        map.insert(Value::String("a".into()), Value::I32(1));
+        let mut de = MapDeserializer::new((&map).into_iter());
+        let err = MapAccess::next_value_seed(&mut de, PhantomData::<Value>).unwrap_err();
+        assert!(err.to_string().contains("value is missing"));
+    }
+
+    #[test]
+    fn map_deserializer_value_error_appends_key() {
+        let mut map = ValueMap::new();
+        map.insert(Value::String("a".into()), Value::I32(1));
+        let mut de = MapDeserializer::new((&map).into_iter());
+        let key: Option<String> = MapAccess::next_key_seed(&mut de, PhantomData::<String>).unwrap();
+        assert_eq!(key.as_deref(), Some("a"));
+        let err = MapAccess::next_value_seed(&mut de, PhantomData::<String>).unwrap_err();
+        assert!(err.to_string().contains("key = `a`"));
+    }
+
+    #[test]
+    fn variant_deserializer_missing_value_errors() {
+        let unit = VariantDeserializer { value: None };
+        assert!(VariantAccess::unit_variant(unit).is_err());
+
+        let newtype = VariantDeserializer { value: None };
+        assert!(VariantAccess::newtype_variant_seed(newtype, PhantomData::<Value>).is_err());
+    }
+
+    #[test]
+    fn variant_deserializer_empty_map_errors() {
+        let newtype = VariantDeserializer {
+            value: Some(Value::Map(ValueMap::new())),
+        };
+        let err = VariantAccess::newtype_variant_seed(newtype, PhantomData::<Value>).unwrap_err();
+        assert!(err.to_string().contains("newtype_variant"));
+    }
+}

@@ -161,3 +161,82 @@ impl<'r> PgValueRef<'r> {
         self.value.is_none()
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    use crate::type_info::PgType;
+
+    fn typed() -> PgTypeInfo {
+        PgTypeInfo(PgType::Int4)
+    }
+
+    #[test]
+    fn pg_value_ref_get_reads_length_prefixed_values() {
+        let mut buf: &[u8] = &[0, 0, 0, 2, 0xab, 0xcd];
+        let value = PgValueRef::get(&mut buf, PgValueFormat::Binary, typed(), Some(60));
+        assert_eq!(value.value, Some(&[0xab, 0xcd][..]));
+        assert_eq!(value.format(), PgValueFormat::Binary);
+        assert_eq!(value.timezone_sec, Some(60));
+        assert_eq!(value.type_info().as_ref(), &typed());
+        assert!(!value.is_null());
+        assert_eq!(value.as_bytes().unwrap(), &[0xab, 0xcd]);
+        assert!(buf.is_empty());
+
+        // NULL value encoded as -1
+        let mut buf: &[u8] = &[0xff, 0xff, 0xff, 0xff];
+        let value = PgValueRef::get(&mut buf, PgValueFormat::Text, typed(), None);
+        assert!(value.is_null());
+        assert!(value.as_bytes().is_err());
+        assert!(value.as_str().is_err());
+
+        let owned = value.to_owned();
+        assert!(owned.is_null());
+        assert_eq!(owned.format(), PgValueFormat::Text);
+        assert_eq!(owned.type_info().as_ref(), &typed());
+    }
+
+    #[test]
+    fn pg_value_ref_as_str_and_invalid_utf8() {
+        let value = PgValueRef {
+            value: Some(b"hello"),
+            type_info: typed(),
+            format: PgValueFormat::Text,
+            timezone_sec: None,
+        };
+        assert_eq!(value.as_str().unwrap(), "hello");
+
+        let invalid = PgValueRef {
+            value: Some(&[0xff]),
+            type_info: typed(),
+            format: PgValueFormat::Text,
+            timezone_sec: None,
+        };
+        assert!(invalid.as_str().is_err());
+    }
+
+    #[test]
+    fn pg_value_accessors() {
+        let mut buf: &[u8] = &[0, 0, 0, 3, b'a', b'b', b'c'];
+        let value = PgValue::get(&mut buf, PgValueFormat::Text, typed(), Some(1));
+        assert_eq!(value.as_str().unwrap(), "abc");
+        assert_eq!(value.as_bytes().unwrap(), b"abc");
+        assert!(!value.is_null());
+        assert_eq!(value.format(), PgValueFormat::Text);
+        assert_eq!(value.type_info().as_ref(), &typed());
+        assert_eq!(value.as_ref().timezone_sec, Some(1));
+        assert!(buf.is_empty());
+
+        let cloned = value.clone();
+        assert_eq!(cloned.into_bytes().unwrap(), b"abc".to_vec());
+
+        // NULL values
+        let mut buf: &[u8] = &[0xff, 0xff, 0xff, 0xff];
+        let value = PgValue::get(&mut buf, PgValueFormat::Binary, typed(), None);
+        assert!(value.is_null());
+        assert!(value.as_str().is_err());
+        assert!(value.as_bytes().is_err());
+        assert!(value.clone().into_bytes().is_err());
+        assert!(value.as_ref().is_null());
+    }
+}

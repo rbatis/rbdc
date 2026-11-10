@@ -69,3 +69,79 @@ impl Decode for DateTime {
         })
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    use crate::type_info::{PgType, PgTypeInfo};
+
+    #[test]
+    fn encode_applies_session_timezone() {
+        let dt = DateTime(fastdate::DateTime::from_timestamp_millis(1_600_000_000_000));
+
+        let mut without = PgArgumentBuffer::default();
+        dt.clone().encode(&mut without).unwrap();
+
+        let mut with = PgArgumentBuffer::default();
+        with.timezone_sec = Some(28800);
+        dt.clone().encode(&mut with).unwrap();
+
+        let a = i64::from_be_bytes(without[..8].try_into().unwrap());
+        let b = i64::from_be_bytes(with[..8].try_into().unwrap());
+        assert_eq!(b - a, 28_800 * 1_000_000);
+    }
+
+    #[test]
+    fn decode_binary_applies_timezone_offset() {
+        let dt = DateTime(fastdate::DateTime::from_timestamp_millis(1_600_000_000_000));
+        let mut buf = PgArgumentBuffer::default();
+        dt.clone().encode(&mut buf).unwrap();
+
+        let value = PgValueRef {
+            value: Some(&buf[..]),
+            type_info: PgTypeInfo(PgType::Timestamptz),
+            format: PgValueFormat::Binary,
+            timezone_sec: Some(3600),
+        };
+        let decoded = DateTime::decode(value).unwrap();
+        // set_offset changes the display offset, not the instant
+        assert_eq!(
+            decoded.unix_timestamp_millis(),
+            dt.unix_timestamp_millis()
+        );
+
+        // negative microseconds branch
+        let negative = (-1_000_000i64).to_be_bytes();
+        let value = PgValueRef {
+            value: Some(&negative),
+            type_info: PgTypeInfo(PgType::Timestamptz),
+            format: PgValueFormat::Binary,
+            timezone_sec: None,
+        };
+        assert!(DateTime::decode(value).is_ok());
+    }
+
+    #[test]
+    fn decode_text_and_errors() {
+        let value = PgValueRef {
+            value: Some(b"2021-02-03 04:05:06"),
+            type_info: PgTypeInfo(PgType::Timestamptz),
+            format: PgValueFormat::Text,
+            timezone_sec: None,
+        };
+        assert_eq!(
+            DateTime::decode(value).unwrap().unix_timestamp_millis(),
+            fastdate::DateTime::from_str("2021-02-03 04:05:06")
+                .unwrap()
+                .unix_timestamp_millis()
+        );
+
+        let value = PgValueRef {
+            value: Some(b"nope"),
+            type_info: PgTypeInfo(PgType::Timestamptz),
+            format: PgValueFormat::Text,
+            timezone_sec: None,
+        };
+        assert!(DateTime::decode(value).is_err());
+    }
+}

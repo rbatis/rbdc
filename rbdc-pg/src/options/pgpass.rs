@@ -325,4 +325,143 @@ mod tests {
             None
         );
     }
+
+    use super::load_password_from_file;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_FILE: AtomicU64 = AtomicU64::new(0);
+
+    // Environment variables are process-wide; serialize the tests that mutate
+    // them so they cannot observe each other's changes.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn temp_pgpass(contents: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "rbdc_pg_pgpass_{}_{}",
+            std::process::id(),
+            NEXT_FILE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let mut file = std::fs::File::create(&path).unwrap();
+        file.write_all(contents.as_bytes()).unwrap();
+        file.flush().unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        path
+    }
+
+    #[test]
+    fn test_load_password_from_file() {
+        let path = temp_pgpass("localhost:5432:bar:foo:baz\n");
+        assert_eq!(
+            load_password_from_file(path.clone(), "localhost", 5432, "foo", Some("bar")),
+            Some("baz".to_owned())
+        );
+        assert_eq!(
+            load_password_from_file(path.clone(), "other", 5432, "foo", Some("bar")),
+            None
+        );
+        let _ = std::fs::remove_file(path);
+
+        // a missing file is simply ignored
+        assert_eq!(
+            load_password_from_file(
+                std::env::temp_dir().join("rbdc_pg_definitely_missing_pgpass"),
+                "localhost",
+                5432,
+                "foo",
+                Some("bar")
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn test_load_password_uses_pgpassfile_env() {
+        let _guard = lock_env();
+        let path = temp_pgpass("localhost:5432:bar:foo:envsecret\n");
+        let previous = std::env::var_os("PGPASSFILE");
+        std::env::set_var("PGPASSFILE", &path);
+        let found = super::load_password("localhost", 5432, "foo", Some("bar"));
+        match previous {
+            Some(value) => std::env::set_var("PGPASSFILE", value),
+            None => std::env::remove_var("PGPASSFILE"),
+        }
+        let _ = std::fs::remove_file(path);
+        assert_eq!(found, Some("envsecret".to_owned()));
+    }
+
+    // On Unix `dirs::home_dir` reads HOME, so we can point it at an empty
+    // directory and verify the fallback lookup runs.
+    #[cfg(unix)]
+    #[test]
+    fn test_load_password_falls_back_to_home_file() {
+        let _guard = lock_env();
+        let home = std::env::temp_dir().join(format!(
+            "rbdc_pg_home_{}_{}",
+            std::process::id(),
+            NEXT_FILE.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&home).unwrap();
+
+        let previous_home = std::env::var_os("HOME");
+        let previous_passfile = std::env::var_os("PGPASSFILE");
+        std::env::set_var("HOME", &home);
+        std::env::remove_var("PGPASSFILE");
+
+        let found = super::load_password("localhost", 5432, "foo", Some("bar"));
+
+        match previous_home {
+            Some(value) => std::env::set_var("HOME", value),
+            None => std::env::remove_var("HOME"),
+        }
+        match previous_passfile {
+            Some(value) => std::env::set_var("PGPASSFILE", value),
+            None => std::env::remove_var("PGPASSFILE"),
+        }
+        let _ = std::fs::remove_dir_all(home);
+
+        assert_eq!(found, None);
+    }
+
+    // On Windows the default location comes from `dirs::data_dir`, which we
+    // cannot easily isolate; just exercise the path without asserting a value.
+    #[cfg(windows)]
+    #[test]
+    fn test_load_password_default_location_is_exercised() {
+        let _guard = lock_env();
+        let previous_passfile = std::env::var_os("PGPASSFILE");
+        std::env::remove_var("PGPASSFILE");
+        let _ = super::load_password("localhost", 5432, "foo", Some("bar"));
+        match previous_passfile {
+            Some(value) => std::env::set_var("PGPASSFILE", value),
+            None => std::env::remove_var("PGPASSFILE"),
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_load_password_from_file_rejects_loose_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = temp_pgpass("localhost:5432:bar:foo:baz\n");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let found = load_password_from_file(
+            path.clone(),
+            "localhost",
+            5432,
+            "foo",
+            Some("bar"),
+        );
+        let _ = std::fs::remove_file(path);
+        assert_eq!(found, None);
+    }
 }

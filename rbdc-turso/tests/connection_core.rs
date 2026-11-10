@@ -633,7 +633,13 @@ async fn test_no_fallback_on_error() {
 
 /// Verify that a bad remote connection fails at connect time, not
 /// silently falling back to local/in-memory.
+///
+/// Ignored by default: it performs real DNS/TLS I/O against a non-existent
+/// host, which is slow and non-deterministic and crashed libsql under LLVM
+/// coverage instrumentation on Linux. The offline validation behaviour is
+/// covered by `test_connect_invalid_remote_fails`.
 #[tokio::test]
+#[ignore = "requires network access to a non-existent remote host"]
 async fn test_no_fallback_bad_remote() {
     let driver = TursoDriver {};
     let result = driver

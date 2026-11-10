@@ -423,6 +423,26 @@ async fn test_extract_enum_union_and_null() {
 /// Directly exercise extraction of a result set containing a NULL column and
 /// multiple rows, to make sure every row is decoded independently.
 #[tokio::test]
+async fn test_ext_timestamp_parameter_binds_through_fallback() {
+    let mut conn = create_conn().await;
+    // `Ext` parameters take the `Encode` fallback path in `bind_params`; a
+    // numeric `Timestamp` is encoded as an Int64 argument.
+    let mut stream = conn
+        .exec_rows(
+            "SELECT CAST(? AS BIGINT)",
+            vec![Value::Ext("Timestamp", Box::new(Value::I64(42)))],
+        )
+        .await
+        .expect("exec_rows");
+    let mut row = stream
+        .next()
+        .await
+        .expect("one row")
+        .expect("row result");
+    assert_eq!(row.get(0).unwrap(), Value::I64(42));
+}
+
+#[tokio::test]
 async fn test_extract_null_mixed_rows() {
     let mut conn = create_conn().await;
     let mut stream = conn

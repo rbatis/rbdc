@@ -133,3 +133,155 @@ impl PgNumeric {
         }
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    use bigdecimal::BigDecimal;
+    use num_bigint::BigInt;
+
+    #[test]
+    fn decode_number_nan_and_invalid_sign() {
+        let mut payload = Vec::new();
+        payload.extend(2u16.to_be_bytes());
+        payload.extend(1i16.to_be_bytes());
+        payload.extend(SIGN_NEG.to_be_bytes());
+        payload.extend(3i16.to_be_bytes());
+        payload.extend(1i16.to_be_bytes());
+        payload.extend(2345i16.to_be_bytes());
+        let decoded = PgNumeric::decode(&payload).unwrap();
+        assert_eq!(
+            decoded,
+            PgNumeric::Number {
+                sign: PgNumericSign::Negative,
+                weight: 1,
+                scale: 3,
+                digits: vec![1, 2345],
+            }
+        );
+
+        let mut nan = Vec::new();
+        nan.extend(0u16.to_be_bytes());
+        nan.extend(0i16.to_be_bytes());
+        nan.extend(SIGN_NAN.to_be_bytes());
+        nan.extend(0i16.to_be_bytes());
+        assert_eq!(PgNumeric::decode(&nan).unwrap(), PgNumeric::NotANumber);
+
+        let mut bad = Vec::new();
+        bad.extend(0u16.to_be_bytes());
+        bad.extend(0i16.to_be_bytes());
+        bad.extend(0x1234u16.to_be_bytes());
+        bad.extend(0i16.to_be_bytes());
+        assert!(PgNumeric::decode(&bad).is_err());
+    }
+
+    #[test]
+    fn encode_number_and_nan() {
+        let number = PgNumeric::Number {
+            sign: PgNumericSign::Positive,
+            weight: 1,
+            scale: 2,
+            digits: vec![1, 2],
+        };
+        let mut buf = PgArgumentBuffer::default();
+        number.encode(&mut buf);
+        assert_eq!(
+            buf.to_vec(),
+            vec![
+                0, 2, // digits
+                0, 1, // weight
+                0, 0, // sign positive
+                0, 2, // scale
+                0, 1, // digit 1
+                0, 2, // digit 2
+            ]
+        );
+
+        let mut buf = PgArgumentBuffer::default();
+        PgNumeric::NotANumber.encode(&mut buf);
+        assert_eq!(
+            buf.to_vec(),
+            vec![0, 0, 0, 0, 0xc0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn sign_conversion() {
+        assert_eq!(PgNumericSign::try_from_u16(SIGN_POS).unwrap(), PgNumericSign::Positive);
+        assert_eq!(PgNumericSign::try_from_u16(SIGN_NEG).unwrap(), PgNumericSign::Negative);
+        assert!(PgNumericSign::try_from_u16(0x1234).is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "sign value for NaN")]
+    fn sign_nan_is_unreachable() {
+        let _ = PgNumericSign::try_from_u16(SIGN_NAN);
+    }
+
+    #[test]
+    fn numeric_to_bigdecimal() {
+        // NaN is rejected
+        assert!(BigDecimal::try_from(PgNumeric::NotANumber).is_err());
+
+        // empty digit array means zero
+        let zero = BigDecimal::try_from(PgNumeric::Number {
+            sign: PgNumericSign::Positive,
+            digits: vec![],
+            weight: 0,
+            scale: 0,
+        })
+        .unwrap();
+        assert_eq!(zero, BigDecimal::from(0u64));
+
+        // regular value, positive and negative
+        let positive = BigDecimal::try_from(PgNumeric::Number {
+            sign: PgNumericSign::Positive,
+            digits: vec![1, 2345],
+            weight: 1,
+            scale: 4,
+        })
+        .unwrap();
+        assert_eq!(positive.to_string(), "12345");
+
+        let negative = BigDecimal::try_from(PgNumeric::Number {
+            sign: PgNumericSign::Negative,
+            digits: vec![1234],
+            weight: 0,
+            scale: 0,
+        })
+        .unwrap();
+        assert_eq!(negative.to_string(), "-1234");
+    }
+
+    #[test]
+    fn bigdecimal_to_numeric_edge_cases() {
+        // offset larger than the digit buffer
+        let value = BigDecimal::new(BigInt::from(1), -1);
+        let numeric = PgNumeric::try_from(&value).unwrap();
+        assert_eq!(
+            numeric,
+            PgNumeric::Number {
+                sign: PgNumericSign::Positive,
+                digits: vec![10],
+                weight: 0,
+                scale: 0,
+            }
+        );
+
+        // huge scale overflows i16
+        let value = BigDecimal::new(BigInt::from(1), 40_000);
+        assert!(PgNumeric::try_from(&value).is_err());
+
+        // huge negative exponent overflows the weight
+        let value = BigDecimal::new(BigInt::from(1), -200_000);
+        assert!(PgNumeric::try_from(&value).is_err());
+
+        // trailing zero base-10000 digits are trimmed
+        let value: BigDecimal = "100000000".parse().unwrap();
+        let numeric = PgNumeric::try_from(&value).unwrap();
+        match numeric {
+            PgNumeric::Number { digits, .. } => assert_ne!(digits.last(), Some(&0)),
+            _ => panic!("expected number"),
+        }
+    }
+}

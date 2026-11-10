@@ -516,3 +516,80 @@ impl SerializeStruct for SerializeVec {
         ser::SerializeSeq::end(self)
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    use serde::ser::{SerializeStructVariant, SerializeTupleVariant as SerializeTupleVariantTrait};
+
+    #[test]
+    fn serialize_value_array_and_map_arms() {
+        let array = Value::Array(vec![Value::I32(1), Value::I32(2)]);
+        let out = Serialize::serialize(&array, Value::Null).unwrap();
+        assert_eq!(out, array);
+
+        let mut map = ValueMap::new();
+        map.insert(Value::String("k".into()), Value::I32(1));
+        let wrapped = Value::Map(map.clone());
+        let out = Serialize::serialize(&wrapped, Value::Null).unwrap();
+        assert_eq!(out, Value::Map(map));
+    }
+
+    #[test]
+    fn serialize_vec_trait_impls() {
+        let mut v = SerializeVec { vec: Vec::new() };
+        SerializeSeq::serialize_element(&mut v, &1i32).unwrap();
+        assert_eq!(
+            SerializeSeq::end(v).unwrap(),
+            Value::Array(vec![Value::I32(1)])
+        );
+
+        let mut v = SerializeVec { vec: Vec::new() };
+        SerializeTuple::serialize_element(&mut v, &2i32).unwrap();
+        assert_eq!(
+            SerializeTuple::end(v).unwrap(),
+            Value::Array(vec![Value::I32(2)])
+        );
+
+        let mut v = SerializeVec { vec: Vec::new() };
+        SerializeTupleStruct::serialize_field(&mut v, &3i32).unwrap();
+        assert_eq!(
+            SerializeTupleStruct::end(v).unwrap(),
+            Value::Array(vec![Value::I32(3)])
+        );
+
+        let mut v = SerializeVec { vec: Vec::new() };
+        SerializeStruct::serialize_field(&mut v, "k", &4i32).unwrap();
+        assert_eq!(
+            SerializeStruct::end(v).unwrap(),
+            Value::Array(vec![Value::I32(4)])
+        );
+    }
+
+    #[test]
+    fn serialize_tuple_variant_impl() {
+        let mut v = SerializeTupleVariant {
+            idx: 1,
+            vec: Vec::new(),
+        };
+        SerializeTupleVariantTrait::serialize_field(&mut v, &5i32).unwrap();
+        assert_eq!(
+            SerializeTupleVariantTrait::end(v).unwrap(),
+            Value::Array(vec![
+                Value::U64(1),
+                Value::Array(vec![Value::I32(5)]),
+            ])
+        );
+    }
+
+    #[test]
+    fn serialize_struct_variant_impl() {
+        let mut m = DefaultSerializeMap {
+            map: ValueMap::new(),
+            next_key: None,
+        };
+        SerializeStructVariant::serialize_field(&mut m, "k", &6i32).unwrap();
+        let out = SerializeStructVariant::end(m).unwrap();
+        assert_eq!(out.as_map().unwrap()["k"], Value::I32(6));
+    }
+}

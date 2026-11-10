@@ -70,3 +70,54 @@ impl From<MySqlDatabaseError> for rbdc::Error {
         rbdc::Error::from(arg.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn err(sql_state: Option<&str>) -> MySqlDatabaseError {
+        MySqlDatabaseError(ErrPacket {
+            error_code: 1146,
+            sql_state: sql_state.map(|s| s.to_string()),
+            error_message: "table does not exist".to_string(),
+        })
+    }
+
+    #[test]
+    fn test_accessors_and_display_with_state() {
+        let e = err(Some("42S02"));
+        assert_eq!(e.code(), Some("42S02"));
+        assert_eq!(e.number(), 1146);
+        assert_eq!(e.message(), "table does not exist");
+        assert_eq!(e.to_string(), "1146 (42S02): table does not exist");
+        let dbg = format!("{:?}", e);
+        assert!(dbg.contains("MySqlDatabaseError"));
+        assert!(dbg.contains("42S02"));
+        assert!(dbg.contains("1146"));
+    }
+
+    #[test]
+    fn test_display_without_state() {
+        let e = err(None);
+        assert_eq!(e.code(), None);
+        assert_eq!(e.to_string(), "1146: table does not exist");
+        // Exercise the std::error::Error impl.
+        let dyn_err: &(dyn Error + Send + Sync + 'static) = e.as_error();
+        assert!(dyn_err.to_string().contains("1146"));
+    }
+
+    #[test]
+    fn test_mutable_and_boxed_error() {
+        let mut e = err(Some("HY000"));
+        assert_eq!(e.as_error_mut().to_string(), "1146 (HY000): table does not exist");
+        let boxed = Box::new(e).into_error();
+        assert_eq!(boxed.to_string(), "1146 (HY000): table does not exist");
+    }
+
+    #[test]
+    fn test_into_rbdc_error() {
+        let e = err(Some("42000"));
+        let e: rbdc::Error = e.into();
+        assert!(e.to_string().contains("42000"));
+    }
+}

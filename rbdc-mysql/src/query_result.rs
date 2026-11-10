@@ -22,3 +22,37 @@ impl Extend<MySqlQueryResult> for MySqlQueryResult {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_getters() {
+        let r = MySqlQueryResult::default();
+        assert_eq!(r.rows_affected(), 0);
+        assert_eq!(r.last_insert_id(), 0);
+    }
+
+    #[test]
+    fn test_extend_accumulates_rows_and_overwrites_last_id() {
+        let mut r = MySqlQueryResult::default();
+        r.extend([
+            MySqlQueryResult {
+                rows_affected: 2,
+                last_insert_id: 10,
+            },
+            MySqlQueryResult {
+                rows_affected: 3,
+                last_insert_id: 12,
+            },
+        ]);
+        assert_eq!(r.rows_affected(), 5);
+        assert_eq!(r.last_insert_id(), 12);
+
+        // Extending with an empty iterator leaves the totals untouched.
+        r.extend(std::iter::empty());
+        assert_eq!(r.rows_affected(), 5);
+        assert_eq!(r.last_insert_id(), 12);
+    }
+}

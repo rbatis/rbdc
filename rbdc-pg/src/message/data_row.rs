@@ -114,6 +114,44 @@ fn test_decode_data_row() {
     assert_eq!(row.get(7).unwrap(), &[0_u8, 0, 0, 80][..]);
 }
 
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+
+    fn make_row() -> DataRow {
+        DataRow {
+            storage: vec![Some(vec![1, 2, 3]), None, Some(vec![9])],
+            values: vec![Some(0..3), None, Some(0..1)],
+        }
+    }
+
+    #[test]
+    fn get_handles_all_cases() {
+        let row = make_row();
+        assert_eq!(row.get(0), Some(&[1u8, 2, 3][..]));
+        assert_eq!(row.get(1), None);
+        assert_eq!(row.get(2), Some(&[9u8][..]));
+        assert_eq!(row.get(3), None);
+        assert_eq!(row.get(99), None);
+
+        // value range exists but the storage slot was already taken
+        let mut taken = make_row();
+        taken.storage[0] = None;
+        assert_eq!(taken.get(0), None);
+    }
+
+    #[test]
+    fn take_handles_all_cases() {
+        let mut row = make_row();
+        assert_eq!(row.take(0), Some(vec![1, 2, 3]));
+        // second take of the same column is now empty
+        assert_eq!(row.take(0), None);
+        assert_eq!(row.take(1), None);
+        assert_eq!(row.take(2), Some(vec![9]));
+        assert_eq!(row.take(3), None);
+    }
+}
+
 #[cfg(all(test, not(debug_assertions)))]
 #[bench]
 fn bench_data_row_get(b: &mut test::Bencher) {

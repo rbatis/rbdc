@@ -99,7 +99,9 @@ async fn test_unix_socket_echo() {
     assert_eq!(&buf, b"ok");
     // The peer already shut down its write side; a second shutdown may
     // legitimately report ENOTCONN on some platforms. This still exercises
-    // AsyncWrite::poll_shutdown for the Unix variant.
+    // both the inherent `Socket::shutdown` and `AsyncWrite::poll_shutdown`
+    // implementations for the Unix variant.
+    let _ = socket.shutdown().await;
     let _ = tokio::io::AsyncWriteExt::shutdown(&mut socket).await;
     server.await.unwrap();
 }

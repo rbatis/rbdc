@@ -67,6 +67,57 @@ fn test_len_all_variants() {
 }
 
 #[test]
+fn test_hash_and_ref_iteration_all_variants() {
+    // Every `Hash` arm must feed the hasher without panicking.
+    let variants = vec![
+        Value::Null,
+        Value::Bool(true),
+        Value::I32(1),
+        Value::I64(2),
+        Value::U32(3),
+        Value::U64(4),
+        Value::F32(5.5),
+        Value::F64(6.5),
+        Value::String("s".into()),
+        Value::Binary(vec![1, 2]),
+        Value::Array(vec![Value::I32(1)]),
+        Value::Map(sample_map()),
+        ext(Value::I32(9)),
+    ];
+    for v in &variants {
+        let mut hasher = DefaultHasher::new();
+        v.hash(&mut hasher);
+        let _ = hasher.finish();
+    }
+
+    // `IntoIterator for &Value` over maps, arrays, extensions and scalars.
+    let map = Value::Map(sample_map());
+    let map_pairs: Vec<_> = (&map).into_iter().collect();
+    assert_eq!(map_pairs.len(), 2);
+    assert_eq!(map_pairs[0].0, Value::String("a".into()));
+
+    let array = Value::Array(vec![Value::I32(7), Value::I32(8)]);
+    let array_pairs: Vec<_> = (&array).into_iter().collect();
+    assert_eq!(array_pairs.len(), 2);
+    assert_eq!(array_pairs[0].0, Value::U32(0));
+    assert_eq!(*array_pairs[0].1, Value::I32(7));
+    assert_eq!(array_pairs[1].0, Value::U32(1));
+    assert_eq!(*array_pairs[1].1, Value::I32(8));
+
+    let wrapped = ext(Value::Array(vec![Value::I32(9)]));
+    let wrapped_pairs: Vec<_> = (&wrapped).into_iter().collect();
+    assert_eq!(wrapped_pairs.len(), 1);
+    assert_eq!(*wrapped_pairs[0].1, Value::I32(9));
+
+    let scalar = Value::I32(1);
+    assert_eq!((&scalar).into_iter().count(), 0);
+
+    // Double reference forwards to the single-reference implementation.
+    let r = &map;
+    assert_eq!((&r).into_iter().count(), 2);
+}
+
+#[test]
 fn test_is_debug_mode() {
     assert_eq!(
         rbs::is_debug_mode(),

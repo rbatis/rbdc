@@ -171,3 +171,65 @@ impl DerefMut for PgArgumentBuffer {
         &mut self.buffer
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    use crate::type_info::{PgType, PgTypeInfo};
+    use rbdc::ext::ustr::UStr;
+
+    #[test]
+    fn add_reserve_and_placeholders() {
+        let mut args = PgArguments::default();
+        assert_eq!(args.types.len(), 0);
+        args.reserve(4, 128);
+
+        args.add(Value::I32(1)).unwrap();
+        args.add(Value::String("two".into())).unwrap();
+        args.add(Value::Null).unwrap();
+        assert_eq!(args.types.len(), 3);
+        assert_eq!(args.types[0], PgTypeInfo(PgType::Int4));
+        assert_eq!(args.types[1], PgTypeInfo(PgType::Varchar));
+        assert_eq!(args.types[2], PgTypeInfo(PgType::Unknown));
+
+        // count drives placeholders
+        let mut out = String::new();
+        args.format_placeholder(&mut out).unwrap();
+        assert_eq!(out, "$3");
+
+        // values are length prefixed; the NULL is -1
+        assert_eq!(&args.buffer[0..4], &4i32.to_be_bytes());
+        assert_eq!(&args.buffer[4..8], &1i32.to_be_bytes());
+        let null_offset = 4 + 4 + 4 + 3;
+        assert_eq!(&args.buffer[null_offset..null_offset + 4], &(-1i32).to_be_bytes());
+
+        // Deref / DerefMut
+        assert_eq!(args.buffer.len(), args.buffer.buffer.len());
+        args.buffer.push(9);
+        assert_eq!(*args.buffer.last().unwrap(), 9);
+    }
+
+    #[test]
+    fn from_args_sets_timezone_and_encodes() {
+        let args = PgArguments::from_args(vec![Value::I32(1), Value::Null], Some(3600)).unwrap();
+        assert_eq!(args.types.len(), 2);
+        // timezone is carried on the buffer (private field, accessible here)
+        assert_eq!(args.buffer.timezone_sec, Some(3600));
+
+        let empty = PgArguments::from_args(vec![], None).unwrap();
+        assert!(empty.types.is_empty());
+    }
+
+    #[test]
+    fn patch_and_type_holes_are_recorded() {
+        let mut buf = PgArgumentBuffer::default();
+        buf.patch(|_buf, _ty| {});
+        assert_eq!(buf.patches.len(), 1);
+
+        buf.patch_type_by_name(&UStr::from("my_type"));
+        assert_eq!(buf.type_holes.len(), 1);
+        assert_eq!(&*buf.type_holes[0].1, "my_type");
+        // four zero bytes were reserved for the OID
+        assert_eq!(&buf[buf.type_holes[0].0..buf.type_holes[0].0 + 4], &[0, 0, 0, 0]);
+    }
+}

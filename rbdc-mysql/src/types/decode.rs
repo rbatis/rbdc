@@ -164,3 +164,116 @@ pub(crate) fn decode_time_buf(_: u8, mut buf: &[u8]) -> Result<String, Error> {
 pub(crate) fn decode_bool(value: MySqlValueRef<'_>) -> Result<bool, Error> {
     Ok(int_decode(value)? != 0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::result_set::MySqlTypeInfo;
+    use crate::value::MySqlValueFormat;
+    use std::sync::Arc;
+
+    fn value<'a>(
+        data: Option<&'a [u8]>,
+        ty: ColumnType,
+        format: MySqlValueFormat,
+    ) -> MySqlValueRef<'a> {
+        MySqlValueRef {
+            value: data,
+            type_info: MySqlTypeInfo::from_type(ty),
+            format,
+            option: Arc::new(crate::options::MySqlConnectOptions::new()),
+        }
+    }
+
+    #[test]
+    fn test_decode_bool_text() {
+        assert!(decode_bool(value(Some(b"1"), ColumnType::Tiny, MySqlValueFormat::Text)).unwrap());
+        assert!(!decode_bool(value(Some(b"0"), ColumnType::Tiny, MySqlValueFormat::Text)).unwrap());
+        // Unparsable values fall back to zero, not an error.
+        assert!(
+            !decode_bool(value(Some(b"nope"), ColumnType::Tiny, MySqlValueFormat::Text)).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_decode_bool_binary() {
+        assert!(decode_bool(value(Some(&[1]), ColumnType::Tiny, MySqlValueFormat::Binary)).unwrap());
+        assert!(
+            !decode_bool(value(Some(&[0]), ColumnType::Tiny, MySqlValueFormat::Binary)).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_decode_bool_missing_value_errors() {
+        assert!(decode_bool(value(None, ColumnType::Tiny, MySqlValueFormat::Text)).is_err());
+    }
+
+    #[test]
+    fn test_decode_time_buf_with_and_without_millis() {
+        assert_eq!(
+            decode_time_buf(8, &[1, 2, 3]).unwrap(),
+            "01:02:03.000000"
+        );
+        let mut buf = vec![1, 2, 3];
+        buf.extend_from_slice(&456_u32.to_le_bytes());
+        assert_eq!(decode_time_buf(11, &buf).unwrap(), "01:02:03.000456");
+    }
+
+    #[test]
+    fn test_decode_year_buf() {
+        assert_eq!(decode_year_buf(&[]).unwrap(), "");
+        assert_eq!(decode_year_buf(&[0xE7, 0x07]).unwrap(), "2023");
+    }
+
+    #[test]
+    fn test_decode_date_buf_empty_is_zero_date() {
+        let d = decode_date_buf(&[]).unwrap();
+        assert_eq!((d.year, d.mon, d.day), (0, 0, 0));
+        let d = decode_date_buf(&[0xE7, 0x07, 5, 6]).unwrap();
+        assert_eq!((d.year, d.mon, d.day), (2023, 5, 6));
+    }
+}
+
+#[cfg(test)]
+mod uint_tests {
+    use super::*;
+    use crate::result_set::MySqlTypeInfo;
+    use crate::value::MySqlValueFormat;
+    use std::sync::Arc;
+
+    fn value<'a>(
+        data: Option<&'a [u8]>,
+        ty: ColumnType,
+        format: MySqlValueFormat,
+    ) -> MySqlValueRef<'a> {
+        MySqlValueRef {
+            value: data,
+            type_info: MySqlTypeInfo::from_type(ty),
+            format,
+            option: Arc::new(crate::options::MySqlConnectOptions::new()),
+        }
+    }
+
+    #[test]
+    fn test_uint_decode_text_and_binary_formats() {
+        assert_eq!(
+            uint_decode(value(Some(b"42"), ColumnType::Long, MySqlValueFormat::Text)).unwrap(),
+            42
+        );
+        assert_eq!(
+            uint_decode(value(
+                Some(&0x0102u16.to_le_bytes()),
+                ColumnType::Long,
+                MySqlValueFormat::Binary
+            ))
+            .unwrap(),
+            0x0102
+        );
+        // Bit columns are always raw binary, big-endian.
+        assert_eq!(
+            uint_decode(value(Some(&[0x01, 0x02]), ColumnType::Bit, MySqlValueFormat::Text)).unwrap(),
+            0x0102
+        );
+        assert!(uint_decode(value(None, ColumnType::Long, MySqlValueFormat::Text)).is_err());
+    }
+}

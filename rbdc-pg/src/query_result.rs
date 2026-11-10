@@ -16,3 +16,21 @@ impl Extend<PgQueryResult> for PgQueryResult {
         }
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+
+    #[test]
+    fn rows_affected_and_extend() {
+        let result = PgQueryResult::default();
+        assert_eq!(result.rows_affected(), 0);
+
+        let mut result = PgQueryResult { rows_affected: 2 };
+        result.extend(vec![
+            PgQueryResult { rows_affected: 3 },
+            PgQueryResult { rows_affected: 4 },
+        ]);
+        assert_eq!(result.rows_affected(), 9);
+    }
+}

@@ -104,3 +104,37 @@ impl TypeInfo for Json {
         PgTypeInfo::JSONB
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+
+    fn jsonb_binary(bytes: &[u8]) -> PgValueRef<'_> {
+        PgValueRef {
+            value: Some(bytes),
+            type_info: PgTypeInfo::JSONB,
+            format: PgValueFormat::Binary,
+            timezone_sec: None,
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "unsupported JSONB format version")]
+    fn json_decode_rejects_unknown_jsonb_version() {
+        let _ = Json::decode(jsonb_binary(&[2, b'n', b'u', b'l', b'l']));
+    }
+
+    #[test]
+    #[should_panic(expected = "unsupported JSONB format version")]
+    fn decode_json_rejects_unknown_jsonb_version() {
+        let _ = decode_json(jsonb_binary(&[2, b'n', b'u', b'l', b'l']));
+    }
+
+    #[test]
+    fn decode_json_round_trips_valid_payloads() {
+        let value = decode_json(jsonb_binary(&[1, b'1'])).unwrap();
+        assert_eq!(value, Value::from(1u64));
+        assert_eq!(decode_json(jsonb_binary(&[])).unwrap(), Value::Null);
+        assert!(decode_json(jsonb_binary(&[1, b'{'])).is_err());
+    }
+}

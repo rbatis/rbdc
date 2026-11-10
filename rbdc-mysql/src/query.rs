@@ -38,3 +38,72 @@ impl MysqlQuery {
         self.persistent
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::stmt::MySqlStatementMetadata;
+    use rbs::Value;
+
+    fn statement(sql: &str) -> MySqlStatement {
+        MySqlStatement {
+            sql: sql.to_string(),
+            metadata: MySqlStatementMetadata::default(),
+        }
+    }
+
+    #[test]
+    fn test_sql_and_statement_for_left() {
+        let q = MysqlQuery {
+            statement: Either::Left("SELECT 1".to_string()),
+            arguments: vec![],
+            persistent: false,
+        };
+        assert_eq!(q.sql(), "SELECT 1");
+        assert!(q.statement().is_none());
+        assert!(!q.persistent());
+    }
+
+    #[test]
+    fn test_sql_and_statement_for_right() {
+        let q = MysqlQuery {
+            statement: Either::Right(statement("SELECT ?")),
+            arguments: vec![],
+            persistent: true,
+        };
+        assert_eq!(q.sql(), "SELECT ?");
+        assert_eq!(q.statement().unwrap().sql, "SELECT ?");
+        assert!(q.persistent());
+    }
+
+    #[test]
+    fn test_take_arguments_empty() {
+        let q = MysqlQuery {
+            statement: Either::Left("SELECT 1".to_string()),
+            arguments: vec![],
+            persistent: false,
+        };
+        assert!(q.take_arguments().unwrap().is_none());
+    }
+
+    #[test]
+    fn test_take_arguments_non_empty() {
+        let q = MysqlQuery {
+            statement: Either::Left("SELECT ?".to_string()),
+            arguments: vec![Value::I32(1), Value::String("x".to_string())],
+            persistent: false,
+        };
+        let args = q.take_arguments().unwrap().unwrap();
+        assert_eq!(args.len(), 2);
+    }
+
+    #[test]
+    fn test_take_arguments_error_is_propagated() {
+        let q = MysqlQuery {
+            statement: Either::Left("SELECT ?".to_string()),
+            arguments: vec![Value::Ext("Date", Box::new(Value::String("nope".into())))],
+            persistent: false,
+        };
+        assert!(q.take_arguments().is_err());
+    }
+}

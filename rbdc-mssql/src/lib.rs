@@ -383,9 +383,28 @@ impl Connection for MssqlConnection {
 
 #[cfg(test)]
 mod test {
-    use crate::{parse_url_connection_string, MssqlConnectOptions};
-    use rbdc::db::ConnectOptions;
-    use tiberius::Config;
+    use crate::{
+        parse_url_connection_string, MssqlConnectOptions, MssqlConnection, MssqlMetaData, MssqlRow,
+    };
+    use futures_util::FutureExt;
+    use rbdc::db::{ConnectOptions, Connection, MetaData, Row};
+    use rbs::Value;
+    use std::borrow::Cow;
+    use std::sync::Arc;
+    use tiberius::{Column, ColumnData, ColumnType, Config};
+
+    /// Poll a future that must resolve without performing any I/O.
+    fn ready<F: std::future::Future>(future: F) -> F::Output {
+        future
+            .now_or_never()
+            .expect("future should complete without I/O")
+    }
+
+    /// A connection without a live client; operations must fail cleanly instead
+    /// of trying to use the network.
+    fn closed_connection() -> MssqlConnection {
+        MssqlConnection { inner: None }
+    }
 
     #[test]
     fn test_datetime() {}
@@ -472,5 +491,186 @@ mod test {
         let result =
             parse_url_connection_string("mssql://user:pass@localhost/db?trust_cert=invalid");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_uri_supported_formats() {
+        let uris = [
+            "mssql://user:pass@localhost:1433/db",
+            "sqlserver://user:pass@localhost:1433/db",
+            "jdbc:sqlserver://localhost:1433;User=SA;Password={pw};Database=master;",
+            "Server=localhost,1433;User Id=SA;Password=pw;Database=master;",
+            "mssql://user@localhost/db",
+            "mssql://user:pass@localhost:1433",
+        ];
+        for uri in uris {
+            let mut options = MssqlConnectOptions(Config::new());
+            options
+                .set_uri(uri)
+                .unwrap_or_else(|e| panic!("{} should parse: {}", uri, e));
+        }
+    }
+
+    #[test]
+    fn test_set_uri_errors() {
+        // JDBC branch with an invalid boolean parameter.
+        let mut options = MssqlConnectOptions(Config::new());
+        assert!(options
+            .set_uri("jdbc:sqlserver://localhost;encrypt=maybe")
+            .is_err());
+
+        // ADO branch with an invalid server definition.
+        let mut options = MssqlConnectOptions(Config::new());
+        assert!(options.set_uri("Server=a,b,c;Database=db").is_err());
+
+        // ADO branch with an invalid boolean parameter.
+        let mut options = MssqlConnectOptions(Config::new());
+        assert!(options
+            .set_uri("Server=localhost;TrustServerCertificate=maybe")
+            .is_err());
+
+        // mssql:// branch with an invalid URL.
+        let mut options = MssqlConnectOptions(Config::new());
+        assert!(options.set_uri("mssql://[::1").is_err());
+    }
+
+    #[test]
+    fn test_parse_url_parameter_aliases() {
+        let config = parse_url_connection_string(
+            "mssql://u:p@host:1234/db?instance_name=inst&applicationname=app\
+             &encryption=TRUE&trustservercertificate=YES&applicationintent=readonly",
+        )
+        .unwrap();
+        assert_eq!(config.get_addr(), "host:1234");
+
+        let config = parse_url_connection_string(
+            "mssql://u:p@host/db?encrypt=no&trust_cert=no&readonly=no&unknown=ignored",
+        )
+        .unwrap();
+        assert_eq!(config.get_addr(), "host:1433");
+
+        let config = parse_url_connection_string(
+            "mssql://u:p@host/db?encrypt=danger_plaintext&readonly=readwrite&instance=i\
+             &application_name=a",
+        )
+        .unwrap();
+        // When an instance name is set the browser port is used.
+        assert_eq!(config.get_addr(), "host:1434");
+
+        // Encoded credentials are decoded before being used.
+        let config = parse_url_connection_string("mssql://us%65r:pa%73s@host/db").unwrap();
+        assert_eq!(config.get_addr(), "host:1433");
+    }
+
+    #[test]
+    fn test_parse_url_without_authority_or_credentials() {
+        // A URL without `//` has no host and no port; both optional branches
+        // must be skipped.
+        let config = parse_url_connection_string("mssql:db").unwrap();
+        assert_eq!(config.get_addr(), "localhost:1433");
+
+        // No username at all.
+        let config = parse_url_connection_string("mssql://localhost/db").unwrap();
+        assert_eq!(config.get_addr(), "localhost:1433");
+    }
+
+    #[test]
+    fn test_parse_url_invalid_values() {
+        for uri in [
+            "mssql://u:p@host/db?encrypt=maybe",
+            "mssql://u:p@host/db?trust_cert=maybe",
+            "mssql://u:p@host/db?readonly=maybe",
+        ] {
+            assert!(
+                parse_url_connection_string(uri).is_err(),
+                "{} should fail",
+                uri
+            );
+        }
+
+        // Malformed URL.
+        assert!(parse_url_connection_string("mssql://[::1").is_err());
+
+        // Invalid percent-encoded UTF-8 in the username/password is rejected.
+        assert!(parse_url_connection_string("mssql://%FF:p@host/db").is_err());
+        assert!(parse_url_connection_string("mssql://u:%FF@host/db").is_err());
+    }
+
+    #[test]
+    fn test_connection_error_paths_without_client() {
+        let mut conn = closed_connection();
+        assert!(ready(conn.close()).is_ok());
+        assert!(ready(conn.ping())
+            .unwrap_err()
+            .to_string()
+            .contains("close"));
+        assert!(ready(conn.begin()).is_err());
+        assert!(ready(conn.commit()).is_err());
+        assert!(ready(conn.rollback()).is_err());
+
+        // exec_rows/exec first encode all parameters, then need a client.
+        assert!(ready(conn.exec_rows("select 1", vec![])).is_err());
+        assert!(ready(conn.exec("select 1", vec![])).is_err());
+        assert!(ready(conn.exec_decode("select 1", vec![])).is_err());
+
+        assert!(ready(conn.exec(
+            "select 1",
+            vec![Value::Null, Value::I32(1), Value::String("s".into())]
+        ))
+        .is_err());
+        assert!(ready(conn.exec_rows(
+            "select 1",
+            vec![Value::Bool(true), Value::I64(2), Value::Binary(vec![1])]
+        ))
+        .is_err());
+
+        // Encoding failures surface before the missing-client error.
+        let json = Value::Ext("Json", Box::new(Value::Null));
+        assert!(ready(conn.exec("select 1", vec![json.clone()])).is_err());
+        assert!(ready(conn.exec_rows("select 1", vec![json])).is_err());
+    }
+
+    #[test]
+    fn test_row_and_metadata() {
+        let columns = Arc::new(vec![
+            Column::new("id".to_string(), ColumnType::Int4),
+            Column::new("name".to_string(), ColumnType::BigVarChar),
+        ]);
+        let mut row = MssqlRow {
+            columns: columns.clone(),
+            datas: vec![
+                ColumnData::I32(Some(42)),
+                ColumnData::String(Some(Cow::Borrowed("bob"))),
+            ],
+        };
+
+        let metadata = row.meta_data();
+        assert_eq!(metadata.column_len(), 2);
+        assert_eq!(metadata.column_name(0), "id");
+        assert_eq!(metadata.column_name(1), "name");
+        assert_eq!(metadata.column_type(0), "Int4");
+        assert_eq!(metadata.column_type(1), "BigVarChar");
+
+        assert_eq!(row.get(0).unwrap(), Value::I32(42));
+        assert_eq!(row.get(1).unwrap(), Value::String("bob".to_string()));
+
+        let standalone = MssqlMetaData(columns);
+        assert_eq!(standalone.column_len(), 2);
+        assert_eq!(standalone.column_name(1), "name");
+        assert_eq!(standalone.column_type(1), "BigVarChar");
+    }
+
+    #[test]
+    fn test_connect_futures_are_lazy() {
+        // Creating (and dropping) the futures must not open a socket: the
+        // async bodies are only started when polled.
+        let options = MssqlConnectOptions(Config::new());
+        let future = ConnectOptions::connect(&options);
+        drop(future);
+
+        let driver = crate::MssqlDriver {};
+        use rbdc::db::Driver;
+        let future = driver.connect_opt(&options);
+        drop(future);
     }
 }

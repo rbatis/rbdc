@@ -5,11 +5,25 @@ use std::ffi::{CStr, CString};
 use std::ptr::NonNull;
 use std::sync::Arc;
 
-/// Wrapper for DuckDB prepared statement handle, shared via Arc for multiple references.
-/// When cloned, all clones share the same underlying statement. Drop calls
-/// duckdb_destroy_prepare only when the last Arc reference is dropped.
+/// Owns a raw prepared statement and destroys it exactly once, when the last
+/// `Arc` reference to it is dropped.
 #[derive(Debug)]
-pub struct DuckDbStatementHandle(Arc<NonNull<libduckdb_sys::_duckdb_prepared_statement>>);
+struct PreparedStatementPtr(NonNull<libduckdb_sys::_duckdb_prepared_statement>);
+
+impl Drop for PreparedStatementPtr {
+    fn drop(&mut self) {
+        unsafe {
+            let mut ptr = self.0.as_ptr() as libduckdb_sys::duckdb_prepared_statement;
+            libduckdb_sys::duckdb_destroy_prepare(&mut ptr);
+        }
+    }
+}
+
+/// Wrapper for a DuckDB prepared statement handle, shared via `Arc` for
+/// multiple references. Clones share the same underlying statement; the
+/// statement is destroyed when the last reference is dropped.
+#[derive(Debug)]
+pub struct DuckDbStatementHandle(Arc<PreparedStatementPtr>);
 
 unsafe impl Send for DuckDbStatementHandle {}
 
@@ -19,18 +33,22 @@ impl DuckDbStatementHandle {
         // from the worker thread, under a mutex). The Arc is used to share the
         // handle among cloned VirtualStatements within the same thread.
         #[allow(clippy::arc_with_non_send_sync)]
-        let inner = Arc::new(unsafe { NonNull::new_unchecked(ptr) });
+        let inner = Arc::new(PreparedStatementPtr(unsafe {
+            NonNull::new_unchecked(ptr)
+        }));
         Self(inner)
     }
 
     pub(crate) fn as_ptr(&self) -> libduckdb_sys::duckdb_prepared_statement {
-        self.0.as_ptr() as libduckdb_sys::duckdb_prepared_statement
+        self.0.0.as_ptr() as libduckdb_sys::duckdb_prepared_statement
     }
 
     #[inline]
     pub(crate) fn clear_bindings(&self) {
         unsafe {
-            libduckdb_sys::duckdb_clear_bindings(self.0.as_ptr() as libduckdb_sys::duckdb_prepared_statement);
+            libduckdb_sys::duckdb_clear_bindings(
+                self.0.0.as_ptr() as libduckdb_sys::duckdb_prepared_statement,
+            );
         }
     }
 }
@@ -38,15 +56,6 @@ impl DuckDbStatementHandle {
 impl Clone for DuckDbStatementHandle {
     fn clone(&self) -> Self {
         DuckDbStatementHandle(Arc::clone(&self.0))
-    }
-}
-
-impl Drop for DuckDbStatementHandle {
-    fn drop(&mut self) {
-        unsafe {
-            let mut ptr = self.0.as_ptr() as libduckdb_sys::duckdb_prepared_statement;
-            libduckdb_sys::duckdb_destroy_prepare(&mut ptr);
-        }
     }
 }
 
@@ -276,5 +285,84 @@ mod coverage_tests {
             get_extract_error(std::ptr::null_mut()),
             "extract statements failed: unknown error"
         );
+    }
+
+    struct TestConnection {
+        db: libduckdb_sys::duckdb_database,
+        con: libduckdb_sys::duckdb_connection,
+    }
+
+    impl TestConnection {
+        fn new() -> Self {
+            unsafe {
+                let mut db = std::ptr::null_mut();
+                assert_eq!(
+                    libduckdb_sys::duckdb_open(std::ptr::null(), &mut db),
+                    libduckdb_sys::DuckDBSuccess
+                );
+                let mut con = std::ptr::null_mut();
+                assert_eq!(
+                    libduckdb_sys::duckdb_connect(db, &mut con),
+                    libduckdb_sys::DuckDBSuccess
+                );
+                Self { db, con }
+            }
+        }
+    }
+
+    impl Drop for TestConnection {
+        fn drop(&mut self) {
+            unsafe {
+                libduckdb_sys::duckdb_disconnect(&mut self.con);
+                libduckdb_sys::duckdb_close(&mut self.db);
+            }
+        }
+    }
+
+    #[test]
+    fn prepare_reuses_and_clones_handle() {
+        let conn = TestConnection::new();
+        let mut stmt = VirtualStatement::new("SELECT 1", true);
+
+        {
+            let handle = stmt.prepare(conn.con).unwrap();
+            let raw = handle.as_ptr();
+            // Cloning shares ownership of the prepared statement; dropping the
+            // clone must not destroy it while the original is alive.
+            let cloned = handle.clone();
+            assert_eq!(cloned.as_ptr(), raw);
+            cloned.clear_bindings();
+        }
+
+        // A second prepare returns the already prepared handle rather than
+        // preparing the query again.
+        {
+            let handle = stmt.prepare(conn.con).unwrap();
+            assert!(!handle.as_ptr().is_null());
+
+            // The statement is still usable after the clone above was dropped.
+            let mut result: libduckdb_sys::duckdb_result = unsafe { std::mem::zeroed() };
+            let rc =
+                unsafe { libduckdb_sys::duckdb_execute_prepared(handle.as_ptr(), &mut result) };
+            assert_eq!(rc, libduckdb_sys::DuckDBSuccess);
+            unsafe { libduckdb_sys::duckdb_destroy_result(&mut result) };
+        }
+
+        assert!(stmt.handle_mut().is_some());
+        stmt.reset();
+        drop(stmt);
+    }
+
+    #[test]
+    fn prepare_empty_and_invalid_sql_errors() {
+        let conn = TestConnection::new();
+
+        let mut empty = VirtualStatement::new("   ", false);
+        let err = empty.prepare(conn.con).unwrap_err();
+        assert!(!err.to_string().is_empty());
+
+        let mut invalid = VirtualStatement::new("NOT SQL", false);
+        let err = invalid.prepare(conn.con).unwrap_err();
+        assert!(!err.to_string().is_empty());
     }
 }

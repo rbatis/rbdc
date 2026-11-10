@@ -113,10 +113,8 @@ fn test_timestamp() {
     assert_eq!(back, ts);
     // A non-integer payload is rejected.
     assert!(serde_json::from_value::<Timestamp>(serde_json::json!("nope")).is_err());
-    // Markers used by drivers.
+    // Markers used by drivers (always UTC so tests are timezone-independent).
     let _ = Timestamp::utc();
-    #[allow(deprecated)]
-    let _ = Timestamp::now();
 }
 
 // ---------------------------------------------------------------------------
@@ -609,7 +607,7 @@ fn test_datetime_conversions() {
     assert!(rbs::from_value::<DateTime>(Value::Bool(true)).is_err());
     assert!("bad-date".parse::<DateTime>().is_err());
 
-    let _ = DateTime::now();
+    // UTC only: `DateTime::now()` would pick up the host timezone.
     let _ = DateTime::utc();
 }
 

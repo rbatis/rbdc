@@ -21,7 +21,7 @@ autoexamples = false
 autotests = true
 autobenches = true
 description = "Serialization framework for ORM"
-documentation = "https://rbatis.github.io/rbatis.io"
+documentation = "https://docs.rs/rbs"
 readme = "Readme.md"
 keywords = [
     "database",
@@ -33,6 +33,7 @@ keywords = [
 categories = ["database"]
 license = "Apache-2.0"
 repository = "https://github.com/rbatis/rbatis"
+homepage = "https://rbatis.github.io/rbatis.io"
 
 [features]
 debug_mode = []

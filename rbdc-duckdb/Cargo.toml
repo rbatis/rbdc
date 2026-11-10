@@ -4,7 +4,9 @@ version = "4.9.12"
 edition = "2021"
 description = "DuckDB database driver for RBDC"
 license = "MIT"
+documentation = "https://docs.rs/rbdc-duckdb"
 repository = "https://github.com/rbatis/rbatis"
+homepage = "https://rbatis.github.io/rbatis.io"
 keywords = ["database", "duckdb", "rbatis", "rbdc"]
 
 [dependencies]

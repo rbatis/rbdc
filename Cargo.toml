@@ -10,8 +10,9 @@ authors = ["ce <zhuxiujia@qq.com>"]
 license = "Apache-2.0"
 categories = ["database"]
 keywords = ["database", "orm", "mysql", "postgres", "sqlite"]
-documentation = "https://rbatis.github.io/rbatis.io"
+documentation = "https://docs.rs/rbdc"
 repository = "https://github.com/rbatis/rbatis"
+homepage = "https://rbatis.github.io/rbatis.io"
 
 [features]
 default = ["tls-rustls"]

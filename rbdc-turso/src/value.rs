@@ -171,7 +171,7 @@ pub fn value_to_libsql(v: &Value) -> Result<libsql::Value, rbdc::Error> {
         Value::I32(n) => Ok(libsql::Value::Integer(*n as i64)),
         Value::I64(n) => Ok(libsql::Value::Integer(*n)),
         Value::U32(n) => Ok(libsql::Value::Integer(*n as i64)),
-        Value::U64(n) => Ok(libsql::Value::Integer(*n as i64)),
+        Value::U64(n) => Ok(crate::types::int::encode_u64(*n)),
         Value::F32(f) => Ok(libsql::Value::Real(*f as f64)),
         Value::F64(f) => Ok(libsql::Value::Real(*f)),
         Value::String(s) => Ok(libsql::Value::Text(s.clone())),
@@ -190,7 +190,7 @@ pub fn value_to_libsql(v: &Value) -> Result<libsql::Value, rbdc::Error> {
             _ => match val.as_ref() {
                 Value::String(s) => Ok(libsql::Value::Text(s.clone())),
                 Value::I64(n) => Ok(libsql::Value::Integer(*n)),
-                Value::U64(n) => Ok(libsql::Value::Integer(*n as i64)),
+                Value::U64(n) => Ok(crate::types::int::encode_u64(*n)),
                 Value::F64(f) => Ok(libsql::Value::Real(*f)),
                 _ => Ok(libsql::Value::Text(val.to_string())),
             },

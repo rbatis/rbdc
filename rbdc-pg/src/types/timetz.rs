@@ -8,6 +8,7 @@ use rbdc::Error;
 use rbs::Value;
 use std::fmt::{Debug, Display, Formatter};
 use std::io::Cursor;
+use std::str::FromStr;
 use std::time::Duration;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Eq, PartialEq)]
@@ -70,12 +71,55 @@ impl Decode for Timetz {
                 }))
             }
             PgValueFormat::Text => {
-                // the `time` crate has a limited ability to parse and can't parse the
-                // timezone format
-                Err("reading a `TIMETZ` value in text format is not supported.".into())
+                let s = value.as_str()?.trim();
+                let split = s
+                    .char_indices()
+                    .skip(1)
+                    .find(|(_, c)| *c == '+' || *c == '-')
+                    .map(|(i, _)| i)
+                    .ok_or_else(|| {
+                        Error::from(format!("Invalid TIMETZ value: {s}. Expected time+offset"))
+                    })?;
+                let (time, raw_offset) = s.split_at(split);
+                let time = fastdate::Time::from_str(time)
+                    .map_err(|e| Error::from(format!("Invalid TIMETZ time: {e}")))?;
+                let offset = parse_offset(raw_offset)?;
+                Ok(Self(OffsetTz { time, offset }))
             }
         }
     }
+}
+
+fn parse_offset(raw: &str) -> Result<i32, Error> {
+    let (sign, digits) = match raw.as_bytes().first() {
+        Some(b'+') => (1, &raw[1..]),
+        Some(b'-') => (-1, &raw[1..]),
+        _ => {
+            return Err(Error::from(format!(
+                "Invalid TIMETZ offset: {raw}. Expected +HH[:MM[:SS]] or -HH[:MM[:SS]]"
+            )));
+        }
+    };
+    let mut parts = digits.split(':');
+    let hours: i32 = parts
+        .next()
+        .unwrap_or_default()
+        .parse()
+        .map_err(|e| Error::from(format!("Invalid TIMETZ offset hour: {e}")))?;
+    let minutes: i32 = parts
+        .next()
+        .unwrap_or("0")
+        .parse()
+        .map_err(|e| Error::from(format!("Invalid TIMETZ offset minute: {e}")))?;
+    let seconds: i32 = parts
+        .next()
+        .unwrap_or("0")
+        .parse()
+        .map_err(|e| Error::from(format!("Invalid TIMETZ offset second: {e}")))?;
+    if parts.next().is_some() || hours > 23 || minutes > 59 || seconds > 59 {
+        return Err(Error::from(format!("Invalid TIMETZ offset: {raw}")));
+    }
+    Ok(sign * (hours * 3600 + minutes * 60 + seconds))
 }
 
 impl Encode for Timetz {

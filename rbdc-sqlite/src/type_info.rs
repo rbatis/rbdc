@@ -35,7 +35,7 @@ pub(crate) enum DataType {
     Int64,
     Date,
     Time,
-    Datetime,
+    DateTime,
 }
 
 /// Type information for a SQLite type.
@@ -72,7 +72,7 @@ impl SqliteTypeInfo {
             DataType::Bool => "BOOLEAN",
             DataType::Date => "DATE",
             DataType::Time => "TIME",
-            DataType::Datetime => "DATETIME",
+            DataType::DateTime => "DATETIME",
         }
     }
 }
@@ -108,7 +108,7 @@ impl FromStr for DataType {
 
             "date" => DataType::Date,
             "time" => DataType::Time,
-            "datetime" | "timestamp" => DataType::Datetime,
+            "datetime" | "timestamp" => DataType::DateTime,
 
             _ if s.contains("int") => DataType::Int64,
 
@@ -140,8 +140,8 @@ impl Type for Value {
             Value::F64(_) => SqliteTypeInfo(DataType::Float),
             Value::String(_) => SqliteTypeInfo(DataType::Text),
             Value::Binary(_) => SqliteTypeInfo(DataType::Blob),
-            Value::Array(_) => SqliteTypeInfo(DataType::Null),
-            Value::Map(_) => SqliteTypeInfo(DataType::Null),
+            Value::Array(_) => SqliteTypeInfo(DataType::Text),
+            Value::Map(_) => SqliteTypeInfo(DataType::Text),
             Value::Ext(t, _) => match *t {
                 "Date" => SqliteTypeInfo(DataType::Text),
                 "DateTime" => SqliteTypeInfo(DataType::Text),
@@ -187,7 +187,7 @@ fn test_data_type_from_str() -> Result<(), Error> {
     assert_eq!(DataType::Bool, "BOOLEAN".parse()?);
     assert_eq!(DataType::Bool, "BOOL".parse()?);
 
-    assert_eq!(DataType::Datetime, "DATETIME".parse()?);
+    assert_eq!(DataType::DateTime, "DATETIME".parse()?);
     assert_eq!(DataType::Time, "TIME".parse()?);
     assert_eq!(DataType::Date, "DATE".parse()?);
 

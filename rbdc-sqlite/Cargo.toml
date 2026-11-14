@@ -1,6 +1,6 @@
 [package]
 name = "rbdc-sqlite"
-version = "4.9.5"
+version = "4.9.6"
 edition = "2021"
 description = "The Rust SQL Toolkit and ORM Library. An async, pure Rust SQL crate featuring compile-time Dynamic SQL"
 readme = "Readme.md"
@@ -35,6 +35,7 @@ rbs = {version="4",path="../rbs"}
 rbdc = { version = "4.9",path = "../", default-features = false, optional = true }
 serde = "1.0"
 serde_json = "1.0"
+fastdate = { version = "0.3" }
 log = "0.4"
 atoi = "2.0"
 percent-encoding = "2.1.0"

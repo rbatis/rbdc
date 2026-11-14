@@ -6,6 +6,7 @@
 //! The SQLite adapter decodes integers as `Value::I64` (from DataType::Int
 //! and DataType::Int64 both). We maintain this behavior.
 
+use rbdc::Error;
 use rbs::Value;
 
 /// Decode an integer from a libsql integer value.
@@ -15,6 +16,13 @@ use rbs::Value;
 #[inline]
 pub fn decode_integer(n: i64) -> Value {
     Value::I64(n)
+}
+
+/// Decode a non-negative libsql integer as `u64`.
+#[inline]
+pub fn decode_u64(n: i64) -> Result<u64, Error> {
+    n.try_into()
+        .map_err(|_| Error::from(format!("integer {n} does not fit into u64")))
 }
 
 /// Encode an i32 to a libsql integer value.
@@ -35,13 +43,14 @@ pub fn encode_u32(n: u32) -> libsql::Value {
     libsql::Value::Integer(n as i64)
 }
 
-/// Encode a u64 to a libsql integer value.
-///
-/// Note: values above `i64::MAX` will be truncated. This matches the
-/// SQLite adapter behavior where `(v as i64).encode(args)` is used.
+/// Encode a u64 to a libsql integer when it fits SQLite's signed INTEGER range.
+/// Larger values fall back to decimal text so no data is silently truncated.
 #[inline]
 pub fn encode_u64(n: u64) -> libsql::Value {
-    libsql::Value::Integer(n as i64)
+    match i64::try_from(n) {
+        Ok(n) => libsql::Value::Integer(n),
+        Err(_) => libsql::Value::Text(n.to_string()),
+    }
 }
 
 #[cfg(test)]
@@ -74,6 +83,13 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_u64() {
+        assert_eq!(decode_u64(0).unwrap(), 0);
+        assert_eq!(decode_u64(i64::MAX).unwrap(), i64::MAX as u64);
+        assert!(decode_u64(-1).is_err());
+    }
+
+    #[test]
     fn test_encode_i32() {
         assert!(matches!(encode_i32(42), libsql::Value::Integer(42)));
     }
@@ -91,5 +107,9 @@ mod tests {
     #[test]
     fn test_encode_u64() {
         assert!(matches!(encode_u64(200), libsql::Value::Integer(200)));
+        assert!(matches!(
+            encode_u64(u64::MAX),
+            libsql::Value::Text(value) if value == u64::MAX.to_string()
+        ));
     }
 }

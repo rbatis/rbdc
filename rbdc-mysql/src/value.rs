@@ -89,7 +89,7 @@ fn is_null(value: Option<&[u8]>, ty: &MySqlTypeInfo) -> bool {
         // zero dates and date times should be treated the same as NULL
         if matches!(
             ty.r#type,
-            ColumnType::Date | ColumnType::Timestamp | ColumnType::Datetime
+            ColumnType::Date | ColumnType::Timestamp | ColumnType::DateTime
         ) && value.get(0) == Some(&0)
         {
             return true;
@@ -146,7 +146,7 @@ mod tests {
         for ty in [
             ColumnType::Date,
             ColumnType::Timestamp,
-            ColumnType::Datetime,
+            ColumnType::DateTime,
         ] {
             let v = owned(Some(vec![0, 0, 0, 0]), ty, MySqlValueFormat::Binary);
             assert!(v.is_null(), "zero value for {ty:?} should be null");

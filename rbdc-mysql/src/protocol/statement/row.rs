@@ -78,7 +78,7 @@ impl<'de> Decode<'de, &'de [MySqlColumn]> for BinaryRow {
                 ColumnType::Time
                 | ColumnType::Timestamp
                 | ColumnType::Date
-                | ColumnType::Datetime => {
+                | ColumnType::DateTime => {
                     // The size of this type is important for decoding
                     if buf.is_empty() {
                         return Err(err_protocol!(

@@ -25,7 +25,7 @@ impl From<&str> for TsQuery {
 
 impl From<TsQuery> for Value {
     fn from(arg: TsQuery) -> Self {
-        rbs::Value::Ext("tsquery", Box::new(rbs::Value::String(arg.0)))
+        rbs::Value::Ext("TsQuery", Box::new(rbs::Value::String(arg.0)))
     }
 }
 
@@ -100,7 +100,7 @@ mod tests {
         let value: rbs::Value = tsquery.into();
         match value {
             rbs::Value::Ext(type_name, boxed) => {
-                assert_eq!(type_name, "tsquery");
+                assert_eq!(type_name, "TsQuery");
                 if let rbs::Value::String(s) = *boxed {
                     assert_eq!(s, "test");
                 } else {

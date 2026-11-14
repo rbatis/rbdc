@@ -52,10 +52,7 @@ async fn test_exec_decode_metadata() {
 #[tokio::test]
 async fn test_exec_select_reports_zero_affected() {
     let mut conn = create_conn().await;
-    let result = conn
-        .exec("SELECT 1", vec![])
-        .await
-        .expect("exec select");
+    let result = conn.exec("SELECT 1", vec![]).await.expect("exec select");
     assert_eq!(result.rows_affected, 0);
     assert_eq!(result.last_insert_id, Value::Null);
 }
@@ -89,7 +86,7 @@ async fn test_bind_param_types() {
     );
     assert_eq!(
         query_row(&mut conn, "SELECT ?", vec![Value::Bool(true)]).await,
-        vec![Value::I32(1)]
+        vec![Value::Bool(true)]
     );
     assert_eq!(
         query_row(&mut conn, "SELECT ?", vec![Value::I32(-3)]).await,
@@ -101,15 +98,15 @@ async fn test_bind_param_types() {
     );
     assert_eq!(
         query_row(&mut conn, "SELECT ?", vec![Value::U32(5)]).await,
-        vec![Value::I32(5)]
+        vec![Value::U64(5)]
     );
     assert_eq!(
         query_row(&mut conn, "SELECT ?", vec![Value::U64(6)]).await,
-        vec![Value::I64(6)]
+        vec![Value::U64(6)]
     );
     assert_eq!(
         query_row(&mut conn, "SELECT ?", vec![Value::F32(1.5)]).await,
-        vec![Value::F64(1.5)]
+        vec![Value::F32(1.5)]
     );
     assert_eq!(
         query_row(&mut conn, "SELECT ?", vec![Value::F64(2.5)]).await,
@@ -174,7 +171,10 @@ async fn test_bind_ext_params() {
         query_row(
             &mut conn,
             "SELECT ?",
-            vec![Value::Ext("Timestamp", Box::new(Value::String("abc".into())))]
+            vec![Value::Ext(
+                "Timestamp",
+                Box::new(Value::String("abc".into()))
+            )]
         )
         .await,
         vec![Value::String("abc".into())]
@@ -185,7 +185,10 @@ async fn test_bind_ext_params() {
         query_row(
             &mut conn,
             "SELECT ?",
-            vec![Value::Ext("Date", Box::new(Value::String("2024-01-15".into())))]
+            vec![Value::Ext(
+                "Date",
+                Box::new(Value::String("2024-01-15".into()))
+            )]
         )
         .await,
         vec![Value::String("2024-01-15".into())]
@@ -212,7 +215,7 @@ async fn test_unbound_param_errors() {
         .await;
     assert!(err.is_err(), "unbindable ext parameter must fail");
 
-    // Unknown Ext types are encoded as SQL NULL and not bound at all.
+    // Unknown Ext types are rejected instead of being silently bound as NULL.
     let err = conn
         .exec(
             "SELECT ?",
@@ -310,10 +313,7 @@ async fn test_multi_statement_intermediate_execute_error() {
 async fn test_multi_statement_intermediate_prepare_error() {
     let mut conn = create_conn().await;
     let err = conn
-        .exec(
-            "INSERT INTO missing_prepare VALUES (1); SELECT 1",
-            vec![],
-        )
+        .exec("INSERT INTO missing_prepare VALUES (1); SELECT 1", vec![])
         .await;
     assert!(err.is_err(), "intermediate prepare failure must surface");
 }
@@ -325,12 +325,9 @@ async fn test_dropping_stream_early_keeps_connection_usable() {
         .await
         .expect("create table");
     for i in 0..64 {
-        conn.exec(
-            &format!("INSERT INTO many_rows VALUES ({i})"),
-            vec![],
-        )
-        .await
-        .expect("insert");
+        conn.exec(&format!("INSERT INTO many_rows VALUES ({i})"), vec![])
+            .await
+            .expect("insert");
     }
 
     {

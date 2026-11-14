@@ -28,11 +28,7 @@ use rbs::Value;
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn vref<'a>(
-    data: Option<&'a [u8]>,
-    ty: ColumnType,
-    format: MySqlValueFormat,
-) -> MySqlValueRef<'a> {
+fn vref<'a>(data: Option<&'a [u8]>, ty: ColumnType, format: MySqlValueFormat) -> MySqlValueRef<'a> {
     MySqlValueRef {
         value: data,
         type_info: MySqlTypeInfo::from_type(ty),
@@ -111,8 +107,11 @@ fn test_type_info_for_value_variants() {
             ColumnType::Timestamp,
         ),
         (
-            Value::Ext("DateTime", Box::new(Value::String("2024-01-01 01:02:03".into()))),
-            ColumnType::Datetime,
+            Value::Ext(
+                "DateTime",
+                Box::new(Value::String("2024-01-01 01:02:03".into())),
+            ),
+            ColumnType::DateTime,
         ),
         (
             Value::Ext("Json", Box::new(Value::String("{}".into()))),
@@ -127,6 +126,10 @@ fn test_type_info_for_value_variants() {
             ColumnType::Set,
         ),
         (
+            Value::Ext("Geometry", Box::new(Value::Binary(vec![1]))),
+            ColumnType::Geometry,
+        ),
+        (
             Value::Ext("Nope", Box::new(Value::I32(1))),
             ColumnType::Null,
         ),
@@ -134,6 +137,29 @@ fn test_type_info_for_value_variants() {
     for (value, expected) in cases {
         assert_eq!(value.type_info().r#type, expected, "value {value:?}");
     }
+}
+
+#[test]
+fn test_unsigned_integer_type_info_and_decode() {
+    assert!(Value::U32(1).type_info().is_unsigned());
+    assert!(Value::U64(1).type_info().is_unsigned());
+    assert!(!Value::I32(1).type_info().is_unsigned());
+
+    let tiny = MySqlValueRef {
+        value: Some(&[0xff]),
+        type_info: MySqlTypeInfo::unsigned(ColumnType::Tiny),
+        format: MySqlValueFormat::Binary,
+        option: Arc::new(MySqlConnectOptions::new()),
+    };
+    assert_eq!(decode(tiny), Value::U32(255));
+
+    let long = MySqlValueRef {
+        value: Some(&u32::MAX.to_le_bytes()),
+        type_info: MySqlTypeInfo::unsigned(ColumnType::Long),
+        format: MySqlValueFormat::Binary,
+        option: Arc::new(MySqlConnectOptions::new()),
+    };
+    assert_eq!(decode(long), Value::U64(u32::MAX as u64));
 }
 
 // ---------------------------------------------------------------------------
@@ -196,10 +222,7 @@ fn test_value_decode_text() {
         decode(text("a,b", ColumnType::Set)),
         Value::Ext("Set", Box::new(Value::String("a,b".into())))
     );
-    assert_eq!(
-        decode(binary(&[1, 2], ColumnType::Bit)),
-        Value::U64(0x0102)
-    );
+    assert_eq!(decode(binary(&[1, 2], ColumnType::Bit)), Value::U64(0x0102));
 
     for ty in [
         ColumnType::TinyBlob,
@@ -214,7 +237,7 @@ fn test_value_decode_text() {
         );
     }
 
-    let dt = decode(text("2023-05-06 07:08:09", ColumnType::Datetime));
+    let dt = decode(text("2023-05-06 07:08:09", ColumnType::DateTime));
     assert_eq!(ext_name(&dt), Some("DateTime"));
 
     let ts = decode(text("2020-01-02 03:04:05Z", ColumnType::Timestamp));
@@ -251,26 +274,17 @@ fn test_value_decode_text_timestamp_without_z() {
 
 #[test]
 fn test_value_decode_binary() {
-    assert_eq!(
-        decode(binary(&[0xff], ColumnType::Tiny)),
-        Value::I32(-1)
-    );
+    assert_eq!(decode(binary(&[0xff], ColumnType::Tiny)), Value::I32(-1));
     assert_eq!(
         decode(binary(&[0xff, 0xff], ColumnType::Short)),
         Value::I32(-1)
     );
-    assert_eq!(
-        decode(binary(&[0xff; 4], ColumnType::Long)),
-        Value::I64(-1)
-    );
+    assert_eq!(decode(binary(&[0xff; 4], ColumnType::Long)), Value::I64(-1));
     assert_eq!(
         decode(binary(&[0xff; 8], ColumnType::LongLong)),
         Value::I64(-1)
     );
-    assert_eq!(
-        decode(binary(&[1, 0, 0], ColumnType::Int24)),
-        Value::I32(1)
-    );
+    assert_eq!(decode(binary(&[1, 0, 0], ColumnType::Int24)), Value::I32(1));
     assert_eq!(
         decode(binary(&1.5f32.to_le_bytes(), ColumnType::Float)),
         Value::F32(1.5)
@@ -284,7 +298,10 @@ fn test_value_decode_binary() {
         decode(binary(&2.5f64.to_le_bytes(), ColumnType::Double)),
         Value::F64(2.5)
     );
-    assert_eq!(decode(binary(&[0x01, 0x02], ColumnType::Bit)), Value::U64(0x0102));
+    assert_eq!(
+        decode(binary(&[0x01, 0x02], ColumnType::Bit)),
+        Value::U64(0x0102)
+    );
     for ty in [
         ColumnType::TinyBlob,
         ColumnType::MediumBlob,
@@ -321,13 +338,13 @@ fn test_value_decode_binary_temporal() {
         Value::Ext("Time", Box::new(Value::String("12:34:56.000000".into())))
     );
 
-    // Datetime with len 4 has no time portion.
-    let dt = decode(binary(&[4, 0xE7, 0x07, 5, 6], ColumnType::Datetime));
+    // DateTime with len 4 has no time portion.
+    let dt = decode(binary(&[4, 0xE7, 0x07, 5, 6], ColumnType::DateTime));
     assert_eq!(ext_name(&dt), Some("DateTime"));
-    // Datetime with time and microseconds.
+    // DateTime with time and microseconds.
     let dt = decode(binary(
         &[11, 0xE7, 0x07, 5, 6, 7, 8, 9, 0x40, 0xE2, 0x01, 0x00],
-        ColumnType::Datetime,
+        ColumnType::DateTime,
     ));
     assert_eq!(ext_name(&dt), Some("DateTime"));
 
@@ -359,19 +376,28 @@ fn test_value_decode_error_paths() {
         decode(binary(&[0xff], ColumnType::VarChar)),
         Value::String("".into())
     );
-    assert_eq!(decode(text("not-a-number", ColumnType::Float)), Value::F32(0.0));
-    assert_eq!(decode(text("not-a-number", ColumnType::Long)), Value::I64(0));
+    assert_eq!(
+        decode(text("not-a-number", ColumnType::Float)),
+        Value::F32(0.0)
+    );
+    assert_eq!(
+        decode(text("not-a-number", ColumnType::Long)),
+        Value::I64(0)
+    );
     assert_eq!(
         decode(text("not-a-number", ColumnType::Short)),
         Value::I32(0)
     );
-    assert_eq!(decode(text("", ColumnType::Decimal)), Value::Ext("Decimal", Box::new(Value::String("".into()))));
+    assert_eq!(
+        decode(text("", ColumnType::Decimal)),
+        Value::Ext("Decimal", Box::new(Value::String("".into())))
+    );
 
     // Malformed JSON is an error.
     assert!(<Value as Decode>::decode(text("not json", ColumnType::Json)).is_err());
     // Malformed timestamp/datetime text is an error.
     assert!(<Value as Decode>::decode(text("nope", ColumnType::Timestamp)).is_err());
-    assert!(<Value as Decode>::decode(text("nope", ColumnType::Datetime)).is_err());
+    assert!(<Value as Decode>::decode(text("nope", ColumnType::DateTime)).is_err());
 }
 
 // ---------------------------------------------------------------------------
@@ -393,10 +419,7 @@ fn test_value_encode_primitives() {
         encode(Value::String("abc".into())),
         (0, vec![3, b'a', b'b', b'c'])
     );
-    assert_eq!(
-        encode(Value::Binary(vec![1, 2])),
-        (0, vec![2, 1, 2])
-    );
+    assert_eq!(encode(Value::Binary(vec![1, 2])), (0, vec![2, 1, 2]));
 }
 
 #[test]
@@ -506,12 +529,11 @@ fn test_value_encode_invalid_ext_errors() {
     assert!(Value::Ext("Time", Box::new(Value::String("nope".into())))
         .encode(&mut Vec::new())
         .is_err());
-    assert!(Value::Ext(
-        "DateTime",
-        Box::new(Value::String("nope".into()))
-    )
-    .encode(&mut Vec::new())
-    .is_err());
+    assert!(
+        Value::Ext("DateTime", Box::new(Value::String("nope".into())))
+            .encode(&mut Vec::new())
+            .is_err()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -550,12 +572,8 @@ fn test_date_encode_decode() {
 
 #[test]
 fn test_datetime_encode_size_variants() {
-    let midnight = RbdcDateTime(
-        fastdate::DateTime::from_str("2023-05-06 00:00:00").unwrap(),
-    );
-    let with_time = RbdcDateTime(
-        fastdate::DateTime::from_str("2023-05-06 01:02:03").unwrap(),
-    );
+    let midnight = RbdcDateTime(fastdate::DateTime::from_str("2023-05-06 00:00:00").unwrap());
+    let with_time = RbdcDateTime(fastdate::DateTime::from_str("2023-05-06 01:02:03").unwrap());
     let with_nanos = RbdcDateTime(fastdate::DateTime::from_timestamp_millis(123));
 
     let mut buf = Vec::new();
@@ -573,20 +591,30 @@ fn test_datetime_encode_size_variants() {
 
 #[test]
 fn test_datetime_decode() {
-    let dt = RbdcDateTime::decode(text("2023-05-06 07:08:09", ColumnType::Datetime)).unwrap();
+    let dt = RbdcDateTime::decode(text("2023-05-06 07:08:09", ColumnType::DateTime)).unwrap();
     assert_eq!(
-        (dt.0.year(), dt.0.mon(), dt.0.day(), dt.0.hour(), dt.0.minute(), dt.0.sec()),
+        (
+            dt.0.year(),
+            dt.0.mon(),
+            dt.0.day(),
+            dt.0.hour(),
+            dt.0.minute(),
+            dt.0.sec()
+        ),
         (2023, 5, 6, 7, 8, 9)
     );
 
     // len == 4 -> no time component.
-    let dt = RbdcDateTime::decode(binary(&[4, 0xE7, 0x07, 5, 6], ColumnType::Datetime)).unwrap();
-    assert_eq!((dt.0.year(), dt.0.hour(), dt.0.minute(), dt.0.sec()), (2023, 0, 0, 0));
+    let dt = RbdcDateTime::decode(binary(&[4, 0xE7, 0x07, 5, 6], ColumnType::DateTime)).unwrap();
+    assert_eq!(
+        (dt.0.year(), dt.0.hour(), dt.0.minute(), dt.0.sec()),
+        (2023, 0, 0, 0)
+    );
 
     // len == 7 -> time without microseconds.
     let dt = RbdcDateTime::decode(binary(
         &[7, 0xE7, 0x07, 5, 6, 7, 8, 9],
-        ColumnType::Datetime,
+        ColumnType::DateTime,
     ))
     .unwrap();
     assert_eq!((dt.0.hour(), dt.0.minute(), dt.0.sec()), (7, 8, 9));
@@ -594,12 +622,12 @@ fn test_datetime_decode() {
     // len == 11 -> microseconds included.
     let dt = RbdcDateTime::decode(binary(
         &[11, 0xE7, 0x07, 5, 6, 7, 8, 9, 0x40, 0xE2, 0x01, 0x00],
-        ColumnType::Datetime,
+        ColumnType::DateTime,
     ))
     .unwrap();
     assert_eq!(dt.0.nano(), 123_456_000);
 
-    assert!(RbdcDateTime::decode(text("nope", ColumnType::Datetime)).is_err());
+    assert!(RbdcDateTime::decode(text("nope", ColumnType::DateTime)).is_err());
 }
 
 // ---------------------------------------------------------------------------
@@ -688,9 +716,10 @@ fn test_timestamp_encode_and_decode() {
     .unix_timestamp_millis();
     assert_eq!(ts.0, expected);
 
-    let ts = Timestamp::decode(
-        binary(&[7, 0xE7, 0x07, 5, 6, 7, 8, 9], ColumnType::Timestamp),
-    )
+    let ts = Timestamp::decode(binary(
+        &[7, 0xE7, 0x07, 5, 6, 7, 8, 9],
+        ColumnType::Timestamp,
+    ))
     .unwrap();
     assert_eq!(ts.0, expected + ((7 * 3600 + 8 * 60 + 9) * 1000));
 

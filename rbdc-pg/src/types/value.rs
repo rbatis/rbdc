@@ -59,10 +59,10 @@ impl TypeInfo for Value {
                     "Text" => PgTypeInfo::TEXT,
                     "Oid" => PgTypeInfo::OID,
                     "Json" => PgTypeInfo::JSON,
-                    "Point" => PgTypeInfo::POINT,
-                    "TsVector" => PgTypeInfo::UNKNOWN,
-                    "TsQuery" => PgTypeInfo::UNKNOWN,
-                    "Hstore" => PgTypeInfo::UNKNOWN,
+                    "Point" | "point" => PgTypeInfo::POINT,
+                    "TsVector" | "tsvector" => PgTypeInfo::TSVECTOR,
+                    "TsQuery" | "tsquery" => PgTypeInfo::TSQUERY,
+                    "Hstore" | "hstore" => PgTypeInfo::HSTORE,
                     "Lseg" => PgTypeInfo::LSEG,
                     "Path" => PgTypeInfo::PATH,
                     "Box" => PgTypeInfo::BOX,
@@ -185,7 +185,10 @@ impl Decode for Value {
 
             PgType::Float4 => Value::F32(Decode::decode(arg)?),
             PgType::Float8 => Value::F64(Decode::decode(arg)?),
-            PgType::Unknown => Value::Null,
+            PgType::Unknown => Value::String(match arg.format() {
+                PgValueFormat::Text => arg.as_str()?.to_string(),
+                PgValueFormat::Binary => String::from_utf8_lossy(arg.as_bytes()?).into_owned(),
+            }),
             PgType::Circle => Value::Ext(
                 "Circle",
                 Box::new(Value::Binary({
@@ -279,14 +282,25 @@ impl Decode for Value {
             ),
             PgType::Uuid => Uuid::decode(arg)?.into(),
             PgType::Jsonb => decode_json(arg)?,
-            PgType::Tsvector => {
-                use crate::types::tsvector::TsVector;
-                TsVector::decode(arg)?.into()
-            }
-            PgType::Tsquery => {
-                use crate::types::tsquery::TsQuery;
-                TsQuery::decode(arg)?.into()
-            }
+            PgType::Tsvector => match arg.format() {
+                PgValueFormat::Text => {
+                    use crate::types::tsvector::TsVector;
+                    TsVector::decode(arg)?.into()
+                }
+                PgValueFormat::Binary => Value::Ext(
+                    "TsVector",
+                    Box::new(Value::Binary(arg.as_bytes()?.to_vec())),
+                ),
+            },
+            PgType::Tsquery => match arg.format() {
+                PgValueFormat::Text => {
+                    use crate::types::tsquery::TsQuery;
+                    TsQuery::decode(arg)?.into()
+                }
+                PgValueFormat::Binary => {
+                    Value::Ext("TsQuery", Box::new(Value::Binary(arg.as_bytes()?.to_vec())))
+                }
+            },
             PgType::Hstore => {
                 use crate::types::hstore::Hstore;
                 Hstore::decode(arg)?.into()
@@ -356,15 +370,7 @@ impl Decode for Value {
                 })),
             ),
             PgType::Money => Money::decode(arg)?.into(),
-            PgType::Void => Value::Ext(
-                "Ext",
-                Box::new(Value::Binary({
-                    match arg.format() {
-                        PgValueFormat::Binary => arg.as_bytes()?.to_owned(),
-                        PgValueFormat::Text => arg.as_str()?.as_bytes().to_vec(),
-                    }
-                })),
-            ),
+            PgType::Void => Value::Null,
             PgType::Custom(ref pg_custom_type) => match &pg_custom_type.kind {
                 PgTypeKind::Enum(_) => Value::String(Decode::decode(arg)?),
                 _ => Value::Ext(
@@ -491,9 +497,9 @@ impl Encode for Value {
                     "Bytea" => v.as_slice().unwrap_or_default().encode(buf)?,
                     "Char" => v.into_string().unwrap_or_default().encode(buf)?,
                     "Name" => v.into_string().unwrap_or_default().encode(buf)?,
-                    "Int8" => (v.as_i64().unwrap_or_default() as i32).encode(buf)?,
-                    "Int2" => (v.as_i64().unwrap_or_default() as i8).encode(buf)?,
-                    "Int4" => (v.as_i64().unwrap_or_default() as i16).encode(buf)?,
+                    "Int8" => v.as_i64().unwrap_or_default().encode(buf)?,
+                    "Int2" => (v.as_i64().unwrap_or_default() as i16).encode(buf)?,
+                    "Int4" => (v.as_i64().unwrap_or_default() as i32).encode(buf)?,
                     "Text" => v.into_string().unwrap_or_default().encode(buf)?,
                     "Oid" => Oid::from(v.as_u64().unwrap_or_default() as u32).encode(buf)?,
                     "Json" => Json(v.into_string().unwrap_or_default()).encode(buf)?,
@@ -537,47 +543,64 @@ impl Encode for Value {
                     "Jsonpath" => v.into_bytes().unwrap_or_default().encode(buf)?,
                     "Money" => Money(v.as_i64().unwrap_or_default()).encode(buf)?,
                     "Void" => v.into_bytes().unwrap_or_default().encode(buf)?,
-                    "TsVector" => {
-                        use crate::types::tsvector::TsVector;
-                        let s = v.as_str().unwrap_or_default();
-                        TsVector(s.to_string()).encode(buf)?
-                    }
-                    "TsQuery" => {
-                        use crate::types::tsquery::TsQuery;
-                        let s = v.as_str().unwrap_or_default();
-                        TsQuery(s.to_string()).encode(buf)?
-                    }
-                    "Hstore" => {
+                    "TsVector" | "tsvector" => match *v {
+                        Value::Binary(bytes) => bytes.encode(buf)?,
+                        other => {
+                            use crate::types::tsvector::TsVector;
+                            TsVector(other.into_string().unwrap_or_default()).encode(buf)?
+                        }
+                    },
+                    "TsQuery" | "tsquery" => match *v {
+                        Value::Binary(bytes) => bytes.encode(buf)?,
+                        other => {
+                            use crate::types::tsquery::TsQuery;
+                            TsQuery(other.into_string().unwrap_or_default()).encode(buf)?
+                        }
+                    },
+                    "Hstore" | "hstore" => {
                         use crate::types::hstore::Hstore;
-                        let s = v.as_str().unwrap_or_default();
-                        // Parse hstore text format: "key1=>value1, key2=>value2"
-                        let mut map = std::collections::HashMap::new();
-                        for pair in s.split(',') {
-                            let pair = pair.trim();
-                            if let Some(pos) = pair.find("=>") {
-                                let key = pair[..pos].trim().to_string();
-                                let value = pair[pos + 2..].trim().to_string();
-                                map.insert(key, value);
+                        match *v {
+                            Value::Binary(bytes) => bytes.encode(buf)?,
+                            Value::Map(values) => {
+                                let map = values
+                                    .into_iter()
+                                    .map(|(key, value)| {
+                                        (
+                                            key.into_string().unwrap_or_default(),
+                                            value.into_string().unwrap_or_default(),
+                                        )
+                                    })
+                                    .collect();
+                                Hstore(map).encode(buf)?
                             }
-                        }
-                        Hstore(map).encode(buf)?
-                    }
-                    "Point" => {
-                        use crate::types::point::Point;
-                        let s = v.as_str().unwrap_or_default();
-                        // Parse POINT(x y) format
-                        if let Some(start) = s.find('(') {
-                            if let Some(end) = s.find(')') {
-                                let coords = &s[start + 1..end];
-                                let parts: Vec<&str> = coords.split_whitespace().collect();
-                                if parts.len() == 2 {
-                                    let x = parts[0].parse::<f64>().unwrap_or(0.0);
-                                    let y = parts[1].parse::<f64>().unwrap_or(0.0);
-                                    Point { x, y }.encode(buf)?;
+                            Value::String(s) => {
+                                let mut map = std::collections::HashMap::new();
+                                for pair in s.split(',') {
+                                    let pair = pair.trim();
+                                    if let Some(pos) = pair.find("=>") {
+                                        let key = pair[..pos].trim().to_string();
+                                        let value = pair[pos + 2..].trim().to_string();
+                                        map.insert(key, value);
+                                    }
                                 }
+                                Hstore(map).encode(buf)?
                             }
+                            _ => return Err(Error::from("Invalid HSTORE value")),
                         }
-                        return Err(Error::from("Invalid POINT format"));
+                    }
+                    "Point" | "point" => {
+                        use crate::types::point::Point;
+                        match *v {
+                            Value::Array(values) if values.len() == 2 => Point {
+                                x: values[0].as_f64().unwrap_or_default(),
+                                y: values[1].as_f64().unwrap_or_default(),
+                            }
+                            .encode(buf)?,
+                            Value::String(s) => Point::from_str(&s)
+                                .map_err(|e| Error::from(e.to_string()))?
+                                .encode(buf)?,
+                            _ => return Err(Error::from("Invalid POINT value")),
+                        }
                     }
                     "Custom" => v.into_bytes().unwrap_or_default().encode(buf)?,
                     "DeclareWithName" => v.into_bytes().unwrap_or_default().encode(buf)?,

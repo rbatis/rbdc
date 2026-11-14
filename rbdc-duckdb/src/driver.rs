@@ -63,7 +63,7 @@ impl Driver for DuckDbDriver {
             Value::Map(_) => "VARCHAR",
             Value::Ext(t, _) => match *t {
                 "Date" => "DATE",
-                "DateTime" | "Datetime" => "TIMESTAMP",
+                "DateTime" => "TIMESTAMP",
                 "Time" => "TIME",
                 "Timestamp" => "BIGINT",
                 "Decimal" => "DECIMAL",

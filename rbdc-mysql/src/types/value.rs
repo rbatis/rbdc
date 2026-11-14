@@ -28,8 +28,8 @@ impl TypeInfo for Value {
             Value::Bool(_) => MySqlTypeInfo::from_type(ColumnType::Tiny),
             Value::I32(_) => MySqlTypeInfo::from_type(ColumnType::Long),
             Value::I64(_) => MySqlTypeInfo::from_type(ColumnType::LongLong),
-            Value::U32(_) => MySqlTypeInfo::from_type(ColumnType::Long),
-            Value::U64(_) => MySqlTypeInfo::from_type(ColumnType::LongLong),
+            Value::U32(_) => MySqlTypeInfo::unsigned(ColumnType::Long),
+            Value::U64(_) => MySqlTypeInfo::unsigned(ColumnType::LongLong),
             Value::F32(_) => MySqlTypeInfo::from_type(ColumnType::Float),
             Value::F64(_) => MySqlTypeInfo::from_type(ColumnType::Double),
             Value::String(_) => MySqlTypeInfo::from_type(ColumnType::VarChar),
@@ -52,10 +52,15 @@ impl TypeInfo for Value {
                         //datetime=5byte
                         MySqlTypeInfo::from_type(ColumnType::Timestamp)
                     }
-                    "DateTime" => MySqlTypeInfo::from_type(ColumnType::Datetime),
+                    "DateTime" => MySqlTypeInfo::from_type(ColumnType::DateTime),
                     "Json" => MySqlTypeInfo::from_type(ColumnType::Json),
                     "Enum" => MySqlTypeInfo::from_type(ColumnType::Enum),
                     "Set" => MySqlTypeInfo::from_type(ColumnType::Set),
+                    "Geometry" => MySqlTypeInfo::from_type(ColumnType::Geometry),
+                    "Bit" => MySqlTypeInfo::from_type(ColumnType::Bit),
+                    "Blob" | "TinyBlob" | "MediumBlob" | "LongBlob" => {
+                        MySqlTypeInfo::from_type(ColumnType::Blob)
+                    }
                     _ => MySqlTypeInfo::null(),
                 }
             }
@@ -164,14 +169,20 @@ impl Decode for Value {
         }
 
         let type_info = v.type_info.r#type;
+        let unsigned = v.type_info.is_unsigned();
         Ok(match type_info {
+            ColumnType::Tiny if unsigned => Value::U32(uint_decode(v).unwrap_or_default() as u32),
             ColumnType::Tiny => Value::I32(int_decode(v).unwrap_or_default() as i32),
+            ColumnType::Short if unsigned => Value::U32(uint_decode(v).unwrap_or_default() as u32),
             ColumnType::Short => Value::I32(int_decode(v).unwrap_or_default() as i32),
+            ColumnType::Long if unsigned => Value::U64(uint_decode(v).unwrap_or_default()),
             ColumnType::Long => Value::I64(int_decode(v).unwrap_or_default()),
             ColumnType::Float => Value::F32(f32_decode(v).unwrap_or_default()),
             ColumnType::Double => Value::F64(f64_decode(v).unwrap_or_default()),
             ColumnType::Null => Value::Null,
+            ColumnType::LongLong if unsigned => Value::U64(uint_decode(v).unwrap_or_default()),
             ColumnType::LongLong => Value::I64(int_decode(v).unwrap_or_default()),
+            ColumnType::Int24 if unsigned => Value::U32(uint_decode(v).unwrap_or_default() as u32),
             ColumnType::Int24 => Value::I32(int_decode(v).unwrap_or_default() as i32),
             ColumnType::VarChar => Value::String(v.as_str().unwrap_or_default().to_string()),
             ColumnType::Bit => Value::U64(uint_decode(v).unwrap_or_default()),
@@ -202,7 +213,7 @@ impl Decode for Value {
                 "Time",
                 Box::new(Value::String(decode_time(v).unwrap_or_default())),
             ),
-            ColumnType::Datetime => Value::Ext(
+            ColumnType::DateTime => Value::Ext(
                 "DateTime",
                 Box::new(Value::String(DateTime::decode(v)?.to_string())),
             ),

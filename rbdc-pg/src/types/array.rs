@@ -228,17 +228,14 @@ mod coverage_tests {
             PgTypeKind::Simple,
             PgTypeKind::Pseudo,
             PgTypeKind::Domain(PgTypeInfo(PgType::Int4)),
-            PgTypeKind::Composite(Arc::from(vec![(
-                "a".to_string(),
-                PgTypeInfo(PgType::Text),
-            )])),
+            PgTypeKind::Composite(Arc::from(vec![("a".to_string(), PgTypeInfo(PgType::Text))])),
             PgTypeKind::Enum(Arc::from(vec!["a".to_string()])),
             PgTypeKind::Range(PgTypeInfo(PgType::Int4)),
         ] {
-            let decoded =
-                Vec::<Value>::decode(text("{1}", custom(kind))).unwrap();
-            // without an array kind the element type is UNKNOWN
-            assert_eq!(decoded, vec![Value::Null]);
+            let decoded = Vec::<Value>::decode(text("{1}", custom(kind))).unwrap();
+            // without an array kind the element type is UNKNOWN, which is
+            // decoded as text instead of being discarded as NULL.
+            assert_eq!(decoded, vec![Value::String("1".to_string())]);
         }
 
         // Array kind resolves the element type

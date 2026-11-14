@@ -41,8 +41,8 @@ impl Decode for Value {
                 "Time",
                 Box::new(Value::String(String::decode(value)?)),
             )),
-            DataType::Datetime => Ok(Value::Ext(
-                "Datetime",
+            DataType::DateTime => Ok(Value::Ext(
+                "DateTime",
                 Box::new(Value::String(String::decode(value)?)),
             )),
         }

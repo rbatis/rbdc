@@ -716,7 +716,7 @@ fn test_column_type_try_from_u16_all_known_and_unknown() {
         (0x09, ColumnType::Int24),
         (0x0a, ColumnType::Date),
         (0x0b, ColumnType::Time),
-        (0x0c, ColumnType::Datetime),
+        (0x0c, ColumnType::DateTime),
         (0x0d, ColumnType::Year),
         (0x0f, ColumnType::VarChar),
         (0x10, ColumnType::Bit),
@@ -844,7 +844,7 @@ fn test_binary_row_length_encoded_and_temporal() {
         ColumnType::Date,
         ColumnType::Time,
         ColumnType::Timestamp,
-        ColumnType::Datetime,
+        ColumnType::DateTime,
     ] {
         let cols = columns(&[ty]);
         let mut b = vec![0u8, 0]; // header + null bitmap
@@ -891,7 +891,7 @@ fn test_binary_row_errors() {
     .is_err());
 
     // Temporal value with no data at all.
-    let cols = columns(&[ColumnType::Datetime]);
+    let cols = columns(&[ColumnType::DateTime]);
     let err = BinaryRow::decode_with(Bytes::from_static(b"\x00\x00"), &cols).unwrap_err();
     assert!(err.to_string().contains("temporal length"));
 }

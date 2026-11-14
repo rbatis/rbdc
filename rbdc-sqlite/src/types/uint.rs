@@ -64,3 +64,24 @@ impl Decode for u32 {
         Ok(value.to_owned().int64().try_into()?)
     }
 }
+
+impl Type for u64 {
+    fn type_info(&self) -> SqliteTypeInfo {
+        SqliteTypeInfo(DataType::Int64)
+    }
+}
+
+impl Encode for u64 {
+    fn encode(self, args: &mut Vec<SqliteArgumentValue>) -> Result<IsNull, Error> {
+        let value: i64 = self.try_into()?;
+        args.push(SqliteArgumentValue::Int64(value));
+
+        Ok(IsNull::No)
+    }
+}
+
+impl Decode for u64 {
+    fn decode(value: SqliteValueRef) -> Result<Self, Error> {
+        Ok(value.to_owned().int64().try_into()?)
+    }
+}

@@ -84,19 +84,22 @@ impl DuckDbWorker {
                     if let Some(ref db) = *guard {
                         db.0
                     } else {
-                        let db_path: *const std::os::raw::c_char = if path == ":memory:" || path.is_empty() {
-                            ptr::null_mut()
-                        } else {
-                            CString::new(&*path)
-                                .map(|s| s.into_raw())
-                                .unwrap_or(ptr::null_mut())
-                        };
+                        let db_path: *const std::os::raw::c_char =
+                            if path == ":memory:" || path.is_empty() {
+                                ptr::null_mut()
+                            } else {
+                                CString::new(&*path)
+                                    .map(|s| s.into_raw())
+                                    .unwrap_or(ptr::null_mut())
+                            };
 
                         let mut db: libduckdb_sys::duckdb_database = ptr::null_mut();
                         let r = unsafe { libduckdb_sys::duckdb_open(db_path, &mut db) };
 
                         if !db_path.is_null() && path != ":memory:" && !path.is_empty() {
-                            drop(unsafe { CString::from_raw(db_path as *mut std::os::raw::c_char) });
+                            drop(unsafe {
+                                CString::from_raw(db_path as *mut std::os::raw::c_char)
+                            });
                         }
                         if r != libduckdb_sys::DuckDBSuccess {
                             let _ = establish_tx.send(Err(Error::from("duckdb_open failed")));
@@ -141,13 +144,23 @@ impl DuckDbWorker {
                     match cmd {
                         Command::Execute { query, params, tx } => {
                             let mut guard = shared.conn.lock();
-                            execute::iter(&mut guard, &query, params, tx, &shared.cached_statements_size);
+                            execute::iter(
+                                &mut guard,
+                                &query,
+                                params,
+                                tx,
+                                &shared.cached_statements_size,
+                            );
                         }
                         Command::Ping { tx } => {
                             let conn_guard = shared.conn.lock();
                             let sql_cstr = CString::new("SELECT 1").unwrap_or_default();
                             let r = unsafe {
-                                libduckdb_sys::duckdb_query(conn_guard.handle.con, sql_cstr.as_ptr(), ptr::null_mut())
+                                libduckdb_sys::duckdb_query(
+                                    conn_guard.handle.con,
+                                    sql_cstr.as_ptr(),
+                                    ptr::null_mut(),
+                                )
                             };
                             if r == libduckdb_sys::DuckDBSuccess {
                                 tx.send(()).ok();
@@ -179,7 +192,10 @@ impl DuckDbWorker {
         &mut self,
         sql: String,
         params: Vec<Value>,
-    ) -> Result<crossfire::AsyncRx<crossfire::spsc::Array<Result<Either<DuckDbRow, u64>, Error>>>, Error> {
+    ) -> Result<
+        crossfire::AsyncRx<crossfire::spsc::Array<Result<Either<DuckDbRow, u64>, Error>>>,
+        Error,
+    > {
         let (tx, rx) = spsc::bounded_blocking_async(self.row_channel_size);
 
         self.command_tx
@@ -194,11 +210,7 @@ impl DuckDbWorker {
         Ok(rx)
     }
 
-    pub(crate) async fn exec(
-        &mut self,
-        sql: String,
-        params: Vec<Value>,
-    ) -> Result<u64, Error> {
+    pub(crate) async fn exec(&mut self, sql: String, params: Vec<Value>) -> Result<u64, Error> {
         let (tx, rx) = spsc::bounded_blocking_async(self.row_channel_size);
 
         self.command_tx
@@ -301,7 +313,12 @@ mod execute {
         cached_statements_size.store(conn.statements.len(), Ordering::Release);
 
         // Step 2: Bind parameters
-        bind_params(stmt_ptr, &params);
+        if let Err(e) = bind_params(stmt_ptr, &params) {
+            conn.statements.remove(query);
+            cached_statements_size.store(conn.statements.len(), Ordering::Release);
+            let _ = tx.send(Err(e));
+            return;
+        }
 
         // Step 3: Execute
         let mut result: libduckdb_sys::duckdb_result = unsafe { std::mem::zeroed() };
@@ -337,7 +354,8 @@ mod execute {
             // SELECT-like query: stream row data
             let mut col_names = Vec::with_capacity(col_count as usize);
             for col_idx in 0..col_count as usize {
-                let name_ptr = unsafe { libduckdb_sys::duckdb_column_name(&mut result, col_idx as u64) };
+                let name_ptr =
+                    unsafe { libduckdb_sys::duckdb_column_name(&mut result, col_idx as u64) };
                 if !name_ptr.is_null() {
                     let name = unsafe { CStr::from_ptr(name_ptr) }
                         .to_string_lossy()
@@ -347,7 +365,8 @@ mod execute {
             }
 
             for row_idx in 0..row_count as usize {
-                let values = crate::types::extract_row_values(&mut result, row_idx, col_count as usize);
+                let values =
+                    crate::types::extract_row_values(&mut result, row_idx, col_count as usize);
                 let duckdb_row = DuckDbRow::new(values, col_count as usize, col_names.clone());
                 if tx.send(Ok(Either::Left(duckdb_row))).is_err() {
                     break;
@@ -363,53 +382,32 @@ mod execute {
         unsafe { libduckdb_sys::duckdb_destroy_result(&mut result) };
     }
 
-    /// Bind parameters to a prepared statement by directly matching on rbs::Value variants.
-    ///
-    /// This avoids the previous pattern of accumulating all encoded values into a Vec
-    /// then using `.last()` for each parameter. Common types (Null, Bool, Int, Float,
-    /// String, Binary) are handled directly; complex types (Array, Map, Ext) fall back
-    /// to the Encode trait's conversion.
-    fn bind_params(stmt: libduckdb_sys::duckdb_prepared_statement, params: &[Value]) {
+    /// Bind parameters through the common type encoder so that signed/unsigned
+    /// integers, booleans and floats retain their exact DuckDB types.
+    fn bind_params(
+        stmt: libduckdb_sys::duckdb_prepared_statement,
+        params: &[Value],
+    ) -> Result<(), Error> {
+        use crate::types::{Encode, IsNull};
+
         for (i, param) in params.iter().enumerate() {
             let idx = (i + 1) as u64;
-
-            match param {
-                Value::Null => unsafe { libduckdb_sys::duckdb_bind_null(stmt, idx); },
-                Value::Bool(v) => unsafe { libduckdb_sys::duckdb_bind_int32(stmt, idx, *v as i32); },
-                Value::I32(v) => unsafe { libduckdb_sys::duckdb_bind_int32(stmt, idx, *v); },
-                Value::U32(v) => unsafe { libduckdb_sys::duckdb_bind_int32(stmt, idx, *v as i32); },
-                Value::I64(v) => unsafe { libduckdb_sys::duckdb_bind_int64(stmt, idx, *v); },
-                Value::U64(v) => unsafe { libduckdb_sys::duckdb_bind_int64(stmt, idx, *v as i64); },
-                Value::F32(v) => unsafe { libduckdb_sys::duckdb_bind_double(stmt, idx, *v as f64); },
-                Value::F64(v) => unsafe { libduckdb_sys::duckdb_bind_double(stmt, idx, *v); },
-                Value::String(v) => {
-                    // CString::new copies the string data; DuckDB binds copy immediately
-                    if let Ok(cstr) = CString::new(v.as_str()) {
-                        unsafe { libduckdb_sys::duckdb_bind_varchar(stmt, idx, cstr.as_ptr()); }
+            let mut args = Vec::with_capacity(1);
+            match param.clone().encode(&mut args) {
+                Ok(IsNull::No) => {
+                    if let Some(arg) = args.last() {
+                        bind_duckdb_arg(stmt, idx, arg);
+                    } else {
+                        return Err(Error::from("DuckDB encoder produced no value"));
                     }
                 }
-                Value::Binary(v) => {
-                    unsafe {
-                        libduckdb_sys::duckdb_bind_blob(
-                            stmt,
-                            idx,
-                            v.as_ptr() as *const std::ffi::c_void,
-                            v.len() as u64,
-                        );
-                    }
-                }
-                // Array, Map, Ext types: convert via Encode trait
-                _ => {
-                    use crate::types::Encode;
-                    let mut args = Vec::new();
-                    if param.clone().encode(&mut args).is_ok() {
-                        if let Some(arg) = args.last() {
-                            bind_duckdb_arg(stmt, idx, arg);
-                        }
-                    }
-                }
+                Ok(IsNull::Yes) => unsafe {
+                    libduckdb_sys::duckdb_bind_null(stmt, idx);
+                },
+                Err(e) => return Err(e),
             }
         }
+        Ok(())
     }
 
     /// Bind a single DuckDbArgumentValue to a prepared statement parameter index.
@@ -419,25 +417,57 @@ mod execute {
         arg: &DuckDbArgumentValue,
     ) {
         match arg {
-            DuckDbArgumentValue::Null => unsafe { libduckdb_sys::duckdb_bind_null(stmt, idx); },
-            DuckDbArgumentValue::Int(v) => unsafe { libduckdb_sys::duckdb_bind_int32(stmt, idx, *v); },
-            DuckDbArgumentValue::Int64(v) => unsafe { libduckdb_sys::duckdb_bind_int64(stmt, idx, *v); },
-            DuckDbArgumentValue::Double(v) => unsafe { libduckdb_sys::duckdb_bind_double(stmt, idx, *v); },
+            DuckDbArgumentValue::Null => unsafe {
+                libduckdb_sys::duckdb_bind_null(stmt, idx);
+            },
+            DuckDbArgumentValue::Boolean(v) => unsafe {
+                libduckdb_sys::duckdb_bind_boolean(stmt, idx, *v);
+            },
+            DuckDbArgumentValue::Int8(v) => unsafe {
+                libduckdb_sys::duckdb_bind_int8(stmt, idx, *v);
+            },
+            DuckDbArgumentValue::Int16(v) => unsafe {
+                libduckdb_sys::duckdb_bind_int16(stmt, idx, *v);
+            },
+            DuckDbArgumentValue::Int(v) => unsafe {
+                libduckdb_sys::duckdb_bind_int32(stmt, idx, *v);
+            },
+            DuckDbArgumentValue::Int64(v) => unsafe {
+                libduckdb_sys::duckdb_bind_int64(stmt, idx, *v);
+            },
+            DuckDbArgumentValue::UInt8(v) => unsafe {
+                libduckdb_sys::duckdb_bind_uint8(stmt, idx, *v);
+            },
+            DuckDbArgumentValue::UInt16(v) => unsafe {
+                libduckdb_sys::duckdb_bind_uint16(stmt, idx, *v);
+            },
+            DuckDbArgumentValue::UInt32(v) => unsafe {
+                libduckdb_sys::duckdb_bind_uint32(stmt, idx, *v);
+            },
+            DuckDbArgumentValue::UInt64(v) => unsafe {
+                libduckdb_sys::duckdb_bind_uint64(stmt, idx, *v);
+            },
+            DuckDbArgumentValue::Float(v) => unsafe {
+                libduckdb_sys::duckdb_bind_float(stmt, idx, *v);
+            },
+            DuckDbArgumentValue::Double(v) => unsafe {
+                libduckdb_sys::duckdb_bind_double(stmt, idx, *v);
+            },
             DuckDbArgumentValue::Text(v) => {
                 if let Ok(cstr) = CString::new(v.as_str()) {
-                    unsafe { libduckdb_sys::duckdb_bind_varchar(stmt, idx, cstr.as_ptr()); }
+                    unsafe {
+                        libduckdb_sys::duckdb_bind_varchar(stmt, idx, cstr.as_ptr());
+                    }
                 }
             }
-            DuckDbArgumentValue::Blob(v) => {
-                unsafe {
-                    libduckdb_sys::duckdb_bind_blob(
-                        stmt,
-                        idx,
-                        v.as_ptr() as *const std::ffi::c_void,
-                        v.len() as u64,
-                    );
-                }
-            }
+            DuckDbArgumentValue::Blob(v) => unsafe {
+                libduckdb_sys::duckdb_bind_blob(
+                    stmt,
+                    idx,
+                    v.as_ptr() as *const std::ffi::c_void,
+                    v.len() as u64,
+                );
+            },
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::protocol::text::{ColumnDefinition, ColumnType};
+use crate::protocol::text::{ColumnDefinition, ColumnFlags, ColumnType};
 use rbdc::ext::ustr::UStr;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -14,7 +14,7 @@ pub struct MySqlColumn {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MySqlTypeInfo {
     pub r#type: ColumnType,
-    // pub flags: ColumnFlags,
+    pub flags: ColumnFlags,
     pub char_set: u16,
     // [max_size] for integer types, this is (M) in BIT(M) or TINYINT(M)
     // #[serde(default)]
@@ -28,7 +28,7 @@ impl MySqlTypeInfo {
     pub const fn binary(ty: ColumnType) -> Self {
         Self {
             r#type: ty,
-            // flags: ColumnFlags::BINARY,
+            flags: ColumnFlags::BINARY,
             char_set: 63,
         }
     }
@@ -37,7 +37,7 @@ impl MySqlTypeInfo {
     pub const fn null() -> Self {
         Self {
             r#type: ColumnType::Null,
-            // flags: ColumnFlags::BINARY,
+            flags: ColumnFlags::BINARY,
             char_set: 63,
         }
     }
@@ -46,7 +46,7 @@ impl MySqlTypeInfo {
     pub const fn __enum() -> Self {
         Self {
             r#type: ColumnType::Enum,
-            // flags: ColumnFlags::BINARY,
+            flags: ColumnFlags::BINARY,
             char_set: 63,
         }
     }
@@ -54,7 +54,7 @@ impl MySqlTypeInfo {
     #[doc(hidden)]
     pub fn __type_feature_gate(&self) -> Option<&'static str> {
         match self.r#type {
-            ColumnType::Date | ColumnType::Time | ColumnType::Timestamp | ColumnType::Datetime => {
+            ColumnType::Date | ColumnType::Time | ColumnType::Timestamp | ColumnType::DateTime => {
                 Some("time")
             }
             ColumnType::Json => Some("json"),
@@ -66,7 +66,7 @@ impl MySqlTypeInfo {
     pub(crate) fn from_column(column: &ColumnDefinition) -> Self {
         Self {
             r#type: column.r#type,
-            // flags: column.flags,
+            flags: column.flags,
             char_set: column.char_set,
         }
     }
@@ -74,7 +74,19 @@ impl MySqlTypeInfo {
     pub fn from_type(ty: ColumnType) -> Self {
         Self {
             r#type: ty,
-            // flags: column.flags,
+            flags: ColumnFlags::empty(),
+            char_set: 63,
+        }
+    }
+
+    pub fn is_unsigned(&self) -> bool {
+        self.flags.contains(ColumnFlags::UNSIGNED)
+    }
+
+    pub const fn unsigned(ty: ColumnType) -> Self {
+        Self {
+            r#type: ty,
+            flags: ColumnFlags::UNSIGNED,
             char_set: 63,
         }
     }
@@ -138,7 +150,7 @@ mod tests {
             Some("time")
         );
         assert_eq!(
-            MySqlTypeInfo::from_type(ColumnType::Datetime).__type_feature_gate(),
+            MySqlTypeInfo::from_type(ColumnType::DateTime).__type_feature_gate(),
             Some("time")
         );
         assert_eq!(

@@ -1,6 +1,6 @@
 [package]
 name = "rbdc-mysql"
-version = "4.9.7"
+version = "4.9.8"
 edition = "2021"
 description = "The Rust SQL Toolkit and ORM Library. An async, pure Rust SQL crate featuring compile-time Dynamic SQL"
 readme = "Readme.md"
@@ -21,7 +21,7 @@ rbs = {version="4",path="../rbs"}
 bytes = "1.1.0"
 rbdc = { version = "4.9", path = "../", default-features = false, optional = true }
 serde = "1"
-bitflags = "2.0.2"
+bitflags = { version = "2.0.2", features = ["serde"] }
 digest = { version = "0.10.7", default-features = false, features = ["std"] }
 futures-core = { version = "0.3.19", default-features = false }
 futures-util = { version = "0.3.21", features = ["alloc", "sink"] }

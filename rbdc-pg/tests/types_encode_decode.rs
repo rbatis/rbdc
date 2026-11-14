@@ -98,14 +98,32 @@ fn integer_codec() {
     assert_eq!(encode(0x01020304u32), vec![1, 2, 3, 4]);
     assert_eq!(encode(0x0102030405060708u64), vec![1, 2, 3, 4, 5, 6, 7, 8]);
 
-    assert_eq!(<i8 as Decode>::decode(binary_ref(&[0x80], PgType::Char)).unwrap(), -128);
-    assert_eq!(<u8 as Decode>::decode(binary_ref(&[0xff], PgType::Char)).unwrap(), 255);
+    assert_eq!(
+        <i8 as Decode>::decode(binary_ref(&[0x80], PgType::Char)).unwrap(),
+        -128
+    );
+    assert_eq!(
+        <u8 as Decode>::decode(binary_ref(&[0xff], PgType::Char)).unwrap(),
+        255
+    );
     // empty slice decodes as zero
-    assert_eq!(<i8 as Decode>::decode(binary_ref(&[], PgType::Char)).unwrap(), 0);
-    assert_eq!(<u8 as Decode>::decode(binary_ref(&[], PgType::Char)).unwrap(), 0);
+    assert_eq!(
+        <i8 as Decode>::decode(binary_ref(&[], PgType::Char)).unwrap(),
+        0
+    );
+    assert_eq!(
+        <u8 as Decode>::decode(binary_ref(&[], PgType::Char)).unwrap(),
+        0
+    );
 
-    assert_eq!(<i16 as Decode>::decode(binary_ref(&[0, 5], PgType::Int2)).unwrap(), 5);
-    assert_eq!(<i16 as Decode>::decode(binary_ref(&[0, 0, 0, 5], PgType::Int4)).unwrap(), 5);
+    assert_eq!(
+        <i16 as Decode>::decode(binary_ref(&[0, 5], PgType::Int2)).unwrap(),
+        5
+    );
+    assert_eq!(
+        <i16 as Decode>::decode(binary_ref(&[0, 0, 0, 5], PgType::Int4)).unwrap(),
+        5
+    );
     assert_eq!(
         <i16 as Decode>::decode(binary_ref(&[0, 0, 0, 0, 0, 0, 0, 5], PgType::Int8)).unwrap(),
         5
@@ -113,7 +131,10 @@ fn integer_codec() {
     assert!(<i16 as Decode>::decode(binary_ref(&[0], PgType::Int2)).is_err());
     assert_eq!(<i16 as Decode>::decode(text_ref("5")).unwrap(), 5);
 
-    assert_eq!(<i32 as Decode>::decode(binary_ref(&[0, 0, 0, 5], PgType::Int4)).unwrap(), 5);
+    assert_eq!(
+        <i32 as Decode>::decode(binary_ref(&[0, 0, 0, 5], PgType::Int4)).unwrap(),
+        5
+    );
     assert_eq!(
         <i32 as Decode>::decode(binary_ref(&[0, 0, 0, 0, 0, 0, 0, 5], PgType::Int8)).unwrap(),
         5
@@ -128,8 +149,14 @@ fn integer_codec() {
     );
     assert_eq!(<i64 as Decode>::decode(text_ref("-5")).unwrap(), -5);
 
-    assert_eq!(<u16 as Decode>::decode(binary_ref(&[0, 5], PgType::Int2)).unwrap(), 5);
-    assert_eq!(<u16 as Decode>::decode(binary_ref(&[0, 0, 0, 5], PgType::Int4)).unwrap(), 5);
+    assert_eq!(
+        <u16 as Decode>::decode(binary_ref(&[0, 5], PgType::Int2)).unwrap(),
+        5
+    );
+    assert_eq!(
+        <u16 as Decode>::decode(binary_ref(&[0, 0, 0, 5], PgType::Int4)).unwrap(),
+        5
+    );
     assert_eq!(
         <u16 as Decode>::decode(binary_ref(&[0, 0, 0, 0, 0, 0, 0, 5], PgType::Int8)).unwrap(),
         5
@@ -137,7 +164,10 @@ fn integer_codec() {
     assert!(<u16 as Decode>::decode(binary_ref(&[0], PgType::Int2)).is_err());
     assert_eq!(<u16 as Decode>::decode(text_ref("5")).unwrap(), 5);
 
-    assert_eq!(<u32 as Decode>::decode(binary_ref(&[0, 0, 0, 5], PgType::Int4)).unwrap(), 5);
+    assert_eq!(
+        <u32 as Decode>::decode(binary_ref(&[0, 0, 0, 5], PgType::Int4)).unwrap(),
+        5
+    );
     assert_eq!(
         <u32 as Decode>::decode(binary_ref(&[0, 0, 0, 0, 0, 0, 0, 5], PgType::Int8)).unwrap(),
         5
@@ -157,7 +187,10 @@ fn float_codec() {
     assert_eq!(encode(1.5f32), 1.5f32.to_be_bytes());
     assert_eq!(encode(-2.25f64), (-2.25f64).to_be_bytes());
 
-    assert_eq!(<f32 as Decode>::decode(binary_ref(&1.5f32.to_be_bytes(), PgType::Float4)).unwrap(), 1.5);
+    assert_eq!(
+        <f32 as Decode>::decode(binary_ref(&1.5f32.to_be_bytes(), PgType::Float4)).unwrap(),
+        1.5
+    );
     assert_eq!(
         <f32 as Decode>::decode(binary_ref(&1.5f64.to_be_bytes(), PgType::Float8)).unwrap(),
         1.5
@@ -181,8 +214,14 @@ fn string_and_bytea_codec() {
     assert_eq!(String::new().type_info(), PgTypeInfo(PgType::Varchar));
 
     // binary and text bytea
-    assert_eq!(Vec::<u8>::decode(binary_ref(&[1, 2, 3], PgType::Bytea)).unwrap(), vec![1, 2, 3]);
-    assert_eq!(Vec::<u8>::decode(text_ref("\\x0102ff")).unwrap(), vec![1, 2, 255]);
+    assert_eq!(
+        Vec::<u8>::decode(binary_ref(&[1, 2, 3], PgType::Bytea)).unwrap(),
+        vec![1, 2, 3]
+    );
+    assert_eq!(
+        Vec::<u8>::decode(text_ref("\\x0102ff")).unwrap(),
+        vec![1, 2, 255]
+    );
     assert!(Vec::<u8>::decode(text_ref("0102")).is_err());
     assert!(Vec::<u8>::decode(text_ref("\\xzz")).is_err());
     assert_eq!(encode(vec![1u8, 2, 3]), vec![1, 2, 3]);
@@ -191,7 +230,10 @@ fn string_and_bytea_codec() {
     let bytea = Bytea(vec![9, 8]);
     assert_eq!(format!("{bytea}"), "[len=2]");
     assert_eq!(encode(bytea.clone()), vec![9, 8]);
-    assert_eq!(Bytea::decode(binary_ref(&[9, 8], PgType::Bytea)).unwrap(), bytea);
+    assert_eq!(
+        Bytea::decode(binary_ref(&[9, 8], PgType::Bytea)).unwrap(),
+        bytea
+    );
     let v: Value = bytea.into();
     assert_eq!(v, Value::Ext("Bytea", Box::new(Value::Binary(vec![9, 8]))));
 }
@@ -205,7 +247,10 @@ fn date_time_codecs() {
     };
     let encoded = encode(d.clone());
     assert_eq!(encoded, 1i32.to_be_bytes().to_vec());
-    assert_eq!(fastdate::Date::decode(binary_ref(&encoded, PgType::Date)).unwrap(), d);
+    assert_eq!(
+        fastdate::Date::decode(binary_ref(&encoded, PgType::Date)).unwrap(),
+        d
+    );
 
     // before epoch exercises the negative branch
     let before = fastdate::Date {
@@ -231,7 +276,10 @@ fn date_time_codecs() {
     assert!(fastdate::Date::decode(text_ref("not-a-date")).is_err());
 
     let rbdc_date = Date(d);
-    assert_eq!(Date::decode(binary_ref(&encoded, PgType::Date)).unwrap(), rbdc_date);
+    assert_eq!(
+        Date::decode(binary_ref(&encoded, PgType::Date)).unwrap(),
+        rbdc_date
+    );
     assert_eq!(encode(rbdc_date.clone()), encoded);
 
     let t = rbdc::Time(fastdate::Time {
@@ -254,10 +302,15 @@ fn date_time_codecs() {
     // negative microseconds branch
     assert!(rbdc::Time::decode(binary_ref(&(-1i64).to_be_bytes(), PgType::Time)).is_ok());
 
-    let ts_ms = DateTime::from_str("2021-02-03 04:05:06").unwrap().unix_timestamp_millis();
+    let ts_ms = DateTime::from_str("2021-02-03 04:05:06")
+        .unwrap()
+        .unix_timestamp_millis();
     let ts = Timestamp(ts_ms);
     let ts_encoded = encode(ts.clone());
-    assert_eq!(Timestamp::decode(binary_ref(&ts_encoded, PgType::Timestamp)).unwrap(), ts);
+    assert_eq!(
+        Timestamp::decode(binary_ref(&ts_encoded, PgType::Timestamp)).unwrap(),
+        ts
+    );
     assert_eq!(
         Timestamp::decode(text_ref("2021-02-03 04:05:06")).unwrap(),
         Timestamp(
@@ -277,7 +330,10 @@ fn date_time_codecs() {
 
     let dt = DateTime::from_timestamp_millis(1_600_000_000_000);
     let dt_encoded = encode(dt.clone());
-    assert_eq!(DateTime::decode(binary_ref(&dt_encoded, PgType::Timestamptz)).unwrap(), dt);
+    assert_eq!(
+        DateTime::decode(binary_ref(&dt_encoded, PgType::Timestamptz)).unwrap(),
+        dt
+    );
     // negative branch
     let early_dt = DateTime::from_timestamp_millis(-1_000_000);
     let early_dt_encoded = encode(early_dt.clone());
@@ -309,8 +365,11 @@ fn timetz_codec() {
     });
     let encoded = encode(tz.clone());
     assert_eq!(encoded.len(), 12);
-    assert_eq!(Timetz::decode(binary_ref(&encoded, PgType::Timetz)).unwrap(), tz);
-    assert!(Timetz::decode(text_ref("01:02:03+01")).is_err());
+    assert_eq!(
+        Timetz::decode(binary_ref(&encoded, PgType::Timetz)).unwrap(),
+        tz
+    );
+    assert_eq!(Timetz::decode(text_ref("01:02:03+01")).unwrap(), tz);
 
     assert_eq!(format!("{tz}"), "01:02:03+01:00");
     let negative = Timetz(OffsetTz {
@@ -342,7 +401,10 @@ fn uuid_codec() {
     let uuid = Uuid(s.to_string());
     let encoded = encode(uuid.clone());
     assert_eq!(encoded.len(), 16);
-    assert_eq!(Uuid::decode(binary_ref(&encoded, PgType::Uuid)).unwrap(), uuid);
+    assert_eq!(
+        Uuid::decode(binary_ref(&encoded, PgType::Uuid)).unwrap(),
+        uuid
+    );
     assert_eq!(Uuid::decode(text_ref_typed(s, PgType::Uuid)).unwrap(), uuid);
     // text format is parsed as a plain string by the rbdc wrapper
     assert_eq!(
@@ -359,7 +421,10 @@ fn json_codec() {
     let encoded = encode(json.clone());
     assert_eq!(encoded[0], 1);
     assert_eq!(&encoded[1..], b"{\"a\":1}");
-    assert_eq!(Json::decode(binary_ref(&encoded, PgType::Jsonb)).unwrap(), json);
+    assert_eq!(
+        Json::decode(binary_ref(&encoded, PgType::Jsonb)).unwrap(),
+        json
+    );
 
     // JSON (not JSONB) does not strip a version byte
     let raw = b"{\"a\":2}";
@@ -372,7 +437,10 @@ fn json_codec() {
         Json("{\"a\":3}".to_string())
     );
     // empty and zero-length buffers are "null"
-    assert_eq!(Json::decode(null_ref(PgType::Json)).unwrap(), Json("null".to_string()));
+    assert_eq!(
+        Json::decode(null_ref(PgType::Json)).unwrap(),
+        Json("null".to_string())
+    );
     assert_eq!(
         Json::decode(binary_ref(&[], PgType::Json)).unwrap(),
         Json("null".to_string())
@@ -386,7 +454,10 @@ fn json_codec() {
     assert_eq!(v, rbs::value!({"a": 1u64}));
     let v = Value::decode(binary_ref(raw, PgType::Json)).unwrap();
     assert_eq!(v, rbs::value!({"a": 2u64}));
-    assert_eq!(Value::decode(binary_ref(&[], PgType::Json)).unwrap(), Value::Null);
+    assert_eq!(
+        Value::decode(binary_ref(&[], PgType::Json)).unwrap(),
+        Value::Null
+    );
     assert!(Value::decode(binary_ref(b"not json", PgType::Json)).is_err());
 
     let mut buf = PgArgumentBuffer::default();
@@ -402,11 +473,11 @@ fn numeric_and_decimal_codec() {
     let encoded = encode(dec.clone());
     // header + digits
     assert!(encoded.len() >= 8);
-    assert_eq!(BigDecimal::decode(binary_ref(&encoded, PgType::Numeric)).unwrap(), dec);
     assert_eq!(
-        BigDecimal::decode(text_ref("12345.6789")).unwrap(),
+        BigDecimal::decode(binary_ref(&encoded, PgType::Numeric)).unwrap(),
         dec
     );
+    assert_eq!(BigDecimal::decode(text_ref("12345.6789")).unwrap(), dec);
     assert!(BigDecimal::decode(text_ref("not-a-number")).is_err());
 
     // zero is encoded as an empty digit array
@@ -432,7 +503,10 @@ fn numeric_and_decimal_codec() {
     // Decimal wrapper
     let decimal = Decimal(dec.clone());
     let encoded = encode(decimal.clone());
-    assert_eq!(Decimal::decode(binary_ref(&encoded, PgType::Numeric)).unwrap(), decimal);
+    assert_eq!(
+        Decimal::decode(binary_ref(&encoded, PgType::Numeric)).unwrap(),
+        decimal
+    );
     assert_eq!(Decimal::decode(text_ref("12345.6789")).unwrap(), decimal);
 }
 
@@ -454,21 +528,22 @@ fn money_codec() {
 fn point_codec() {
     let p = Point { x: 1.5, y: -2.5 };
     assert_eq!(format!("{p}"), "POINT(1.5 -2.5)");
-    assert_eq!(
-        Point::decode(text_ref("POINT(1.5 -2.5)")).unwrap(),
-        p
-    );
-    assert_eq!(
-        Point::decode(text_ref("  POINT(1.5 -2.5)  ")).unwrap(),
-        p
-    );
+    assert_eq!(Point::decode(text_ref("POINT(1.5 -2.5)")).unwrap(), p);
+    assert_eq!(Point::decode(text_ref("  POINT(1.5 -2.5)  ")).unwrap(), p);
+    assert_eq!(Point::decode(text_ref("(1.5,-2.5)")).unwrap(), p);
     assert!(Point::decode(text_ref("POINT(1.5)")).is_err());
     assert!(Point::decode(text_ref("LINESTRING(1 2)")).is_err());
     assert!(Point::decode(text_ref("POINT(a b)")).is_err());
-    assert!(Point::decode(binary_ref(&[0; 16], PgType::Point)).is_err());
-    assert!(encode_err(p));
+    assert_eq!(
+        Point::decode(binary_ref(&encode(p), PgType::Point)).unwrap(),
+        p
+    );
+    assert_eq!(
+        Point::decode(binary_ref(&[0; 16], PgType::Point)).unwrap(),
+        Point { x: 0.0, y: 0.0 }
+    );
     let v: Value = p.into();
-    assert!(matches!(v, Value::Ext("point", _)));
+    assert!(matches!(v, Value::Ext("Point", _)));
 }
 
 #[test]
@@ -501,17 +576,15 @@ fn hstore_codec() {
     assert_eq!(decoded.0.get("missing").map(String::as_str), Some("null"));
 
     assert!(Hstore::decode(binary_ref(&[0, 0], PgType::Hstore)).is_err());
-    // entry header too short (count=1, no room for lengths)
+    // entry header too short (count=1, no room for key length)
     assert!(Hstore::decode(binary_ref(&[0, 0, 0, 1, 0, 0], PgType::Hstore)).is_err());
     // key length larger than buffer
     let mut too_long_key = Vec::new();
     too_long_key.extend(1i32.to_be_bytes());
     too_long_key.extend(99i32.to_be_bytes());
-    too_long_key.extend(0i32.to_be_bytes());
     assert!(Hstore::decode(binary_ref(&too_long_key, PgType::Hstore)).is_err());
     // invalid utf8 key
     let mut bad_key = Vec::new();
-    bad_key.extend(1i32.to_be_bytes());
     bad_key.extend(1i32.to_be_bytes());
     bad_key.extend(1i32.to_be_bytes());
     bad_key.push(0xff);
@@ -521,36 +594,40 @@ fn hstore_codec() {
     let mut bad_value = Vec::new();
     bad_value.extend(1i32.to_be_bytes()); // count
     bad_value.extend(1i32.to_be_bytes()); // key length
-    bad_value.extend(1i32.to_be_bytes()); // value length
     bad_value.push(b'k');
+    bad_value.extend(1i32.to_be_bytes()); // value length
     bad_value.push(0xff);
     assert!(Hstore::decode(binary_ref(&bad_value, PgType::Hstore)).is_err());
     // value length larger than buffer
     let mut too_long_value = Vec::new();
     too_long_value.extend(1i32.to_be_bytes());
     too_long_value.extend(1i32.to_be_bytes());
-    too_long_value.extend(99i32.to_be_bytes());
     too_long_value.push(b'k');
+    too_long_value.extend(99i32.to_be_bytes());
     assert!(Hstore::decode(binary_ref(&too_long_value, PgType::Hstore)).is_err());
 
-    assert!(encode_err(hstore.clone()));
+    let encoded = encode(hstore.clone());
+    assert_eq!(
+        Hstore::decode(binary_ref(&encoded, PgType::Hstore)).unwrap(),
+        hstore
+    );
     let from_map: Hstore = map.into();
     assert_eq!(from_map, hstore);
     let v: Value = hstore.into();
-    assert!(matches!(v, Value::Ext("hstore", _)));
+    assert!(matches!(v, Value::Ext("Hstore", _)));
 }
 
 fn hstore_binary(entries: &[(&str, Option<&str>)]) -> Vec<u8> {
     let mut buf = Vec::new();
     buf.extend((entries.len() as i32).to_be_bytes());
     for (key, value) in entries {
-        // wire order is: key length, value length, key bytes, value bytes
+        // wire order is: key length, key bytes, value length, value bytes
         buf.extend((key.len() as i32).to_be_bytes());
+        buf.extend(key.as_bytes());
         match value {
             Some(value) => buf.extend((value.len() as i32).to_be_bytes()),
             None => buf.extend((-1i32).to_be_bytes()),
         }
-        buf.extend(key.as_bytes());
         if let Some(value) = value {
             buf.extend(value.as_bytes());
         }
@@ -563,26 +640,26 @@ fn tsvector_tsquery_codec() {
     let tv = TsVector("'a' 'b'".to_string());
     assert_eq!(format!("{tv}"), "'a' 'b'");
     assert_eq!(encode_err(tv.clone()), true);
-    assert_eq!(
-        TsVector::decode(text_ref("'a' 'b'")).unwrap(),
-        tv
-    );
+    assert_eq!(TsVector::decode(text_ref("'a' 'b'")).unwrap(), tv);
     assert_eq!(
         TsVector::decode(binary_ref(b"'a' 'b'", PgType::Tsvector)).unwrap(),
         tv
     );
     assert_eq!(TsVector::from(String::from("x")).0, "x");
     let v: Value = tv.into();
-    assert!(matches!(v, Value::Ext("tsvector", _)));
+    assert!(matches!(v, Value::Ext("TsVector", _)));
 
     let tq = TsQuery("a & b".to_string());
     assert_eq!(format!("{tq}"), "a & b");
     assert_eq!(encode_err(tq.clone()), true);
     assert_eq!(TsQuery::decode(text_ref("a & b")).unwrap(), tq);
-    assert_eq!(TsQuery::decode(binary_ref(b"a & b", PgType::Tsquery)).unwrap(), tq);
+    assert_eq!(
+        TsQuery::decode(binary_ref(b"a & b", PgType::Tsquery)).unwrap(),
+        tq
+    );
     assert_eq!(TsQuery::from(String::from("x")).0, "x");
     let v: Value = tq.into();
-    assert!(matches!(v, Value::Ext("tsquery", _)));
+    assert!(matches!(v, Value::Ext("TsQuery", _)));
 }
 
 #[test]
@@ -591,7 +668,10 @@ fn oid_codec() {
     let mut buf = PgArgumentBuffer::default();
     Oid(41).encode(&mut buf).unwrap();
     assert_eq!(buf.to_vec(), 41u32.to_be_bytes().to_vec());
-    assert_eq!(Oid::decode(binary_ref(&41u32.to_be_bytes(), PgType::Oid)).unwrap(), oid);
+    assert_eq!(
+        Oid::decode(binary_ref(&41u32.to_be_bytes(), PgType::Oid)).unwrap(),
+        oid
+    );
     assert_eq!(Oid::decode(text_ref("41")).unwrap(), oid);
     assert!(Oid::decode(text_ref("x")).is_err());
     assert_eq!(oid.type_info(), PgTypeInfo(PgType::Oid));
@@ -684,8 +764,11 @@ fn array_text_codec() {
     );
 
     // quoted values, escapes, NULL
-    let v = Vec::<Value>::decode(text_ref_typed("{\"a,b\",\"c\\\"d\",NULL,\"e\\\\f\"}", PgType::TextArray))
-        .unwrap();
+    let v = Vec::<Value>::decode(text_ref_typed(
+        "{\"a,b\",\"c\\\"d\",NULL,\"e\\\\f\"}",
+        PgType::TextArray,
+    ))
+    .unwrap();
     assert_eq!(
         v,
         vec![
@@ -701,9 +784,9 @@ fn array_text_codec() {
     assert_eq!(v, vec!["(1,2)".to_string(), "(3,4)".to_string()]);
 
     // Text type_info without an array kind falls back to UNKNOWN, so
-    // Value elements decode as NULL.
+    // Value elements decode as text.
     let v = Vec::<Value>::decode(text_ref_typed("{1}", PgType::Text)).unwrap();
-    assert_eq!(v, vec![Value::Null]);
+    assert_eq!(v, vec![Value::String("1".to_string())]);
 }
 
 #[test]
@@ -746,12 +829,52 @@ fn value_type_info_matches_driver_types() {
     for (value, expected) in cases {
         assert_eq!(value.type_info(), expected);
     }
+
+    let ext_cases = [
+        (
+            Value::Ext("TsVector", Box::new(Value::String("'a'".into()))),
+            PgTypeInfo(PgType::Tsvector),
+        ),
+        (
+            Value::Ext("TsQuery", Box::new(Value::String("a".into()))),
+            PgTypeInfo(PgType::Tsquery),
+        ),
+        (
+            Value::Ext("Hstore", Box::new(Value::String("a=>b".into()))),
+            PgTypeInfo(PgType::Hstore),
+        ),
+        (
+            Value::Ext(
+                "Point",
+                Box::new(Value::Array(vec![Value::F64(1.0), Value::F64(2.0)])),
+            ),
+            PgTypeInfo(PgType::Point),
+        ),
+    ];
+    for (value, expected) in ext_cases {
+        assert_eq!(value.type_info(), expected);
+    }
+
+    assert_eq!(encode(Value::Ext("Int2", Box::new(Value::I64(5)))).len(), 2);
+    assert_eq!(encode(Value::Ext("Int4", Box::new(Value::I64(5)))).len(), 4);
+    assert_eq!(encode(Value::Ext("Int8", Box::new(Value::I64(5)))).len(), 8);
+    assert_eq!(
+        Value::decode(text_ref_typed("unknown", PgType::Unknown)).unwrap(),
+        Value::String("unknown".into())
+    );
+    assert_eq!(
+        Value::decode(binary_ref(&[], PgType::Void)).unwrap(),
+        Value::Null
+    );
 }
 
 #[test]
 fn value_encode_covers_ext_names() {
     let cases: Vec<(&'static str, Value)> = vec![
-        ("Uuid", Value::String("550e8400-e29b-41d4-a716-446655440000".into())),
+        (
+            "Uuid",
+            Value::String("550e8400-e29b-41d4-a716-446655440000".into()),
+        ),
         ("Bool", Value::Bool(true)),
         ("Decimal", Value::String("1.5".into())),
         ("Numeric", Value::String("1.5".into())),
@@ -809,10 +932,9 @@ fn value_encode_covers_ext_names() {
     for (name, value) in cases {
         let mut buf = PgArgumentBuffer::default();
         let result = buf.encode(Value::Ext(name, Box::new(value)));
-        if matches!(name, "Point" | "TsVector" | "TsQuery" | "Hstore") {
-            // these encoders are intentionally unsupported (Point additionally
-            // reports a format error after a successful parse); the important
-            // thing is that the arm executed.
+        if matches!(name, "TsVector" | "TsQuery") {
+            // Text-search binary encoders are intentionally unsupported for
+            // string payloads; raw binary payloads are passed through.
             assert!(result.is_err(), "expected error for {name}");
         } else {
             assert!(result.is_ok(), "encode failed for {name}: {result:?}");
@@ -942,7 +1064,11 @@ fn value_decode_common_types() {
         Value::Ext("Decimal", _)
     ));
     assert!(matches!(
-        Value::decode(text_ref_typed("550e8400-e29b-41d4-a716-446655440000", PgType::Uuid)).unwrap(),
+        Value::decode(text_ref_typed(
+            "550e8400-e29b-41d4-a716-446655440000",
+            PgType::Uuid
+        ))
+        .unwrap(),
         Value::Ext("Uuid", _)
     ));
     assert_eq!(

@@ -12,7 +12,7 @@ use rbdc::{err_protocol, Error};
 
 bitflags! {
     //#[derive(serde::Serialize, serde::Deserialize)]
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
     pub struct ColumnFlags: u16 {
         /// Field can't be `NULL`.
         const NOT_NULL = 1;
@@ -78,7 +78,7 @@ pub enum ColumnType {
     Int24 = 0x09,
     Date = 0x0a,
     Time = 0x0b,
-    Datetime = 0x0c,
+    DateTime = 0x0c,
     Year = 0x0d,
     VarChar = 0x0f,
     Bit = 0x10,
@@ -187,7 +187,7 @@ impl ColumnType {
     //         ColumnType::Timestamp => "TIMESTAMP",
     //         ColumnType::Date => "DATE",
     //         ColumnType::Time => "TIME",
-    //         ColumnType::Datetime => "DATETIME",
+    //         ColumnType::DateTime => "DATETIME",
     //         ColumnType::Year => "YEAR",
     //         ColumnType::Bit => "BIT",
     //         ColumnType::Enum => "ENUM",
@@ -231,13 +231,13 @@ impl ColumnType {
             0x09 => ColumnType::Int24,
             0x0a => ColumnType::Date,
             0x0b => ColumnType::Time,
-            0x0c => ColumnType::Datetime,
+            0x0c => ColumnType::DateTime,
             0x0d => ColumnType::Year,
             // [internal] 0x0e => ColumnType::NewDate,
             0x0f => ColumnType::VarChar,
             0x10 => ColumnType::Bit,
             // [internal] 0x11 => ColumnType::Timestamp2,
-            // [internal] 0x12 => ColumnType::Datetime2,
+            // [internal] 0x12 => ColumnType::DateTime2,
             // [internal] 0x13 => ColumnType::Time2,
             0xf5 => ColumnType::Json,
             0xf6 => ColumnType::NewDecimal,

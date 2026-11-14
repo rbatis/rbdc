@@ -25,7 +25,7 @@ impl From<&str> for TsVector {
 
 impl From<TsVector> for Value {
     fn from(arg: TsVector) -> Self {
-        rbs::Value::Ext("tsvector", Box::new(rbs::Value::String(arg.0)))
+        rbs::Value::Ext("TsVector", Box::new(rbs::Value::String(arg.0)))
     }
 }
 
@@ -100,7 +100,7 @@ mod tests {
         let value: rbs::Value = tsvector.into();
         match value {
             rbs::Value::Ext(type_name, boxed) => {
-                assert_eq!(type_name, "tsvector");
+                assert_eq!(type_name, "TsVector");
                 if let rbs::Value::String(s) = *boxed {
                     assert_eq!(s, "test");
                 } else {

@@ -54,9 +54,7 @@ impl From<HashMap<String, String>> for Hstore {
 
 impl From<Hstore> for Value {
     fn from(arg: Hstore) -> Self {
-        // Store as string representation: "key1=>value1, key2=>value2"
-        let s = format!("{}", arg);
-        Value::Ext("hstore", Box::new(Value::String(s)))
+        Value::Ext("Hstore", Box::new(Value::String(arg.to_string())))
     }
 }
 
@@ -83,12 +81,11 @@ impl Decode for Hstore {
                 let mut map = HashMap::new();
 
                 for _ in 0..count {
-                    if buf.len() < 8 {
+                    if buf.len() < 4 {
                         return Err(Error::from("HSTORE binary entry too short"));
                     }
 
                     let key_len = buf.read_i32::<BigEndian>()? as usize;
-                    let val_len = buf.read_i32::<BigEndian>()? as i32;
 
                     if buf.len() < key_len {
                         return Err(Error::from("HSTORE binary key too short"));
@@ -97,6 +94,11 @@ impl Decode for Hstore {
                     let key = String::from_utf8(buf[..key_len].to_vec())
                         .map_err(|e| Error::from(format!("Invalid HSTORE key: {}", e)))?;
                     buf = &buf[key_len..];
+
+                    if buf.len() < 4 {
+                        return Err(Error::from("HSTORE binary value header too short"));
+                    }
+                    let val_len = buf.read_i32::<BigEndian>()?;
 
                     if val_len < 0 {
                         // NULL value
@@ -152,11 +154,18 @@ impl Decode for Hstore {
 }
 
 impl Encode for Hstore {
-    fn encode(self, _buf: &mut crate::arguments::PgArgumentBuffer) -> Result<IsNull, Error> {
-        // HSTORE encoding is complex
-        // Applications should use hstore(text) or hstore(text, text) in their query
-        Err(Error::from(
-            "HStore encoding not supported. Use hstore(text) or hstore(text, text) in your query instead."
-        ))
+    fn encode(self, buf: &mut crate::arguments::PgArgumentBuffer) -> Result<IsNull, Error> {
+        buf.extend_from_slice(&(self.0.len() as i32).to_be_bytes());
+        for (key, value) in self.0 {
+            buf.extend_from_slice(&(key.len() as i32).to_be_bytes());
+            buf.extend_from_slice(key.as_bytes());
+            if value == "null" {
+                buf.extend_from_slice(&(-1_i32).to_be_bytes());
+            } else {
+                buf.extend_from_slice(&(value.len() as i32).to_be_bytes());
+                buf.extend_from_slice(value.as_bytes());
+            }
+        }
+        Ok(IsNull::No)
     }
 }

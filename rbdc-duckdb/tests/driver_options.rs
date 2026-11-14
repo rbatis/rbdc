@@ -56,7 +56,7 @@ fn test_driver_column_type_all_variants() {
         (Value::Map(rbs::value::map::ValueMap::new()), "VARCHAR"),
         (Value::Ext("Date", Box::new(Value::Null)), "DATE"),
         (Value::Ext("DateTime", Box::new(Value::Null)), "TIMESTAMP"),
-        (Value::Ext("Datetime", Box::new(Value::Null)), "TIMESTAMP"),
+        (Value::Ext("DateTime", Box::new(Value::Null)), "TIMESTAMP"),
         (Value::Ext("Time", Box::new(Value::Null)), "TIME"),
         (Value::Ext("Timestamp", Box::new(Value::Null)), "BIGINT"),
         (Value::Ext("Decimal", Box::new(Value::Null)), "DECIMAL"),

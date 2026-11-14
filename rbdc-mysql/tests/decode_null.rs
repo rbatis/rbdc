@@ -23,7 +23,7 @@ fn test_decode_null_for_all_types() {
         ColumnType::Int24,
         ColumnType::Date,
         ColumnType::Time,
-        ColumnType::Datetime,
+        ColumnType::DateTime,
         ColumnType::Year,
         ColumnType::VarChar,
         ColumnType::Bit,

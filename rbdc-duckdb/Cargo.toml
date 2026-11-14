@@ -1,6 +1,6 @@
 [package]
 name = "rbdc-duckdb"
-version = "4.9.13"
+version = "4.9.14"
 edition = "2021"
 description = "DuckDB database driver for RBDC"
 license = "MIT"

@@ -4,6 +4,7 @@ use crate::value::{PgValueFormat, PgValueRef};
 use rbdc::Error;
 use rbs::Value;
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
 /// PostgreSQL POINT type for geometric points
 ///
@@ -36,15 +37,48 @@ impl Display for Point {
 impl From<Point> for Value {
     fn from(arg: Point) -> Self {
         rbs::Value::Ext(
-            "point",
-            Box::new(rbs::Value::Ext(
-                "point",
-                Box::new(rbs::Value::Array(vec![
-                    rbs::Value::F64(arg.x),
-                    rbs::Value::F64(arg.y),
-                ])),
-            )),
+            "Point",
+            Box::new(rbs::Value::Array(vec![
+                rbs::Value::F64(arg.x),
+                rbs::Value::F64(arg.y),
+            ])),
         )
+    }
+}
+
+impl FromStr for Point {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        let coords = if let Some(rest) = s.strip_prefix("POINT(") {
+            rest.strip_suffix(')')
+        } else {
+            s.strip_prefix('(').and_then(|rest| rest.strip_suffix(')'))
+        }
+        .ok_or_else(|| {
+            Error::from(format!(
+                "Invalid POINT format: {s}. Expected '(x,y)' or 'POINT(x y)'"
+            ))
+        })?;
+
+        let parts: Vec<&str> = coords
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .filter(|part| !part.is_empty())
+            .collect();
+        if parts.len() != 2 {
+            return Err(Error::from(format!(
+                "Invalid POINT coords: {coords}. Expected 2 values."
+            )));
+        }
+
+        let x = parts[0]
+            .parse::<f64>()
+            .map_err(|e| Error::from(format!("Invalid x coordinate: {e}")))?;
+        let y = parts[1]
+            .parse::<f64>()
+            .map_err(|e| Error::from(format!("Invalid y coordinate: {e}")))?;
+        Ok(Self { x, y })
     }
 }
 
@@ -52,57 +86,27 @@ impl Decode for Point {
     fn decode(value: PgValueRef) -> Result<Self, Error> {
         Ok(match value.format() {
             PgValueFormat::Binary => {
-                // Binary format is WKB (Well-Known Binary)
-                // For simplicity, we don't support direct binary parsing
-                // Applications should use geo-types crate for proper WKB parsing
-                // Or use TEXT format in PostgreSQL: ST_AsText(point_column)
-                return Err(Error::from(
-                    "POINT binary format (WKB) not supported. \
-                     Use TEXT format: ST_AsText(point_column) or parse with geo-types crate.",
-                ));
-            }
-            PgValueFormat::Text => {
-                // Text format is WKT (Well-Known Text): "POINT(x y)"
-                let s = value.as_str()?;
-
-                // Parse WKT format: "POINT(x y)"
-                let s = s.trim();
-                if !s.starts_with("POINT(") || !s.ends_with(')') {
+                let bytes = value.as_bytes()?;
+                if bytes.len() != 16 {
                     return Err(Error::from(format!(
-                        "Invalid POINT format: {}. Expected 'POINT(x y)'",
-                        s
+                        "Invalid PostgreSQL POINT binary length: {} (expected 16)",
+                        bytes.len()
                     )));
                 }
-
-                let coords = &s[6..s.len() - 1]; // Remove "POINT(" and ")"
-                let parts: Vec<&str> = coords.split_whitespace().collect();
-
-                if parts.len() != 2 {
-                    return Err(Error::from(format!(
-                        "Invalid POINT coords: {}. Expected 2 values.",
-                        coords
-                    )));
+                Self {
+                    x: f64::from_bits(u64::from_be_bytes(bytes[0..8].try_into().unwrap())),
+                    y: f64::from_bits(u64::from_be_bytes(bytes[8..16].try_into().unwrap())),
                 }
-
-                let x = parts[0]
-                    .parse::<f64>()
-                    .map_err(|e| Error::from(format!("Invalid x coordinate: {}", e)))?;
-                let y = parts[1]
-                    .parse::<f64>()
-                    .map_err(|e| Error::from(format!("Invalid y coordinate: {}", e)))?;
-
-                Self { x, y }
             }
+            PgValueFormat::Text => Self::from_str(value.as_str()?)?,
         })
     }
 }
 
 impl Encode for Point {
-    fn encode(self, _buf: &mut crate::arguments::PgArgumentBuffer) -> Result<IsNull, Error> {
-        // For PostGIS POINT, use TEXT format in your query:
-        // ST_GeomFromText('POINT(116.4 39.9)')
-        Err(Error::from(
-            "POINT encoding not supported. Use PostGIS ST_GeomFromText() or ST_MakePoint() in your query instead."
-        ))
+    fn encode(self, buf: &mut crate::arguments::PgArgumentBuffer) -> Result<IsNull, Error> {
+        buf.extend_from_slice(&self.x.to_bits().to_be_bytes());
+        buf.extend_from_slice(&self.y.to_bits().to_be_bytes());
+        Ok(IsNull::No)
     }
 }

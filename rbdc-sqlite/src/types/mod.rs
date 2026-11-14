@@ -17,6 +17,13 @@
 //! | `f64`                                 | REAL                                                 |
 //! | `&str`, [`String`]                    | TEXT                                                 |
 //! | `&[u8]`, `Vec<u8>`                    | BLOB                                                 |
+//! | `Date`                                | DATE / TEXT                                          |
+//! | `DateTime`                            | DATETIME / TEXT                                      |
+//! | `Time`                                | TIME / TEXT                                          |
+//! | `Timestamp`                           | INTEGER                                              |
+//! | `Decimal`                             | NUMERIC / TEXT                                       |
+//! | `Json`                                | TEXT                                                 |
+//! | `Uuid`                                | TEXT                                                 |
 //! # Nullable
 //!
 //! In addition, `Option<T>` is supported where `T` implements `Type`. An `Option<T>` represents
@@ -25,6 +32,7 @@
 
 mod bool;
 mod bytes;
+mod ext;
 mod float;
 mod int;
 mod str;

@@ -37,20 +37,26 @@ fn test_encode_all_value_variants() {
 
     let (args, null) = encode(Value::Bool(true));
     assert!(matches!(null, IsNull::No));
-    assert!(matches!(args.as_slice(), [DuckDbArgumentValue::Int(1)]));
+    assert!(matches!(
+        args.as_slice(),
+        [DuckDbArgumentValue::Boolean(true)]
+    ));
     let (args, _) = encode(Value::Bool(false));
-    assert!(matches!(args.as_slice(), [DuckDbArgumentValue::Int(0)]));
+    assert!(matches!(
+        args.as_slice(),
+        [DuckDbArgumentValue::Boolean(false)]
+    ));
 
     let (args, _) = encode(Value::I32(-5));
     assert!(matches!(args.as_slice(), [DuckDbArgumentValue::Int(-5)]));
     let (args, _) = encode(Value::I64(-6));
     assert!(matches!(args.as_slice(), [DuckDbArgumentValue::Int64(-6)]));
     let (args, _) = encode(Value::U32(7));
-    assert!(matches!(args.as_slice(), [DuckDbArgumentValue::Int(7)]));
+    assert!(matches!(args.as_slice(), [DuckDbArgumentValue::UInt32(7)]));
     let (args, _) = encode(Value::U64(8));
-    assert!(matches!(args.as_slice(), [DuckDbArgumentValue::Int64(8)]));
+    assert!(matches!(args.as_slice(), [DuckDbArgumentValue::UInt64(8)]));
     let (args, _) = encode(Value::F32(1.25));
-    assert!(matches!(args.as_slice(), [DuckDbArgumentValue::Double(v)] if *v == 1.25));
+    assert!(matches!(args.as_slice(), [DuckDbArgumentValue::Float(v)] if *v == 1.25));
     let (args, _) = encode(Value::F64(2.5));
     assert!(matches!(args.as_slice(), [DuckDbArgumentValue::Double(v)] if *v == 2.5));
     let (args, _) = encode(Value::String("text".into()));
@@ -71,7 +77,11 @@ fn test_encode_all_value_variants() {
 fn test_encode_ext_variants() {
     for (name, inner, expected) in [
         ("Date", Value::String("2024-01-15".into()), "2024-01-15"),
-        ("DateTime", Value::String("2024-01-15T10:00:00".into()), "2024-01-15T10:00:00"),
+        (
+            "DateTime",
+            Value::String("2024-01-15T10:00:00".into()),
+            "2024-01-15T10:00:00",
+        ),
         ("Time", Value::String("10:00:00".into()), "10:00:00"),
         ("Decimal", Value::String("1.23".into()), "1.23"),
         ("Json", Value::String("{}".into()), "{}"),
@@ -84,28 +94,57 @@ fn test_encode_ext_variants() {
 
     // Numeric timestamp is encoded as Int64
     let (args, _) = encode(Value::Ext("Timestamp", Box::new(Value::I64(1234))));
-    assert!(matches!(args.as_slice(), [DuckDbArgumentValue::Int64(1234)]));
+    assert!(matches!(
+        args.as_slice(),
+        [DuckDbArgumentValue::Int64(1234)]
+    ));
 
     // Non-numeric timestamp falls back to text
-    let (args, _) = encode(Value::Ext("Timestamp", Box::new(Value::String("abc".into()))));
+    let (args, _) = encode(Value::Ext(
+        "Timestamp",
+        Box::new(Value::String("abc".into())),
+    ));
     assert_text(&args, "abc");
 
-    // Unknown extension types are treated as SQL NULL
-    let (args, null) = encode(Value::Ext("Unknown", Box::new(Value::I32(1))));
-    assert!(matches!(null, IsNull::Yes));
+    // Unknown extension types are rejected.
+    let mut args = Vec::new();
+    assert!(Value::Ext("Unknown", Box::new(Value::I32(1)))
+        .encode(&mut args)
+        .is_err());
     assert!(args.is_empty());
 }
 
 #[test]
 fn test_value_to_param_all_variants() {
-    assert!(matches!(value_to_param(Value::Null), DuckDbArgumentValue::Null));
-    assert!(matches!(value_to_param(Value::Bool(true)), DuckDbArgumentValue::Int(1)));
-    assert!(matches!(value_to_param(Value::Bool(false)), DuckDbArgumentValue::Int(0)));
-    assert!(matches!(value_to_param(Value::I32(-1)), DuckDbArgumentValue::Int(-1)));
-    assert!(matches!(value_to_param(Value::I64(-2)), DuckDbArgumentValue::Int64(-2)));
-    assert!(matches!(value_to_param(Value::U32(3)), DuckDbArgumentValue::Int(3)));
-    assert!(matches!(value_to_param(Value::U64(4)), DuckDbArgumentValue::Int64(4)));
-    assert!(matches!(value_to_param(Value::F32(0.5)), DuckDbArgumentValue::Double(v) if v == 0.5));
+    assert!(matches!(
+        value_to_param(Value::Null),
+        DuckDbArgumentValue::Null
+    ));
+    assert!(matches!(
+        value_to_param(Value::Bool(true)),
+        DuckDbArgumentValue::Boolean(true)
+    ));
+    assert!(matches!(
+        value_to_param(Value::Bool(false)),
+        DuckDbArgumentValue::Boolean(false)
+    ));
+    assert!(matches!(
+        value_to_param(Value::I32(-1)),
+        DuckDbArgumentValue::Int(-1)
+    ));
+    assert!(matches!(
+        value_to_param(Value::I64(-2)),
+        DuckDbArgumentValue::Int64(-2)
+    ));
+    assert!(matches!(
+        value_to_param(Value::U32(3)),
+        DuckDbArgumentValue::UInt32(3)
+    ));
+    assert!(matches!(
+        value_to_param(Value::U64(4)),
+        DuckDbArgumentValue::UInt64(4)
+    ));
+    assert!(matches!(value_to_param(Value::F32(0.5)), DuckDbArgumentValue::Float(v) if v == 0.5));
     assert!(matches!(value_to_param(Value::F64(1.5)), DuckDbArgumentValue::Double(v) if v == 1.5));
 
     match value_to_param(Value::String("s".into())) {
@@ -131,7 +170,7 @@ fn test_value_to_param_all_variants() {
         ("Date", Value::String("2024-01-15".into()), "2024-01-15"),
         ("Time", Value::String("10:00:00".into()), "10:00:00"),
         ("DateTime", Value::String("dt".into()), "dt"),
-        ("Datetime", Value::String("dt2".into()), "dt2"),
+        ("DateTime", Value::String("dt2".into()), "dt2"),
         ("Decimal", Value::String("1.23".into()), "1.23"),
         ("Json", Value::String("{}".into()), "{}"),
         ("Uuid", Value::String("uuid".into()), "uuid"),
@@ -144,7 +183,10 @@ fn test_value_to_param_all_variants() {
     }
 
     // Timestamp with a numeric string is converted to Int64
-    match value_to_param(Value::Ext("Timestamp", Box::new(Value::String("999".into())))) {
+    match value_to_param(Value::Ext(
+        "Timestamp",
+        Box::new(Value::String("999".into())),
+    )) {
         DuckDbArgumentValue::Int64(n) => assert_eq!(n, 999),
         other => panic!("unexpected {other:?}"),
     }
@@ -176,6 +218,7 @@ fn test_from_duckdb_type_maps_every_constant() {
         (duck::DUCKDB_TYPE_DUCKDB_TYPE_TIMESTAMP_S, T::TimestampS),
         (duck::DUCKDB_TYPE_DUCKDB_TYPE_TIMESTAMP_MS, T::TimestampMs),
         (duck::DUCKDB_TYPE_DUCKDB_TYPE_TIMESTAMP_NS, T::TimestampNs),
+        (duck::DUCKDB_TYPE_DUCKDB_TYPE_TIMESTAMP_TZ, T::TimestampTz),
         (duck::DUCKDB_TYPE_DUCKDB_TYPE_DATE, T::Date),
         (duck::DUCKDB_TYPE_DUCKDB_TYPE_TIME, T::Time),
         (duck::DUCKDB_TYPE_DUCKDB_TYPE_TIME_TZ, T::TimeTz),
@@ -264,11 +307,11 @@ async fn test_extract_numeric_and_boolean_types() {
             Value::I32(2),
             Value::I32(3),
             Value::I64(4),
-            Value::I32(5),
-            Value::I32(6),
-            Value::I64(7),
-            Value::I64(8),
-            Value::F64(9.5),
+            Value::U32(5),
+            Value::U32(6),
+            Value::U64(7),
+            Value::U64(8),
+            Value::F32(9.5),
             Value::F64(10.5),
             Value::Bool(true),
         ]
@@ -283,7 +326,9 @@ async fn test_extract_varchar_parsing_variants() {
         "SELECT '{\"a\":1}', '[1,2]', 'null', '42', '1.5', 'hello', '{oops}'",
     )
     .await;
-    assert!(matches!(&values[0], Value::Map(m) if m.get(&Value::String("a".into())) == &Value::U64(1)));
+    assert!(
+        matches!(&values[0], Value::Map(m) if m.get(&Value::String("a".into())) == &Value::U64(1))
+    );
     assert!(matches!(&values[1], Value::Array(a) if a.len() == 2));
     assert_eq!(values[2], Value::Null);
     assert_eq!(values[3], Value::I64(42));
@@ -341,14 +386,22 @@ async fn test_extract_decimal_interval_hugeint_uuid_blob() {
         Value::Ext("Decimal", inner) => assert_eq!(**inner, Value::String("1.25".into())),
         other => panic!("unexpected decimal: {other:?}"),
     }
-    assert!(matches!(&values[1], Value::Ext("Interval", _)), "interval: {:?}", values[1]);
-    assert_eq!(values[2], Value::String("1".into()));
-    assert_eq!(values[3], Value::String("2".into()));
+    assert!(
+        matches!(&values[1], Value::Ext("Interval", _)),
+        "interval: {:?}",
+        values[1]
+    );
+    assert!(
+        matches!(&values[2], Value::Ext("HugeInt", inner) if **inner == Value::String("1".into()))
+    );
+    assert!(
+        matches!(&values[3], Value::Ext("UHugeInt", inner) if **inner == Value::String("2".into()))
+    );
 
     // UUID support in the C string conversion varies by DuckDB version.
     let values = query_row(&mut conn, "SELECT uuid()").await;
     assert!(
-        matches!(&values[0], Value::Null | Value::String(_)),
+        matches!(&values[0], Value::Null | Value::Ext("Uuid", _)),
         "unexpected uuid value: {:?}",
         values[0]
     );
@@ -400,11 +453,7 @@ async fn test_extract_enum_union_and_null() {
         .await
         .expect("create enum type");
 
-    let values = query_row(
-        &mut conn,
-        "SELECT 'happy'::mood, union_value(a := 1), NULL",
-    )
-    .await;
+    let values = query_row(&mut conn, "SELECT 'happy'::mood, union_value(a := 1), NULL").await;
     // ENUM and UNION string conversion varies by DuckDB version; SQL NULL is
     // always NULL.
     assert!(
@@ -434,11 +483,7 @@ async fn test_ext_timestamp_parameter_binds_through_fallback() {
         )
         .await
         .expect("exec_rows");
-    let mut row = stream
-        .next()
-        .await
-        .expect("one row")
-        .expect("row result");
+    let mut row = stream.next().await.expect("one row").expect("row result");
     assert_eq!(row.get(0).unwrap(), Value::I64(42));
 }
 
@@ -488,11 +533,7 @@ fn test_extract_row_values_direct_call() {
         let values = extract_row_values(&mut result, 0, cols);
         assert_eq!(
             values,
-            vec![
-                Value::I32(7),
-                Value::String("x".into()),
-                Value::F64(1.5)
-            ]
+            vec![Value::I32(7), Value::String("x".into()), Value::F64(1.5)]
         );
 
         duck::duckdb_destroy_result(&mut result);

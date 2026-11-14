@@ -177,7 +177,7 @@ fn test_type_info_helpers() {
         (ColumnType::Date, Some("time")),
         (ColumnType::Time, Some("time")),
         (ColumnType::Timestamp, Some("time")),
-        (ColumnType::Datetime, Some("time")),
+        (ColumnType::DateTime, Some("time")),
         (ColumnType::Json, Some("json")),
         (ColumnType::NewDecimal, Some("bigdecimal")),
         (ColumnType::Long, None),

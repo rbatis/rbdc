@@ -8,6 +8,13 @@ use libsqlite3_sys::{
     sqlite3, sqlite3_close, sqlite3_column_value, sqlite3_finalize, sqlite3_open,
     sqlite3_prepare_v2, sqlite3_step, sqlite3_stmt, SQLITE_OK, SQLITE_ROW,
 };
+use rbdc::date::Date;
+use rbdc::datetime::DateTime;
+use rbdc::decimal::Decimal;
+use rbdc::json::Json;
+use rbdc::timestamp::Timestamp;
+use rbdc::types::time::Time;
+use rbdc::uuid::Uuid;
 use rbdc_sqlite::decode::Decode;
 use rbdc_sqlite::encode::{Encode, IsNull};
 use rbdc_sqlite::query::SqliteQuery;
@@ -116,15 +123,40 @@ fn test_typed_decode() {
     assert_eq!(decode!(u8, "SELECT 200").unwrap(), 200u8);
     assert_eq!(decode!(u16, "SELECT 60000").unwrap(), 60000u16);
     assert_eq!(decode!(u32, "SELECT 4000000000").unwrap(), 4_000_000_000u32);
+    assert_eq!(decode!(u64, "SELECT 9000000000").unwrap(), 9_000_000_000u64);
     assert_eq!(decode!(f32, "SELECT 1.5").unwrap(), 1.5f32);
     assert_eq!(decode!(f64, "SELECT 2.25").unwrap(), 2.25f64);
     assert_eq!(decode!(String, "SELECT 'abc'").unwrap(), "abc".to_string());
-    assert_eq!(
-        decode!(Vec<u8>, "SELECT x'0102'").unwrap(),
-        vec![1u8, 2u8]
-    );
+    assert_eq!(decode!(Vec<u8>, "SELECT x'0102'").unwrap(), vec![1u8, 2u8]);
     assert!(decode!(bool, "SELECT 1").unwrap());
     assert!(!decode!(bool, "SELECT 0").unwrap());
+
+    assert_eq!(
+        decode!(Date, "SELECT '2024-01-15'").unwrap().to_string(),
+        "2024-01-15"
+    );
+    assert_eq!(
+        decode!(DateTime, "SELECT '2024-01-15T12:30:45Z'")
+            .unwrap()
+            .to_string(),
+        "2024-01-15T12:30:45Z"
+    );
+    assert_eq!(
+        decode!(Time, "SELECT '12:30:45'").unwrap().to_string(),
+        "12:30:45"
+    );
+    assert_eq!(decode!(Timestamp, "SELECT 1234").unwrap(), Timestamp(1234));
+    assert_eq!(
+        decode!(Decimal, "SELECT '123.45'").unwrap().to_string(),
+        "123.45"
+    );
+    assert_eq!(decode!(Json, "SELECT '{\"a\":1}'").unwrap().0, "{\"a\":1}");
+    assert_eq!(
+        decode!(Uuid, "SELECT '550e8400-e29b-41d4-a716-446655440000'")
+            .unwrap()
+            .to_string(),
+        "550e8400-e29b-41d4-a716-446655440000"
+    );
 
     // Out-of-range integer conversions error instead of wrapping.
     assert!(decode!(i8, "SELECT 300").is_err());
@@ -155,6 +187,10 @@ fn test_typed_encode_and_type_info() {
     assert!(matches!(args.as_slice(), [SqliteArgumentValue::Int(6)]));
     let (args, _) = encode(7u32);
     assert!(matches!(args.as_slice(), [SqliteArgumentValue::Int64(7)]));
+    let (args, _) = encode(8u64);
+    assert!(matches!(args.as_slice(), [SqliteArgumentValue::Int64(8)]));
+    let mut too_large = Vec::new();
+    assert!((u64::MAX).encode(&mut too_large).is_err());
     let (args, _) = encode(1.5f32);
     assert!(matches!(args.as_slice(), [SqliteArgumentValue::Double(v)] if *v == 1.5));
     let (args, _) = encode(2.5f64);
@@ -175,6 +211,7 @@ fn test_typed_encode_and_type_info() {
     assert_eq!(1u8.type_info().name(), "INTEGER");
     assert_eq!(1u16.type_info().name(), "INTEGER");
     assert_eq!(1u32.type_info().name(), "INTEGER");
+    assert_eq!(1u64.type_info().name(), "INTEGER");
     assert_eq!(1.5f32.type_info().name(), "REAL");
     assert_eq!(1.5f64.type_info().name(), "REAL");
     assert_eq!("x".to_string().type_info().name(), "TEXT");
@@ -249,7 +286,10 @@ fn test_value_decode_dynamic_types() {
             m.insert(Value::String("a".into()), Value::U64(1));
             Value::Map(m)
         }),
-        ("SELECT '[1,2]'", Value::Array(vec![Value::U64(1), Value::U64(2)])),
+        (
+            "SELECT '[1,2]'",
+            Value::Array(vec![Value::U64(1), Value::U64(2)]),
+        ),
         ("SELECT 'null'", Value::Null),
         // Non-JSON text is preserved as a string.
         ("SELECT 'not json'", Value::String("not json".into())),
@@ -276,14 +316,21 @@ fn test_value_type_info_and_is_json_string() {
     assert_eq!(Value::F64(1.0).type_info().name(), "REAL");
     assert_eq!(Value::String("x".into()).type_info().name(), "TEXT");
     assert_eq!(Value::Binary(vec![1]).type_info().name(), "BLOB");
-    assert!(Value::Array(vec![]).type_info().is_null());
-    assert!(Value::Map(rbs::value::map::ValueMap::new()).type_info().is_null());
+    assert_eq!(Value::Array(vec![]).type_info().name(), "TEXT");
+    assert_eq!(
+        Value::Map(rbs::value::map::ValueMap::new())
+            .type_info()
+            .name(),
+        "TEXT"
+    );
     assert_eq!(
         Value::Ext("Date", Box::new(Value::Null)).type_info().name(),
         "TEXT"
     );
     assert_eq!(
-        Value::Ext("DateTime", Box::new(Value::Null)).type_info().name(),
+        Value::Ext("DateTime", Box::new(Value::Null))
+            .type_info()
+            .name(),
         "TEXT"
     );
     assert_eq!(
@@ -291,11 +338,15 @@ fn test_value_type_info_and_is_json_string() {
         "TEXT"
     );
     assert_eq!(
-        Value::Ext("Timestamp", Box::new(Value::Null)).type_info().name(),
+        Value::Ext("Timestamp", Box::new(Value::Null))
+            .type_info()
+            .name(),
         "INTEGER"
     );
     assert_eq!(
-        Value::Ext("Decimal", Box::new(Value::Null)).type_info().name(),
+        Value::Ext("Decimal", Box::new(Value::Null))
+            .type_info()
+            .name(),
         "NUMERIC"
     );
     assert_eq!(
@@ -309,7 +360,6 @@ fn test_value_type_info_and_is_json_string() {
     assert!(Value::Ext("Unknown", Box::new(Value::Null))
         .type_info()
         .is_null());
-
 }
 
 #[test]
@@ -333,12 +383,9 @@ fn test_sqlite_arguments_api() {
     assert!(debug.contains("Null"));
     assert!(debug.contains("Int64(1)"));
 
-    let from_args = SqliteArguments::from_args(vec![
-        Value::Bool(true),
-        Value::I64(2),
-        Value::Array(vec![]),
-    ])
-    .unwrap();
+    let from_args =
+        SqliteArguments::from_args(vec![Value::Bool(true), Value::I64(2), Value::Array(vec![])])
+            .unwrap();
     let debug = format!("{:?}", from_args);
     assert!(debug.contains("Int(1)"));
     assert!(debug.contains("Int64(2)"));

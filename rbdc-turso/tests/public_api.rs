@@ -32,14 +32,23 @@ fn types_bool_helpers() {
     assert_eq!(tbool::decode_bool(0), Value::Bool(false));
     assert_eq!(tbool::decode_bool(1), Value::Bool(true));
     assert_eq!(tbool::decode_bool(-7), Value::Bool(true));
-    assert!(matches!(tbool::encode_bool(true), libsql::Value::Integer(1)));
-    assert!(matches!(tbool::encode_bool(false), libsql::Value::Integer(0)));
+    assert!(matches!(
+        tbool::encode_bool(true),
+        libsql::Value::Integer(1)
+    ));
+    assert!(matches!(
+        tbool::encode_bool(false),
+        libsql::Value::Integer(0)
+    ));
 }
 
 #[test]
 fn types_bytes_helpers() {
     let data = vec![0u8, 1, 2, 255];
-    assert_eq!(bytes::decode_blob(data.clone()), Value::Binary(data.clone()));
+    assert_eq!(
+        bytes::decode_blob(data.clone()),
+        Value::Binary(data.clone())
+    );
     assert_eq!(bytes::decode_blob(vec![]), Value::Binary(vec![]));
     assert!(matches!(
         bytes::encode_blob(data.clone()),
@@ -62,7 +71,10 @@ fn types_int_helpers() {
     assert!(matches!(int::encode_i32(-3), libsql::Value::Integer(-3)));
     assert!(matches!(int::encode_i64(9), libsql::Value::Integer(9)));
     assert!(matches!(int::encode_u32(u32::MAX), libsql::Value::Integer(n) if n == u32::MAX as i64));
-    assert!(matches!(int::encode_u64(123456789), libsql::Value::Integer(123456789)));
+    assert!(matches!(
+        int::encode_u64(123456789),
+        libsql::Value::Integer(123456789)
+    ));
 }
 
 #[test]
@@ -216,7 +228,10 @@ fn libsql_to_value_maps_all_variants() {
 
 #[test]
 fn value_to_libsql_covers_scalar_variants() {
-    assert!(matches!(value_to_libsql(&Value::Null).unwrap(), libsql::Value::Null));
+    assert!(matches!(
+        value_to_libsql(&Value::Null).unwrap(),
+        libsql::Value::Null
+    ));
     assert!(matches!(
         value_to_libsql(&Value::Bool(true)).unwrap(),
         libsql::Value::Integer(1)
@@ -276,7 +291,11 @@ fn value_to_libsql_covers_ext_and_collections() {
     ));
     // Non-integer timestamp payload defaults to 0.
     assert!(matches!(
-        value_to_libsql(&Value::Ext("Timestamp", Box::new(Value::String("x".into())))).unwrap(),
+        value_to_libsql(&Value::Ext(
+            "Timestamp",
+            Box::new(Value::String("x".into()))
+        ))
+        .unwrap(),
         libsql::Value::Integer(0)
     ));
 
@@ -285,9 +304,11 @@ fn value_to_libsql_covers_ext_and_collections() {
         libsql::Value::Blob(ref b) if b == &vec![1, 2]
     ));
     // Non-binary JSON payload is serialized as text bytes.
-    let json_out =
-        value_to_libsql(&Value::Ext("Json", Box::new(Value::String(r#"{"a":1}"#.into()))))
-            .unwrap();
+    let json_out = value_to_libsql(&Value::Ext(
+        "Json",
+        Box::new(Value::String(r#"{"a":1}"#.into())),
+    ))
+    .unwrap();
     // Value's Display wraps strings in quotes, so the blob is `"{"a":1}"`.
     let expected = format!("\"{}\"", r#"{"a":1}"#).into_bytes();
     match json_out {
@@ -478,9 +499,7 @@ fn driver_column_type_maps_every_value_variant() {
 struct ForeignOptions;
 
 impl ConnectOptions for ForeignOptions {
-    fn connect(
-        &self,
-    ) -> BoxFuture<'_, Result<Box<dyn Connection>, rbdc::Error>> {
+    fn connect(&self) -> BoxFuture<'_, Result<Box<dyn Connection>, rbdc::Error>> {
         Box::pin(async { Err(rbdc::Error::from("foreign options must not connect")) })
     }
 
@@ -548,19 +567,21 @@ fn options_builders_and_predicates() {
     assert!(libsql.is_remote());
 
     // Builder toggling json_detect off.
-    let off = TursoConnectOptions::new().json_detect(true).json_detect(false);
+    let off = TursoConnectOptions::new()
+        .json_detect(true)
+        .json_detect(false);
     assert!(!off.is_json_detect());
 
     // A whitespace-only token is treated as missing for remote URLs.
-    let blank = TursoConnectOptions::new().url("libsql://x").auth_token("  \t ");
+    let blank = TursoConnectOptions::new()
+        .url("libsql://x")
+        .auth_token("  \t ");
     assert!(blank.validate().is_err());
 }
 
 #[test]
 fn options_parse_bare_path_with_query() {
-    let opts: TursoConnectOptions = "turso://relative/file.db?json_detect=1"
-        .parse()
-        .unwrap();
+    let opts: TursoConnectOptions = "turso://relative/file.db?json_detect=1".parse().unwrap();
     assert!(!opts.is_in_memory());
     assert!(!opts.is_remote());
     assert!(opts.is_json_detect());
@@ -568,10 +589,9 @@ fn options_parse_bare_path_with_query() {
 
 #[test]
 fn options_explicit_url_wins_over_path() {
-    let opts: TursoConnectOptions =
-        "turso://ignored/path.db?url=libsql://real.example.com&token=t"
-            .parse()
-            .unwrap();
+    let opts: TursoConnectOptions = "turso://ignored/path.db?url=libsql://real.example.com&token=t"
+        .parse()
+        .unwrap();
     assert!(opts.is_remote());
 }
 

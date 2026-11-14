@@ -54,12 +54,10 @@ impl Decode for TsQuery {
 }
 
 impl Encode for TsQuery {
-    fn encode(self, _buf: &mut crate::arguments::PgArgumentBuffer) -> Result<IsNull, Error> {
-        // TSQUERY encoding is complex
-        // Applications should use PostgreSQL's to_tsquery() or plainto_tsquery() functions instead
-        Err(Error::from(
-            "TsQuery encoding not supported. Use PostgreSQL's to_tsquery() function in your query instead."
-        ))
+    fn encode(self, buf: &mut crate::arguments::PgArgumentBuffer) -> Result<IsNull, Error> {
+        // `PgArguments` marks string tsquery parameters as text format.
+        buf.extend_from_slice(self.0.as_bytes());
+        Ok(IsNull::No)
     }
 }
 
@@ -109,5 +107,13 @@ mod tests {
             }
             _ => panic!("Expected Ext variant"),
         }
+    }
+
+    #[test]
+    fn test_serde_deserialize() {
+        let value = TsQuery("hello & world".to_string());
+        let encoded = rbs::to_value(&value).unwrap();
+        let decoded: TsQuery = rbs::from_value(encoded).unwrap();
+        assert_eq!(decoded, value);
     }
 }

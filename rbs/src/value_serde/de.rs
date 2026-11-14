@@ -245,7 +245,11 @@ impl<'de> Deserializer<'de> for &Value {
     where
         V: Visitor<'de>,
     {
-        let v = match self {
+        let value = match self {
+            Value::Ext(_, data) => data.as_ref(),
+            other => other,
+        };
+        let v = match value {
             Value::String(v) => visitor.visit_enum(EnumDeserializer {
                 variant: v.as_str(),
                 value: Some(Value::String(v.clone())),

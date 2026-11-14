@@ -543,20 +543,26 @@ impl Encode for Value {
                     "Jsonpath" => v.into_bytes().unwrap_or_default().encode(buf)?,
                     "Money" => Money(v.as_i64().unwrap_or_default()).encode(buf)?,
                     "Void" => v.into_bytes().unwrap_or_default().encode(buf)?,
-                    "TsVector" | "tsvector" => match *v {
-                        Value::Binary(bytes) => bytes.encode(buf)?,
-                        other => {
-                            use crate::types::tsvector::TsVector;
-                            TsVector(other.into_string().unwrap_or_default()).encode(buf)?
-                        }
-                    },
-                    "TsQuery" | "tsquery" => match *v {
-                        Value::Binary(bytes) => bytes.encode(buf)?,
-                        other => {
-                            use crate::types::tsquery::TsQuery;
-                            TsQuery(other.into_string().unwrap_or_default()).encode(buf)?
-                        }
-                    },
+                    "TsVector" | "tsvector" => {
+                        use crate::types::tsvector::TsVector;
+                        let text = match *v {
+                            Value::String(text) => text,
+                            Value::Binary(bytes) => String::from_utf8(bytes)
+                                .map_err(|e| Error::from(format!("invalid TsVector text: {e}")))?,
+                            _ => return Err(Error::from("Invalid TsVector value")),
+                        };
+                        TsVector(text).encode(buf)?
+                    }
+                    "TsQuery" | "tsquery" => {
+                        use crate::types::tsquery::TsQuery;
+                        let text = match *v {
+                            Value::String(text) => text,
+                            Value::Binary(bytes) => String::from_utf8(bytes)
+                                .map_err(|e| Error::from(format!("invalid TsQuery text: {e}")))?,
+                            _ => return Err(Error::from("Invalid TsQuery value")),
+                        };
+                        TsQuery(text).encode(buf)?
+                    }
                     "Hstore" | "hstore" => {
                         use crate::types::hstore::Hstore;
                         match *v {

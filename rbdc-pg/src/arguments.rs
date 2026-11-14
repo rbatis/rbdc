@@ -2,6 +2,7 @@ use crate::connection::PgConnection;
 use crate::type_info::PgTypeInfo;
 use crate::types::encode::{Encode, IsNull};
 use crate::types::TypeInfo;
+use crate::value::PgValueFormat;
 use rbdc::error::Error;
 use rbdc::ext::ustr::UStr;
 use rbs::Value;
@@ -57,6 +58,9 @@ pub struct PgArguments {
     // Types of each bind parameter
     pub(crate) types: Vec<PgTypeInfo>,
 
+    // Wire format of each bind parameter
+    pub(crate) formats: Vec<PgValueFormat>,
+
     // Buffer of encoded bind parameters
     pub(crate) buffer: PgArgumentBuffer,
 }
@@ -65,7 +69,14 @@ impl PgArguments {
     pub fn add(&mut self, value: Value) -> Result<(), Error> {
         // encode the value into our buffer
         let type_info = self.buffer.encode(value)?;
+        let format = match type_info.0 {
+            crate::type_info::PgType::Tsvector | crate::type_info::PgType::Tsquery => {
+                PgValueFormat::Text
+            }
+            _ => PgValueFormat::Binary,
+        };
         self.types.push(type_info);
+        self.formats.push(format);
         // increment the number of arguments we are tracking
         self.buffer.count += 1;
         Ok(())
@@ -188,6 +199,11 @@ mod coverage_tests {
         args.add(Value::String("two".into())).unwrap();
         args.add(Value::Null).unwrap();
         assert_eq!(args.types.len(), 3);
+        assert_eq!(args.formats.len(), 3);
+        assert!(args
+            .formats
+            .iter()
+            .all(|f| *f == PgValueFormat::Binary));
         assert_eq!(args.types[0], PgTypeInfo(PgType::Int4));
         assert_eq!(args.types[1], PgTypeInfo(PgType::Varchar));
         assert_eq!(args.types[2], PgTypeInfo(PgType::Unknown));
@@ -213,11 +229,36 @@ mod coverage_tests {
     fn from_args_sets_timezone_and_encodes() {
         let args = PgArguments::from_args(vec![Value::I32(1), Value::Null], Some(3600)).unwrap();
         assert_eq!(args.types.len(), 2);
+        assert_eq!(args.formats.len(), 2);
         // timezone is carried on the buffer (private field, accessible here)
         assert_eq!(args.buffer.timezone_sec, Some(3600));
 
         let empty = PgArguments::from_args(vec![], None).unwrap();
         assert!(empty.types.is_empty());
+        assert!(empty.formats.is_empty());
+    }
+
+    #[test]
+    fn text_search_parameters_use_text_format() {
+        let args = PgArguments::from_args(
+            vec![
+                Value::Ext("TsVector", Box::new(Value::String("'a'".into()))),
+                Value::Ext("TsQuery", Box::new(Value::String("a & b".into()))),
+                Value::I32(1),
+            ],
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            args.formats,
+            vec![
+                PgValueFormat::Text,
+                PgValueFormat::Text,
+                PgValueFormat::Binary
+            ]
+        );
+        assert_eq!(args.types[0], PgTypeInfo(PgType::Tsvector));
+        assert_eq!(args.types[1], PgTypeInfo(PgType::Tsquery));
     }
 
     #[test]

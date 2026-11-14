@@ -447,6 +447,24 @@ mod execute {
             DuckDbArgumentValue::UInt64(v) => unsafe {
                 libduckdb_sys::duckdb_bind_uint64(stmt, idx, *v);
             },
+            DuckDbArgumentValue::HugeInt(v) => {
+                let value = libduckdb_sys::duckdb_hugeint {
+                    lower: *v as u64,
+                    upper: (*v >> 64) as i64,
+                };
+                unsafe {
+                    libduckdb_sys::duckdb_bind_hugeint(stmt, idx, value);
+                }
+            }
+            DuckDbArgumentValue::UHugeInt(v) => {
+                if let Ok(cstr) = CString::new(v.to_string()) {
+                    let mut value = unsafe { libduckdb_sys::duckdb_create_varchar(cstr.as_ptr()) };
+                    unsafe {
+                        libduckdb_sys::duckdb_bind_value(stmt, idx, value);
+                        libduckdb_sys::duckdb_destroy_value(&mut value);
+                    }
+                }
+            }
             DuckDbArgumentValue::Float(v) => unsafe {
                 libduckdb_sys::duckdb_bind_float(stmt, idx, *v);
             },
@@ -455,8 +473,10 @@ mod execute {
             },
             DuckDbArgumentValue::Text(v) => {
                 if let Ok(cstr) = CString::new(v.as_str()) {
+                    let mut value = unsafe { libduckdb_sys::duckdb_create_varchar(cstr.as_ptr()) };
                     unsafe {
-                        libduckdb_sys::duckdb_bind_varchar(stmt, idx, cstr.as_ptr());
+                        libduckdb_sys::duckdb_bind_value(stmt, idx, value);
+                        libduckdb_sys::duckdb_destroy_value(&mut value);
                     }
                 }
             }

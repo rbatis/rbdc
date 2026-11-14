@@ -92,6 +92,20 @@ fn test_encode_ext_variants() {
         assert_text(&args, expected);
     }
 
+    let huge = i128::MAX.to_string();
+    let (args, _) = encode(Value::Ext(
+        "HugeInt",
+        Box::new(Value::String(huge.clone())),
+    ));
+    assert!(matches!(args.as_slice(), [DuckDbArgumentValue::HugeInt(v)] if *v == i128::MAX));
+
+    let uhuge = u128::MAX.to_string();
+    let (args, _) = encode(Value::Ext(
+        "UHugeInt",
+        Box::new(Value::String(uhuge.clone())),
+    ));
+    assert!(matches!(args.as_slice(), [DuckDbArgumentValue::UHugeInt(v)] if *v == u128::MAX));
+
     // Numeric timestamp is encoded as Int64
     let (args, _) = encode(Value::Ext("Timestamp", Box::new(Value::I64(1234))));
     assert!(matches!(
@@ -174,10 +188,14 @@ fn test_value_to_param_all_variants() {
         ("Decimal", Value::String("1.23".into()), "1.23"),
         ("Json", Value::String("{}".into()), "{}"),
         ("Uuid", Value::String("uuid".into()), "uuid"),
+        ("HugeInt", Value::String("42".into()), "42"),
+        ("UHugeInt", Value::String("43".into()), "43"),
         ("Other", Value::String("other".into()), "other"),
     ] {
         match value_to_param(Value::Ext(name, Box::new(inner))) {
             DuckDbArgumentValue::Text(s) => assert_eq!(s, expected),
+            DuckDbArgumentValue::HugeInt(v) => assert_eq!(v.to_string(), expected),
+            DuckDbArgumentValue::UHugeInt(v) => assert_eq!(v.to_string(), expected),
             other => panic!("unexpected {other:?}"),
         }
     }

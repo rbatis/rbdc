@@ -43,14 +43,16 @@ pub fn encode_u32(n: u32) -> libsql::Value {
     libsql::Value::Integer(n as i64)
 }
 
-/// Encode a u64 to a libsql integer when it fits SQLite's signed INTEGER range.
-/// Larger values fall back to decimal text so no data is silently truncated.
+/// Encode a u64 to a libsql integer without silent truncation.
+///
+/// SQLite/libSQL INTEGER is signed, so values above `i64::MAX` are rejected.
 #[inline]
-pub fn encode_u64(n: u64) -> libsql::Value {
-    match i64::try_from(n) {
-        Ok(n) => libsql::Value::Integer(n),
-        Err(_) => libsql::Value::Text(n.to_string()),
-    }
+pub fn encode_u64(n: u64) -> Result<libsql::Value, Error> {
+    Ok(libsql::Value::Integer(n.try_into().map_err(|_| {
+        Error::from(format!(
+            "u64 value {n} exceeds SQLite's signed INTEGER range"
+        ))
+    })?))
 }
 
 #[cfg(test)]
@@ -106,10 +108,10 @@ mod tests {
 
     #[test]
     fn test_encode_u64() {
-        assert!(matches!(encode_u64(200), libsql::Value::Integer(200)));
         assert!(matches!(
-            encode_u64(u64::MAX),
-            libsql::Value::Text(value) if value == u64::MAX.to_string()
+            encode_u64(200).unwrap(),
+            libsql::Value::Integer(200)
         ));
+        assert!(encode_u64(u64::MAX).is_err());
     }
 }

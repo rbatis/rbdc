@@ -116,6 +116,31 @@ async fn test_bind_param_types() {
         query_row(&mut conn, "SELECT ?", vec![Value::String("hi".into())]).await,
         vec![Value::String("hi".into())]
     );
+    assert!(matches!(
+        &query_row(
+            &mut conn,
+            "SELECT ?::HUGEINT",
+            vec![Value::Ext(
+                "HugeInt",
+                Box::new(Value::String("12345678901234567890".into()))
+            )]
+        )
+        .await[0],
+        Value::Ext("HugeInt", value) if **value == Value::String("12345678901234567890".into())
+    ));
+    assert!(matches!(
+        &query_row(
+            &mut conn,
+            "SELECT ?::UHUGEINT",
+            vec![Value::Ext(
+                "UHugeInt",
+                Box::new(Value::String("340282366920938463463374607431768211455".into()))
+            )]
+        )
+        .await[0],
+        Value::Ext("UHugeInt", value)
+            if **value == Value::String("340282366920938463463374607431768211455".into())
+    ));
 }
 
 #[tokio::test]

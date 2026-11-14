@@ -169,3 +169,19 @@ impl Encode for Hstore {
         Ok(IsNull::No)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serde_roundtrip() {
+        let value = Hstore(HashMap::from([
+            ("name".to_string(), "John".to_string()),
+            ("age".to_string(), "30".to_string()),
+        ]));
+        let encoded = rbs::to_value(&value).unwrap();
+        let decoded: Hstore = rbs::from_value(encoded).unwrap();
+        assert_eq!(decoded, value);
+    }
+}

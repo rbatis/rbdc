@@ -12,7 +12,7 @@ pub enum IsNull {
     No,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum DuckDbType {
     Null,
     Boolean,
@@ -49,6 +49,58 @@ pub enum DuckDbType {
     UUID,
     Bit,
     SQLNull,
+}
+
+impl<'de> serde::Deserialize<'de> for DuckDbType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = <Value as serde::Deserialize>::deserialize(deserializer)?;
+        let name = match value {
+            Value::String(name) => name,
+            Value::Ext(_, inner) => inner.into_string().unwrap_or_default(),
+            other => other.to_string(),
+        };
+        Ok(match name.as_str() {
+            "Null" => DuckDbType::Null,
+            "Boolean" => DuckDbType::Boolean,
+            "TinyInt" => DuckDbType::TinyInt,
+            "SmallInt" => DuckDbType::SmallInt,
+            "Int" => DuckDbType::Int,
+            "BigInt" => DuckDbType::BigInt,
+            "UTinyInt" => DuckDbType::UTinyInt,
+            "USmallInt" => DuckDbType::USmallInt,
+            "UInt" => DuckDbType::UInt,
+            "UBigInt" => DuckDbType::UBigInt,
+            "Float" => DuckDbType::Float,
+            "Double" => DuckDbType::Double,
+            "Decimal" => DuckDbType::Decimal,
+            "Timestamp" => DuckDbType::Timestamp,
+            "TimestampS" => DuckDbType::TimestampS,
+            "TimestampMs" => DuckDbType::TimestampMs,
+            "TimestampNs" => DuckDbType::TimestampNs,
+            "TimestampTz" => DuckDbType::TimestampTz,
+            "Date" => DuckDbType::Date,
+            "Time" => DuckDbType::Time,
+            "TimeTz" => DuckDbType::TimeTz,
+            "Interval" => DuckDbType::Interval,
+            "HugeInt" => DuckDbType::HugeInt,
+            "UHugeInt" => DuckDbType::UHugeInt,
+            "Varchar" => DuckDbType::Varchar,
+            "Blob" => DuckDbType::Blob,
+            "Enum" => DuckDbType::Enum,
+            "List" => DuckDbType::List,
+            "Struct" => DuckDbType::Struct,
+            "Map" => DuckDbType::Map,
+            "Array" => DuckDbType::Array,
+            "Union" => DuckDbType::Union,
+            "UUID" => DuckDbType::UUID,
+            "Bit" => DuckDbType::Bit,
+            "SQLNull" => DuckDbType::SQLNull,
+            _ => return Err(serde::de::Error::unknown_variant(&name, &[])),
+        })
+    }
 }
 
 impl DuckDbType {
@@ -106,6 +158,8 @@ pub enum DuckDbArgumentValue {
     UInt16(u16),
     UInt32(u32),
     UInt64(u64),
+    HugeInt(i128),
+    UHugeInt(u128),
     Float(f32),
     Double(f64),
     Text(String),
@@ -211,6 +265,36 @@ impl Encode for Value {
                     ));
                     Ok(IsNull::No)
                 }
+                "Bit" | "Enum" => {
+                    args.push(DuckDbArgumentValue::Text(
+                        v.into_string().unwrap_or_default(),
+                    ));
+                    Ok(IsNull::No)
+                }
+                "TimestampTz" => {
+                    args.push(DuckDbArgumentValue::Text(
+                        v.into_string().unwrap_or_default(),
+                    ));
+                    Ok(IsNull::No)
+                }
+                "HugeInt" => {
+                    let n = v
+                        .into_string()
+                        .unwrap_or_default()
+                        .parse()
+                        .map_err(|e| Error::from(format!("invalid HugeInt value: {e}")))?;
+                    args.push(DuckDbArgumentValue::HugeInt(n));
+                    Ok(IsNull::No)
+                }
+                "UHugeInt" => {
+                    let n = v
+                        .into_string()
+                        .unwrap_or_default()
+                        .parse()
+                        .map_err(|e| Error::from(format!("invalid UHugeInt value: {e}")))?;
+                    args.push(DuckDbArgumentValue::UHugeInt(n));
+                    Ok(IsNull::No)
+                }
                 other => Err(Error::from(format!(
                     "unsupported DuckDB extension value type: {other}"
                 ))),
@@ -233,7 +317,7 @@ fn ty_to_type_name(ty: &DuckDbType) -> &'static str {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DuckDbTypeInfo(pub DuckDbType);
 
 /// Convert rbs::Value to DuckDB argument value
@@ -269,6 +353,15 @@ pub fn value_to_param(v: Value) -> DuckDbArgumentValue {
                 "Decimal" => DuckDbArgumentValue::Text(s),
                 "Json" => DuckDbArgumentValue::Text(s),
                 "Uuid" => DuckDbArgumentValue::Text(s),
+                "Bit" | "Enum" | "TimestampTz" => DuckDbArgumentValue::Text(s),
+                "HugeInt" => s
+                    .parse()
+                    .map(DuckDbArgumentValue::HugeInt)
+                    .unwrap_or(DuckDbArgumentValue::Text(s)),
+                "UHugeInt" => s
+                    .parse()
+                    .map(DuckDbArgumentValue::UHugeInt)
+                    .unwrap_or(DuckDbArgumentValue::Text(s)),
                 _ => DuckDbArgumentValue::Text(s),
             }
         }
@@ -441,17 +534,11 @@ pub fn extract_row_values(
             | DuckDbType::TimestampMs
             | DuckDbType::TimestampNs
             | DuckDbType::TimestampTz => {
-                let ptr = unsafe {
-                    libduckdb_sys::duckdb_value_varchar(result, col_idx as u64, row_idx as u64)
-                };
-                if ptr.is_null() {
-                    values.push(Value::Null);
-                } else {
-                    let c_str = unsafe { std::ffi::CStr::from_ptr(ptr) };
-                    let s = c_str.to_string_lossy().into_owned();
-                    unsafe { libduckdb_sys::duckdb_free(ptr as *mut std::ffi::c_void) };
-                    values.push(Value::Ext(ty_to_type_name(&ty), Box::new(Value::String(s))));
-                }
+                values.push(
+                    value_varchar(result, col_idx, row_idx)
+                        .map(|s| Value::Ext(ty_to_type_name(&ty), Box::new(Value::String(s))))
+                        .unwrap_or(Value::Null),
+                );
             }
             DuckDbType::Decimal => {
                 let ptr = unsafe {
@@ -562,5 +649,13 @@ mod coverage_tests {
         // Everything else falls back to a plain string type name.
         assert_eq!(ty_to_type_name(&DuckDbType::Varchar), "String");
         assert_eq!(ty_to_type_name(&DuckDbType::Int), "String");
+    }
+
+    #[test]
+    fn type_info_serde_roundtrip() {
+        let info = DuckDbTypeInfo(DuckDbType::TimestampTz);
+        let value = rbs::to_value(&info).unwrap();
+        let decoded: DuckDbTypeInfo = rbs::from_value(value).unwrap();
+        assert_eq!(decoded.0, DuckDbType::TimestampTz);
     }
 }

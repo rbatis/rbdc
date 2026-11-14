@@ -1688,6 +1688,10 @@ mod coverage_tests {
             let json = serde_json::to_string(&info).unwrap();
             let decoded: PgTypeInfo = serde_json::from_str(&json).unwrap();
             assert_eq!(decoded, info);
+
+            let value = rbs::to_value(&info).unwrap();
+            let decoded: PgTypeInfo = rbs::from_value(value).unwrap();
+            assert_eq!(decoded, info);
         }
 
         // declared variants serialize too

@@ -9,13 +9,35 @@ use rbs::Value;
 ///
 /// Thin wrapper around `libsql::ValueType` that adds the display/name
 /// methods needed by `MetaData::column_type()`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 pub enum TursoDataType {
     Null,
     Integer,
     Real,
     Text,
     Blob,
+}
+
+impl<'de> serde::Deserialize<'de> for TursoDataType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = <Value as serde::Deserialize>::deserialize(deserializer)?;
+        let name = match value {
+            Value::String(name) => name,
+            Value::Ext(_, inner) => inner.into_string().unwrap_or_default(),
+            other => other.to_string(),
+        };
+        Ok(match name.as_str() {
+            "Null" => TursoDataType::Null,
+            "Integer" => TursoDataType::Integer,
+            "Real" => TursoDataType::Real,
+            "Text" => TursoDataType::Text,
+            "Blob" => TursoDataType::Blob,
+            _ => return Err(serde::de::Error::unknown_variant(&name, &[])),
+        })
+    }
 }
 
 impl TursoDataType {
@@ -171,7 +193,7 @@ pub fn value_to_libsql(v: &Value) -> Result<libsql::Value, rbdc::Error> {
         Value::I32(n) => Ok(libsql::Value::Integer(*n as i64)),
         Value::I64(n) => Ok(libsql::Value::Integer(*n)),
         Value::U32(n) => Ok(libsql::Value::Integer(*n as i64)),
-        Value::U64(n) => Ok(crate::types::int::encode_u64(*n)),
+        Value::U64(n) => crate::types::int::encode_u64(*n),
         Value::F32(f) => Ok(libsql::Value::Real(*f as f64)),
         Value::F64(f) => Ok(libsql::Value::Real(*f)),
         Value::String(s) => Ok(libsql::Value::Text(s.clone())),
@@ -190,7 +212,7 @@ pub fn value_to_libsql(v: &Value) -> Result<libsql::Value, rbdc::Error> {
             _ => match val.as_ref() {
                 Value::String(s) => Ok(libsql::Value::Text(s.clone())),
                 Value::I64(n) => Ok(libsql::Value::Integer(*n)),
-                Value::U64(n) => Ok(crate::types::int::encode_u64(*n)),
+                Value::U64(n) => crate::types::int::encode_u64(*n),
                 Value::F64(f) => Ok(libsql::Value::Real(*f)),
                 _ => Ok(libsql::Value::Text(val.to_string())),
             },

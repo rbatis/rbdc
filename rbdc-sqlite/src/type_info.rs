@@ -202,5 +202,10 @@ fn test_data_type_from_str() -> Result<(), Error> {
     assert_eq!(null.to_string(), "NULL");
     assert!(!SqliteTypeInfo(DataType::Text).is_null());
 
+    let info = SqliteTypeInfo(DataType::DateTime);
+    let value = rbs::to_value(&info).unwrap();
+    let decoded: SqliteTypeInfo = rbs::from_value(value).unwrap();
+    assert_eq!(decoded, info);
+
     Ok(())
 }

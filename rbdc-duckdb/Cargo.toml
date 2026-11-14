@@ -1,6 +1,6 @@
 [package]
 name = "rbdc-duckdb"
-version = "4.9.14"
+version = "4.9.15"
 edition = "2021"
 description = "DuckDB database driver for RBDC"
 license = "MIT"
@@ -19,6 +19,7 @@ parking_lot = "0.12"
 rbdc = { path = "..", version = "4.9" }
 rbs = {version="4",path="../rbs"}
 log = "0.4"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["sync", "rt-multi-thread", "macros"] }
@@ -26,7 +27,6 @@ async-trait = "0.1.56"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
-serde = "1"
 serde_json = "1"
 
 [dependencies.libduckdb-sys]

@@ -225,7 +225,7 @@ impl PgConnection {
             self.stream.write(Bind {
                 portal: None,
                 statement,
-                formats: &[PgValueFormat::Binary],
+                formats: &arguments.formats,
                 num_params: arguments.types.len() as i16,
                 params: &*arguments.buffer,
                 result_formats: &[PgValueFormat::Binary],

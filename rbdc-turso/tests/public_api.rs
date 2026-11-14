@@ -73,8 +73,9 @@ fn types_int_helpers() {
     assert!(matches!(int::encode_u32(u32::MAX), libsql::Value::Integer(n) if n == u32::MAX as i64));
     assert!(matches!(
         int::encode_u64(123456789),
-        libsql::Value::Integer(123456789)
+        Ok(libsql::Value::Integer(123456789))
     ));
+    assert!(int::encode_u64(u64::MAX).is_err());
 }
 
 #[test]
@@ -142,6 +143,13 @@ fn data_type_name_display_and_from_value() {
         TursoDataType::from(&libsql::Value::Blob(vec![1])),
         TursoDataType::Blob
     );
+}
+
+#[test]
+fn data_type_serde_roundtrip() {
+    let value = rbs::to_value(&TursoDataType::Text).unwrap();
+    let decoded: TursoDataType = rbs::from_value(value).unwrap();
+    assert_eq!(decoded, TursoDataType::Text);
 }
 
 #[test]

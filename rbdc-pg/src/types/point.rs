@@ -110,3 +110,16 @@ impl Encode for Point {
         Ok(IsNull::No)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serde_roundtrip() {
+        let value = Point { x: 1.5, y: -2.5 };
+        let encoded = rbs::to_value(&value).unwrap();
+        let decoded: Point = rbs::from_value(encoded).unwrap();
+        assert_eq!(decoded, value);
+    }
+}

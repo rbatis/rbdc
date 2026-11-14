@@ -639,7 +639,7 @@ fn hstore_binary(entries: &[(&str, Option<&str>)]) -> Vec<u8> {
 fn tsvector_tsquery_codec() {
     let tv = TsVector("'a' 'b'".to_string());
     assert_eq!(format!("{tv}"), "'a' 'b'");
-    assert_eq!(encode_err(tv.clone()), true);
+    assert_eq!(encode(tv.clone()), b"'a' 'b'");
     assert_eq!(TsVector::decode(text_ref("'a' 'b'")).unwrap(), tv);
     assert_eq!(
         TsVector::decode(binary_ref(b"'a' 'b'", PgType::Tsvector)).unwrap(),
@@ -651,7 +651,7 @@ fn tsvector_tsquery_codec() {
 
     let tq = TsQuery("a & b".to_string());
     assert_eq!(format!("{tq}"), "a & b");
-    assert_eq!(encode_err(tq.clone()), true);
+    assert_eq!(encode(tq.clone()), b"a & b");
     assert_eq!(TsQuery::decode(text_ref("a & b")).unwrap(), tq);
     assert_eq!(
         TsQuery::decode(binary_ref(b"a & b", PgType::Tsquery)).unwrap(),
@@ -932,13 +932,7 @@ fn value_encode_covers_ext_names() {
     for (name, value) in cases {
         let mut buf = PgArgumentBuffer::default();
         let result = buf.encode(Value::Ext(name, Box::new(value)));
-        if matches!(name, "TsVector" | "TsQuery") {
-            // Text-search binary encoders are intentionally unsupported for
-            // string payloads; raw binary payloads are passed through.
-            assert!(result.is_err(), "expected error for {name}");
-        } else {
-            assert!(result.is_ok(), "encode failed for {name}: {result:?}");
-        }
+        assert!(result.is_ok(), "encode failed for {name}: {result:?}");
     }
 
     // Timestamptz / Timetz go through rbs deserialization; cover the arms.

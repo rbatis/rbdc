@@ -54,12 +54,10 @@ impl Decode for TsVector {
 }
 
 impl Encode for TsVector {
-    fn encode(self, _buf: &mut crate::arguments::PgArgumentBuffer) -> Result<IsNull, Error> {
-        // TSVECTOR encoding is complex
-        // Applications should use PostgreSQL's to_tsvector() function instead
-        Err(Error::from(
-            "TsVector encoding not supported. Use PostgreSQL's to_tsvector() function in your query instead."
-        ))
+    fn encode(self, buf: &mut crate::arguments::PgArgumentBuffer) -> Result<IsNull, Error> {
+        // `PgArguments` marks string tsvector parameters as text format.
+        buf.extend_from_slice(self.0.as_bytes());
+        Ok(IsNull::No)
     }
 }
 
@@ -109,5 +107,13 @@ mod tests {
             }
             _ => panic!("Expected Ext variant"),
         }
+    }
+
+    #[test]
+    fn test_serde_deserialize() {
+        let value = TsVector("'hello' 'world'".to_string());
+        let encoded = rbs::to_value(&value).unwrap();
+        let decoded: TsVector = rbs::from_value(encoded).unwrap();
+        assert_eq!(decoded, value);
     }
 }

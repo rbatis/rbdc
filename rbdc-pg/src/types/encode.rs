@@ -15,6 +15,7 @@ impl PgArguments {
     pub fn from_args(args: Vec<Value>, timezone_sec: Option<i32>) -> Result<Self, Error> {
         let mut arg = PgArguments {
             types: Vec::with_capacity(args.len()),
+            formats: Vec::with_capacity(args.len()),
             buffer: {
                 let mut buf = PgArgumentBuffer::default();
                 buf.timezone_sec = timezone_sec;

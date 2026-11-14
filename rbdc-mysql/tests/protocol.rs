@@ -606,6 +606,9 @@ fn test_execute_encode_with_arguments() {
     assert_eq!(buf[10], args.null_bitmap[0]);
     assert_eq!(buf[11], 1);
     assert_eq!(buf.len(), 12 + args.types.len() * 2 + args.values.len());
+    // U64 is the fifth parameter. MySQL encodes unsigned parameter types in
+    // the high byte of the two-byte type field.
+    assert_eq!(buf[12 + 4 * 2 + 1], 0x80);
 }
 
 #[test]

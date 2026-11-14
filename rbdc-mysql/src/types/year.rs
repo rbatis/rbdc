@@ -1,6 +1,5 @@
 use crate::types::{Decode, Encode};
 use crate::value::{MySqlValueFormat, MySqlValueRef};
-use byteorder::{ByteOrder, LittleEndian};
 use rbdc::Error;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -22,7 +21,8 @@ impl Debug for Year {
 
 impl Encode for Year {
     fn encode(self, buf: &mut Vec<u8>) -> Result<usize, Error> {
-        buf.push(2);
+        // Bind YEAR values as a fixed-width SHORT parameter. MySQL result
+        // columns still use the one-byte YEAR representation.
         buf.extend_from_slice(&self.0.to_le_bytes());
         Ok(2)
     }
@@ -35,7 +35,13 @@ impl Decode for Year {
                 MySqlValueFormat::Text => value.as_str()?.parse().unwrap_or_default(),
                 MySqlValueFormat::Binary => {
                     let buf = value.as_bytes()?;
-                    LittleEndian::read_u16(&buf[1..])
+                    if buf.is_empty() {
+                        return Err(Error::from("YEAR binary value must not be empty"));
+                    }
+                    if buf.len() < 2 {
+                        return Err(Error::from("YEAR binary value must be 2 bytes"));
+                    }
+                    u16::from_le_bytes([buf[0], buf[1]])
                 }
             }
         }))

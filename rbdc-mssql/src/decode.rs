@@ -166,32 +166,9 @@ impl Decode for Value {
                     match v {
                         Ok(v) => match v {
                             None => Value::Null,
-                            Some(v) => {
-                                // Handle dates beyond nanosecond precision range (year 2262+)
-                                let dt = match v.timestamp_nanos_opt() {
-                                    Some(nanos) => DateTime(
-                                        fastdate::DateTime::from_timestamp_nano(
-                                            nanos as i128
-                                                - (v.offset().utc_minus_local() * 60) as i128,
-                                        )
-                                        .set_offset(v.offset().utc_minus_local() * 60),
-                                    ),
-                                    None => {
-                                        // Fallback to second precision for dates beyond nanosecond range
-                                        let timestamp_secs = v.timestamp();
-                                        let subsec_nanos = v.nanosecond();
-                                        DateTime(
-                                            fastdate::DateTime::from_timestamp_nano(
-                                                (timestamp_secs as i128) * 1_000_000_000
-                                                    + (subsec_nanos as i128)
-                                                    - (v.offset().utc_minus_local() * 60) as i128,
-                                            )
-                                            .set_offset(v.offset().utc_minus_local() * 60),
-                                        )
-                                    }
-                                };
-                                value!(dt)
-                            }
+                            Some(v) => value!(DateTime(
+                                <fastdate::DateTime as DateTimeFromDateTimeFixedOffset>::from(v)
+                            )),
                         },
                         Err(e) => {
                             return Err(Error::from(e.to_string()));

@@ -92,7 +92,7 @@ fn test_type_info_for_value_variants() {
         ),
         (
             Value::Ext("Year", Box::new(Value::U64(2024))),
-            ColumnType::Year,
+            ColumnType::Short,
         ),
         (
             Value::Ext("Date", Box::new(Value::String("2024-01-01".into()))),
@@ -357,16 +357,12 @@ fn test_value_decode_binary_temporal() {
     ));
     assert_eq!(ext_name(&ts), Some("Timestamp"));
 
-    // Year is a 2-byte value preceded by its length byte.
+    // YEAR is a fixed-width two-byte integer.
     assert_eq!(
-        decode(binary(&[2, 0xE8, 0x07], ColumnType::Year)),
+        decode(binary(&[0xE8, 0x07], ColumnType::Year)),
         Value::Ext("Year", Box::new(Value::String("2024".into())))
     );
-    // A zero-length year decodes to an empty string.
-    assert_eq!(
-        decode(binary(&[0], ColumnType::Year)),
-        Value::Ext("Year", Box::new(Value::String("".into())))
-    );
+    assert!(<Value as Decode>::decode(binary(&[0], ColumnType::Year)).is_err());
 }
 
 #[test]
@@ -462,12 +458,12 @@ fn test_value_encode_ext_types() {
 
     assert_eq!(
         encode(Value::Ext("Year", Box::new(Value::U64(2024)))),
-        (2, vec![2, 0xE8, 0x07])
+        (2, vec![0xE8, 0x07])
     );
     // Non-numeric years fall back to zero.
     assert_eq!(
         encode(Value::Ext("Year", Box::new(Value::String("x".into())))),
-        (2, vec![2, 0, 0])
+        (2, vec![0, 0])
     );
 
     let (_, buf) = encode(Value::Ext(
@@ -797,7 +793,7 @@ fn test_year_encode_decode_and_formatting() {
 
     let mut buf = Vec::new();
     assert_eq!(y.encode(&mut buf).unwrap(), 2);
-    assert_eq!(buf, vec![2, 0xE8, 0x07]);
+    assert_eq!(buf, vec![0xE8, 0x07]);
 
     assert_eq!(
         Year::decode(text("2024", ColumnType::Year)).unwrap(),
@@ -808,9 +804,12 @@ fn test_year_encode_decode_and_formatting() {
         Year(0)
     );
     assert_eq!(
-        Year::decode(binary(&[2, 0xE8, 0x07], ColumnType::Year)).unwrap(),
+        Year::decode(binary(&[0xE8, 0x07], ColumnType::Year)).unwrap(),
         Year(2024)
     );
+    assert!(Year::decode(binary(&[124], ColumnType::Year)).is_err());
+    assert!(Year::decode(binary(&[0], ColumnType::Year)).is_err());
+    assert!(Year::decode(binary(&[], ColumnType::Year)).is_err());
 }
 
 #[test]

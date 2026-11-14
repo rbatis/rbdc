@@ -70,7 +70,8 @@ impl<'de> Decode<'de, &'de [MySqlColumn]> for BinaryRow {
 
                 ColumnType::LongLong => 8,
                 ColumnType::Long | ColumnType::Int24 => 4,
-                ColumnType::Short | ColumnType::Year => 2,
+                ColumnType::Short => 2,
+                ColumnType::Year => 2,
                 ColumnType::Tiny => 1,
                 ColumnType::Float => 4,
                 ColumnType::Double => 8,

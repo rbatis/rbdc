@@ -39,7 +39,7 @@ impl<'q> Encode<'_, Capabilities> for Execute<'q> {
 
             for ty in &self.arguments.types {
                 buf.push(ty.r#type as u8);
-                buf.push(0);
+                buf.push(if ty.is_unsigned() { 0x80 } else { 0 });
             }
 
             buf.extend(&*self.arguments.values);

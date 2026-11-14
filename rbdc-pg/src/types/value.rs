@@ -62,7 +62,7 @@ impl TypeInfo for Value {
                     "Point" | "point" => PgTypeInfo::POINT,
                     "TsVector" | "tsvector" => PgTypeInfo::TSVECTOR,
                     "TsQuery" | "tsquery" => PgTypeInfo::TSQUERY,
-                    "Hstore" | "hstore" => PgTypeInfo::HSTORE,
+                    "Hstore" | "hstore" => PgTypeInfo::with_name("hstore"),
                     "Lseg" => PgTypeInfo::LSEG,
                     "Path" => PgTypeInfo::PATH,
                     "Box" => PgTypeInfo::BOX,
@@ -373,6 +373,11 @@ impl Decode for Value {
             PgType::Void => Value::Null,
             PgType::Custom(ref pg_custom_type) => match &pg_custom_type.kind {
                 PgTypeKind::Enum(_) => Value::String(Decode::decode(arg)?),
+                PgTypeKind::Array(_) => Value::Array(Decode::decode(arg)?),
+                _ if &*pg_custom_type.name == "hstore" => {
+                    use crate::types::hstore::Hstore;
+                    Hstore::decode(arg)?.into()
+                }
                 _ => Value::Ext(
                     "Custom",
                     Box::new(Value::Binary({

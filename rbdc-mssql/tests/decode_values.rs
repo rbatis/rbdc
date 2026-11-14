@@ -204,7 +204,17 @@ fn decode_datetimeoffset() {
         DateTimeOffset::new(datetime2, 120),
     )))
     .unwrap();
-    assert!(matches!(decoded, Value::Ext("DateTime", _)));
+    match decoded {
+        Value::Ext("DateTime", value) => {
+            let value = value.as_string().expect("datetime string");
+            assert!(
+                value.contains("2020-01-02T14:34:56"),
+                "unexpected datetime: {value}"
+            );
+            assert!(value.ends_with("+02:00"), "unexpected offset: {value}");
+        }
+        other => panic!("unexpected datetimeoffset: {other:?}"),
+    }
 }
 
 #[test]

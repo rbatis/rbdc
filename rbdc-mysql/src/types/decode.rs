@@ -89,7 +89,7 @@ pub(crate) fn decode_year(value: MySqlValueRef<'_>) -> Result<String, Error> {
         MySqlValueFormat::Text => value.as_str()?.to_string(),
         MySqlValueFormat::Binary => {
             let buf = value.as_bytes()?;
-            let date = decode_year_buf(&buf[1..])?;
+            let date = decode_year_buf(buf)?;
             date
         }
     })
@@ -143,7 +143,11 @@ pub(crate) fn decode_year_buf(buf: &[u8]) -> Result<String, Error> {
         // zero buffer means a zero date (null)
         return Ok("".to_string());
     }
-    Ok(format!("{:0>4}", LittleEndian::read_u16(buf) as i32,))
+    if buf.len() < 2 {
+        return Err(Error::from("YEAR binary value must be 2 bytes"));
+    }
+    let year = LittleEndian::read_u16(buf) as i32;
+    Ok(format!("{year:0>4}"))
 }
 
 pub(crate) fn decode_time_buf(_: u8, mut buf: &[u8]) -> Result<String, Error> {
@@ -223,6 +227,7 @@ mod tests {
     fn test_decode_year_buf() {
         assert_eq!(decode_year_buf(&[]).unwrap(), "");
         assert_eq!(decode_year_buf(&[0xE7, 0x07]).unwrap(), "2023");
+        assert!(decode_year_buf(&[123]).is_err());
     }
 
     #[test]

@@ -327,8 +327,6 @@ impl PgType {
             3927 => PgType::Int8RangeArray,
             4072 => PgType::Jsonpath,
             4073 => PgType::JsonpathArray,
-            3361 => PgType::Hstore,
-            3362 => PgType::HstoreArray,
             3614 => PgType::Tsvector,
             3615 => PgType::Tsquery,
 
@@ -376,8 +374,7 @@ impl PgType {
             PgType::Macaddr8Array => Oid(775),
             PgType::Money => Oid(790),
             PgType::MoneyArray => Oid(791),
-            PgType::Hstore => Oid(3361),
-            PgType::HstoreArray => Oid(3362),
+            PgType::Hstore | PgType::HstoreArray => return None,
             PgType::Tsvector => Oid(3614),
             PgType::Tsquery => Oid(3615),
             PgType::Macaddr => Oid(829),

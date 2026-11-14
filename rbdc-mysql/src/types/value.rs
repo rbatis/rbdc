@@ -42,7 +42,7 @@ impl TypeInfo for Value {
                     //decimal = 12345678
                     "Decimal" => MySqlTypeInfo::from_type(ColumnType::NewDecimal),
                     //year = "1993"
-                    "Year" => MySqlTypeInfo::from_type(ColumnType::Year),
+                    "Year" => MySqlTypeInfo::from_type(ColumnType::Short),
                     //Date = "1993-02-06"
                     "Date" => MySqlTypeInfo::from_type(ColumnType::Date),
                     //RFC3339NanoTime = "15:04:05.999999999"
@@ -219,7 +219,7 @@ impl Decode for Value {
             ),
             ColumnType::Year => Value::Ext(
                 "Year",
-                Box::new(Value::String(decode_year(v).unwrap_or_default())),
+                Box::new(Value::String(decode_year(v)?)),
             ),
             ColumnType::Json => decode_json(v)?,
             ColumnType::NewDecimal => Value::Ext(

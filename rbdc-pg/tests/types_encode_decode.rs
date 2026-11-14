@@ -841,7 +841,7 @@ fn value_type_info_matches_driver_types() {
         ),
         (
             Value::Ext("Hstore", Box::new(Value::String("a=>b".into()))),
-            PgTypeInfo(PgType::Hstore),
+            PgTypeInfo::with_name("hstore"),
         ),
         (
             Value::Ext(

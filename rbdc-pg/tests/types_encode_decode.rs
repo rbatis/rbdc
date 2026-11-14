@@ -830,6 +830,26 @@ fn unsigned_values_do_not_wrap_in_postgres_types() {
 }
 
 #[test]
+fn unresolved_custom_arrays_and_ranges_decode_as_readable_values() {
+    let value = Value::decode(text_ref_typed(
+        "{happy,sad}",
+        PgType::DeclareWithOid(Oid(999_999)),
+    ))
+    .unwrap();
+    assert!(matches!(
+        value,
+        Value::Ext("DeclareWithOid", inner)
+            if matches!(*inner, Value::Array(ref values) if values == &vec![Value::String("happy".into()), Value::String("sad".into())])
+    ));
+
+    let value = Value::decode(text_ref_typed("[1,2)", PgType::Int4Range)).unwrap();
+    assert_eq!(
+        value,
+        Value::Ext("Int4Range", Box::new(Value::String("[1,2)".into())))
+    );
+}
+
+#[test]
 fn value_type_info_matches_driver_types() {
     let cases = [
         (Value::Null, PgTypeInfo(PgType::Unknown)),
@@ -979,11 +999,11 @@ fn value_encode_covers_ext_names() {
         ),
     ));
 
-    // unknown extension names are treated as NULL
+    // unknown extension names are rejected instead of silently becoming NULL.
     let mut buf = PgArgumentBuffer::default();
-    let _ = buf
+    assert!(buf
         .encode(Value::Ext("Nonexistent", Box::new(Value::Null)))
-        .unwrap();
+        .is_err());
 
     // an invalid POINT is an error
     let mut buf = PgArgumentBuffer::default();

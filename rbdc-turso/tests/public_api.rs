@@ -308,18 +308,13 @@ fn value_to_libsql_covers_ext_and_collections() {
         value_to_libsql(&Value::Ext("Json", Box::new(Value::Binary(vec![1, 2])))).unwrap(),
         libsql::Value::Blob(ref b) if b == &vec![1, 2]
     ));
-    // Non-binary JSON payload is serialized as text bytes.
+    // String JSON payloads are stored as TEXT without extra quoting.
     let json_out = value_to_libsql(&Value::Ext(
         "Json",
         Box::new(Value::String(r#"{"a":1}"#.into())),
     ))
     .unwrap();
-    // Value's Display wraps strings in quotes, so the blob is `"{"a":1}"`.
-    let expected = format!("\"{}\"", r#"{"a":1}"#).into_bytes();
-    match json_out {
-        libsql::Value::Blob(b) => assert_eq!(b, expected),
-        other => panic!("expected Blob from Json ext, got: {:?}", other),
-    }
+    assert!(matches!(json_out, libsql::Value::Text(ref s) if s == r#"{"a":1}"#));
 
     // Unknown ext tags dispatch on the inner value type.
     assert!(matches!(
@@ -489,7 +484,7 @@ fn driver_column_type_maps_every_value_variant() {
     );
     assert_eq!(
         driver.column_type(&Value::Ext("Json", Box::new(Value::Null))),
-        "BLOB"
+        "TEXT"
     );
     assert_eq!(
         driver.column_type(&Value::Ext("UnknownTag", Box::new(Value::Null))),

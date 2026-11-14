@@ -68,7 +68,7 @@ impl Driver for TursoDriver {
             Value::Ext(t, _) => match *t {
                 "Date" | "DateTime" | "Time" | "Decimal" | "Uuid" => "TEXT",
                 "Timestamp" => "INTEGER",
-                "Json" => "BLOB",
+                "Json" => "TEXT",
                 _ => "TEXT",
             },
         }

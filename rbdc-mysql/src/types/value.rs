@@ -56,7 +56,7 @@ impl TypeInfo for Value {
                     "Json" => MySqlTypeInfo::from_type(ColumnType::Json),
                     // Connector/C binds ENUM/SET through its string path.
                     "Enum" | "Set" => MySqlTypeInfo::from_type(ColumnType::VarChar),
-                    "Geometry" => MySqlTypeInfo::from_type(ColumnType::Blob),
+                    "Geometry" => MySqlTypeInfo::from_type(ColumnType::String),
                     // Connector/C does not expose a bindable BIT parameter type;
                     // bind the raw bytes as a binary string and let MySQL convert it.
                     "Bit" => MySqlTypeInfo::from_type(ColumnType::Blob),

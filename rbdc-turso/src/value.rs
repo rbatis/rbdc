@@ -208,8 +208,9 @@ pub fn value_to_libsql(v: &Value) -> Result<libsql::Value, rbdc::Error> {
                 || rbdc::Error::from("invalid Timestamp value"),
             )?)),
             "Json" => match val.as_ref() {
-                Value::Binary(b) => Ok(libsql::Value::Blob(b.clone())),
-                _ => Ok(libsql::Value::Blob(val.to_string().into_bytes())),
+                Value::Binary(bytes) => Ok(libsql::Value::Blob(bytes.clone())),
+                Value::String(text) => Ok(libsql::Value::Text(text.clone())),
+                value => Ok(libsql::Value::Text(value.to_string())),
             },
             _ => match val.as_ref() {
                 Value::String(s) => Ok(libsql::Value::Text(s.clone())),
@@ -437,7 +438,7 @@ mod tests {
             Box::new(Value::String("{\"a\":1}".into())),
         ))
         .unwrap();
-        assert!(matches!(json_text, libsql::Value::Blob(_)));
+        assert!(matches!(json_text, libsql::Value::Text(ref s) if s == "{\"a\":1}"));
     }
 
     #[test]

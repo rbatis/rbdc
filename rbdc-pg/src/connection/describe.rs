@@ -211,7 +211,7 @@ impl PgConnection {
 
             let rows = self.exec_decode(
                 "SELECT typname, typtype, typcategory, typrelid, typelem, typbasetype FROM pg_catalog.pg_type WHERE oid = $1",
-                vec![oid.0.into()]
+                vec![Value::Ext("Oid", Box::new(Value::U32(oid.0)))]
             ).await?;
 
             let vs: Vec<PGType> = rbs::from_value(rows).map_err(|e| Error::from(e.to_string()))?;
@@ -333,7 +333,7 @@ SELECT rngsubtype
 FROM pg_catalog.pg_range
 WHERE rngtypid = $1
                 "#,
-                    vec![oid.0.into()],
+                    vec![Value::Ext("Oid", Box::new(Value::U32(oid.0)))],
                 )
                 .await?;
             let vs: Vec<V> = rbs::from_value(rows).map_err(|e| Error::from(e.to_string()))?;
@@ -364,7 +364,7 @@ FROM pg_catalog.pg_enum
 WHERE enumtypid = $1
 ORDER BY enumsortorder
             "#,
-                vec![oid.0.into()],
+                vec![Value::Ext("Oid", Box::new(Value::U32(oid.0)))],
             )
             .await?;
         let vs: Vec<V> = rbs::from_value(rows).map_err(|e| Error::from(e.to_string()))?;

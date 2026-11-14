@@ -73,16 +73,21 @@ impl<T: Decode + TypeInfo> Decode for Vec<T> {
             PgValueFormat::Text => {
                 // no type is provided from the database for the element
                 let mut element_type_info = PgTypeInfo::UNKNOWN;
-                match value.type_info.kind() {
-                    PgTypeKind::Simple => {}
-                    PgTypeKind::Pseudo => {}
-                    PgTypeKind::Domain(_) => {}
-                    PgTypeKind::Composite(_) => {}
-                    PgTypeKind::Array(item) => {
-                        element_type_info = item.clone();
+                if !matches!(
+                    value.type_info.0,
+                    PgType::DeclareWithName(_) | PgType::DeclareWithOid(_)
+                ) {
+                    match value.type_info.kind() {
+                        PgTypeKind::Simple => {}
+                        PgTypeKind::Pseudo => {}
+                        PgTypeKind::Domain(_) => {}
+                        PgTypeKind::Composite(_) => {}
+                        PgTypeKind::Array(item) => {
+                            element_type_info = item.clone();
+                        }
+                        PgTypeKind::Enum(_) => {}
+                        PgTypeKind::Range(_) => {}
                     }
-                    PgTypeKind::Enum(_) => {}
-                    PgTypeKind::Range(_) => {}
                 }
 
                 let s = value.as_str()?;

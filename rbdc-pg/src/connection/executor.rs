@@ -5,7 +5,7 @@ use crate::message::{
 };
 use crate::query::PgQuery;
 use crate::statement::PgStatementMetadata;
-use crate::type_info::PgType;
+use crate::type_info::{PgType, PgTypeKind};
 use crate::types::Oid;
 use crate::{
     arguments::PgArguments, query_result::PgQueryResult, row::PgRow, statement::PgStatement,
@@ -98,6 +98,23 @@ async fn prepare(
     };
 
     Ok((id, metadata))
+}
+
+fn requires_text_result(type_info: &PgTypeInfo) -> bool {
+    if matches!(
+        type_info.0,
+        PgType::DeclareWithName(_) | PgType::DeclareWithOid(_)
+    ) {
+        return false;
+    }
+    match type_info.kind() {
+        PgTypeKind::Range(_) | PgTypeKind::Enum(_) | PgTypeKind::Composite(_) => true,
+        PgTypeKind::Domain(inner) | PgTypeKind::Array(inner) => requires_text_result(inner),
+        _ => matches!(
+            type_info.0,
+            PgType::Tsvector | PgType::Tsquery | PgType::Hstore
+        ),
+    }
 }
 
 async fn recv_desc_params(conn: &mut PgConnection) -> Result<ParameterDescription, Error> {
@@ -224,9 +241,11 @@ impl PgConnection {
             // PostgreSQL's binary formats for tsvector/tsquery are complex and
             // are not directly user-facing. Use text results when either appears
             // so decoding yields the canonical textual representation.
-            let result_format = if metadata.columns.iter().any(|column| {
-                matches!(column.type_info.0, PgType::Tsvector | PgType::Tsquery)
-            }) {
+            let result_format = if metadata
+                .columns
+                .iter()
+                .any(|column| requires_text_result(&column.type_info))
+            {
                 PgValueFormat::Text
             } else {
                 PgValueFormat::Binary

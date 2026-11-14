@@ -169,7 +169,7 @@ mod coverage_tests {
         assert_eq!(meta.column_name(0), "a");
         assert_eq!(meta.column_name(1), "b");
         assert_eq!(meta.column_name(9), "");
-        assert_eq!(meta.column_type(1), "b");
+        assert_eq!(meta.column_type(1), "TEXT");
         // Debug impl for PgRow
         assert!(format!("{row:?}").contains("PgRow"));
     }

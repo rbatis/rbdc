@@ -127,7 +127,7 @@ fn test_type_info_for_value_variants() {
         ),
         (
             Value::Ext("Geometry", Box::new(Value::Binary(vec![1]))),
-            ColumnType::Blob,
+            ColumnType::String,
         ),
         (
             Value::Ext("Bit", Box::new(Value::U64(1))),
@@ -702,6 +702,13 @@ fn test_timestamp_encode_and_decode() {
         Timestamp(millis).encode(&mut buf).unwrap();
         assert!(!buf.is_empty());
     }
+
+    let millis = fastdate::DateTime::from_str("2023-05-06 07:08:09")
+        .unwrap()
+        .unix_timestamp_millis();
+    let mut encoded = Vec::new();
+    Timestamp(millis).encode(&mut encoded).unwrap();
+    assert_eq!(encoded, vec![7, 0xE7, 0x07, 5, 5, 23, 8, 9]);
 
     let ts = Timestamp::decode(text("2023-05-06 07:08:09", ColumnType::Timestamp)).unwrap();
     let expected = fastdate::DateTime::from_str("2023-05-06 07:08:09")

@@ -67,6 +67,11 @@ impl Driver for MssqlDriver {
                 "Decimal" => "DECIMAL",
                 "Timestamp" => "BIGINT",
                 "Uuid" => "UNIQUEIDENTIFIER",
+                "Json" | "Jsonb" => "NVARCHAR(MAX)",
+                "Xml" => "XML",
+                "Geometry" => "GEOMETRY",
+                "Geography" => "GEOGRAPHY",
+                "DateTimeOffset" => "DATETIMEOFFSET",
                 _ => "VARCHAR(MAX)",
             },
         }
@@ -128,7 +133,14 @@ mod test {
             (Value::Ext("Decimal", Box::new(Value::Null)), "DECIMAL"),
             (Value::Ext("Timestamp", Box::new(Value::Null)), "BIGINT"),
             (Value::Ext("Uuid", Box::new(Value::Null)), "UNIQUEIDENTIFIER"),
-            (Value::Ext("Json", Box::new(Value::Null)), "VARCHAR(MAX)"),
+            (Value::Ext("Json", Box::new(Value::Null)), "NVARCHAR(MAX)"),
+            (Value::Ext("Xml", Box::new(Value::Null)), "XML"),
+            (Value::Ext("Geometry", Box::new(Value::Null)), "GEOMETRY"),
+            (Value::Ext("Geography", Box::new(Value::Null)), "GEOGRAPHY"),
+            (
+                Value::Ext("DateTimeOffset", Box::new(Value::Null)),
+                "DATETIMEOFFSET",
+            ),
         ];
         for (value, expected) in cases {
             assert_eq!(driver.column_type(&value), expected, "value: {:?}", value);

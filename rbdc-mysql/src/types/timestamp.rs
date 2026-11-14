@@ -1,4 +1,3 @@
-use rbdc::date::Date;
 use std::str::FromStr;
 
 use crate::types::date::decode_date_buf;
@@ -11,32 +10,26 @@ use rbdc::Error;
 impl Encode for Timestamp {
     fn encode(self, buf: &mut Vec<u8>) -> Result<usize, Error> {
         let datetime = fastdate::DateTime::from_timestamp_millis(self.0 as i64);
-        let size = date_time_size_hint(
+        let payload_len = date_time_size_hint(
             datetime.hour(),
             datetime.minute(),
             datetime.sec(),
             datetime.nano(),
         );
-        buf.push(size as u8);
-        let date = Date(fastdate::Date {
-            day: datetime.day(),
-            mon: datetime.mon(),
-            year: datetime.year(),
-        });
-        let size_date = date.encode(buf)?;
-        buf.remove(buf.len() - 1 - size_date);
-        let mut size_time = 0;
-        if (size + size_date) > 4 {
-            let time = fastdate::Time {
-                nano: datetime.nano(),
-                sec: datetime.sec(),
-                minute: datetime.minute(),
-                hour: datetime.hour(),
-            };
-            size_time = time.encode(buf)?;
-            buf.remove(buf.len() - 1 - size_time);
+        let start = buf.len();
+        buf.push(payload_len as u8);
+        buf.extend_from_slice(&(datetime.year() as u16).to_le_bytes());
+        buf.push(datetime.mon() as u8);
+        buf.push(datetime.day() as u8);
+        if payload_len > 4 {
+            buf.push(datetime.hour() as u8);
+            buf.push(datetime.minute() as u8);
+            buf.push(datetime.sec() as u8);
         }
-        Ok(size + size_date + size_time)
+        if payload_len > 7 {
+            buf.extend_from_slice(&(datetime.nano() / 1000).to_le_bytes());
+        }
+        Ok(buf.len() - start)
     }
 }
 

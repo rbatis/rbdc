@@ -22,6 +22,6 @@ impl rbdc::db::MetaData for PgMetaData {
     }
 
     fn column_type(&self, i: usize) -> String {
-        self.metadata.columns[i].name.to_string()
+        self.metadata.columns[i].type_info.name().to_string()
     }
 }

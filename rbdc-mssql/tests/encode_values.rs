@@ -17,7 +17,7 @@ fn encode_scalar_values() {
     assert!(encode(Value::I64(-2)).is_ok());
     assert!(encode(Value::U32(3)).is_ok());
     assert!(encode(Value::U64(4)).is_ok());
-    assert!(encode(Value::U32(u32::MAX)).is_ok());
+    assert!(encode(Value::U32(u32::MAX)).is_err());
     assert!(encode(Value::U64(u64::MAX)).is_err());
     assert!(encode(Value::F32(1.5)).is_ok());
     assert!(encode(Value::F64(2.5)).is_ok());

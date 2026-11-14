@@ -28,11 +28,9 @@ impl Encode for Value {
                 Ok(())
             }
             Value::U32(v) => {
-                if let Ok(value) = i32::try_from(v) {
-                    q.bind(value);
-                } else {
-                    q.bind(v as i64);
-                }
+                q.bind(i32::try_from(v).map_err(|_| {
+                    Error::from(format!("u32 value {v} exceeds SQL Server INT range"))
+                })?);
                 Ok(())
             }
             Value::U64(v) => {

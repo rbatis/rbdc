@@ -33,7 +33,8 @@ fn vref<'a>(data: Option<&'a [u8]>, ty: ColumnType, format: MySqlValueFormat) ->
         value: data,
         type_info: MySqlTypeInfo::from_type(ty),
         format,
-        option: Arc::new(MySqlConnectOptions::new()),
+        // Tests use UTC regardless of the host timezone (GitHub Actions is UTC).
+        option: Arc::new(MySqlConnectOptions::new().offset_sec(0)),
     }
 }
 
@@ -582,8 +583,8 @@ fn test_date_encode_decode() {
 
 #[test]
 fn test_datetime_encode_size_variants() {
-    let midnight = RbdcDateTime(fastdate::DateTime::from_str("2023-05-06 00:00:00").unwrap());
-    let with_time = RbdcDateTime(fastdate::DateTime::from_str("2023-05-06 01:02:03").unwrap());
+    let midnight = RbdcDateTime(fastdate::DateTime::from_str("2023-05-06 00:00:00Z").unwrap());
+    let with_time = RbdcDateTime(fastdate::DateTime::from_str("2023-05-06 01:02:03Z").unwrap());
     let with_nanos = RbdcDateTime(fastdate::DateTime::from_timestamp_millis(123));
 
     let mut buf = Vec::new();
@@ -703,15 +704,15 @@ fn test_timestamp_encode_and_decode() {
         assert!(!buf.is_empty());
     }
 
-    let millis = fastdate::DateTime::from_str("2023-05-06 07:08:09")
+    let millis = fastdate::DateTime::from_str("2023-05-06 07:08:09Z")
         .unwrap()
         .unix_timestamp_millis();
     let mut encoded = Vec::new();
     Timestamp(millis).encode(&mut encoded).unwrap();
-    assert_eq!(encoded, vec![7, 0xE7, 0x07, 5, 5, 23, 8, 9]);
+    assert_eq!(encoded, vec![7, 0xE7, 0x07, 5, 6, 7, 8, 9]);
 
-    let ts = Timestamp::decode(text("2023-05-06 07:08:09", ColumnType::Timestamp)).unwrap();
-    let expected = fastdate::DateTime::from_str("2023-05-06 07:08:09")
+    let ts = Timestamp::decode(text("2023-05-06 07:08:09Z", ColumnType::Timestamp)).unwrap();
+    let expected = fastdate::DateTime::from_str("2023-05-06 07:08:09Z")
         .unwrap()
         .unix_timestamp_millis();
     assert_eq!(ts.0, expected);

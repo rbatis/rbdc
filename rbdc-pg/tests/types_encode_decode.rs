@@ -302,7 +302,7 @@ fn date_time_codecs() {
     // negative microseconds branch
     assert!(rbdc::Time::decode(binary_ref(&(-1i64).to_be_bytes(), PgType::Time)).is_ok());
 
-    let ts_ms = DateTime::from_str("2021-02-03 04:05:06")
+    let ts_ms = DateTime::from_str("2021-02-03 04:05:06Z")
         .unwrap()
         .unix_timestamp_millis();
     let ts = Timestamp(ts_ms);
@@ -342,10 +342,10 @@ fn date_time_codecs() {
         early_dt
     );
     // text format
-    let text_dt = DateTime::decode(text_ref("2021-02-03 04:05:06")).unwrap();
+    let text_dt = DateTime::decode(text_ref("2021-02-03 04:05:06Z")).unwrap();
     assert_eq!(
         text_dt.unix_timestamp_millis(),
-        DateTime::from_str("2021-02-03 04:05:06")
+        DateTime::from_str("2021-02-03 04:05:06Z")
             .unwrap()
             .unix_timestamp_millis()
     );
@@ -1237,4 +1237,73 @@ fn value_decode_all_pg_types_does_not_panic() {
         };
         let _ = Value::decode(binary_ref(binary, ty.clone()));
     }
+}
+
+#[test]
+fn datetime_decode_binary_applies_timezone_offset() {
+    let dt = DateTime::from_timestamp_millis(1_600_000_000_000);
+    let encoded = encode(dt.clone());
+
+    let value = PgValueRef {
+        value: Some(&encoded),
+        type_info: PgTypeInfo(PgType::Timestamptz),
+        format: PgValueFormat::Binary,
+        timezone_sec: Some(3_600),
+    };
+    let decoded = DateTime::decode(value).unwrap();
+    assert_eq!(decoded.unix_timestamp_millis(), dt.unix_timestamp_millis());
+
+    let negative = (-1_000_000i64).to_be_bytes();
+    let value = PgValueRef {
+        value: Some(&negative),
+        type_info: PgTypeInfo(PgType::Timestamptz),
+        format: PgValueFormat::Binary,
+        timezone_sec: None,
+    };
+    assert!(DateTime::decode(value).is_ok());
+}
+
+#[test]
+fn datetime_decode_text_uses_explicit_utc() {
+    let value = PgValueRef {
+        value: Some(b"2021-02-03 04:05:06Z"),
+        type_info: PgTypeInfo(PgType::Timestamptz),
+        format: PgValueFormat::Text,
+        timezone_sec: None,
+    };
+    assert_eq!(
+        DateTime::decode(value).unwrap().unix_timestamp_millis(),
+        DateTime::from_str("2021-02-03 04:05:06Z")
+            .unwrap()
+            .unix_timestamp_millis()
+    );
+
+    let value = PgValueRef {
+        value: Some(b"nope"),
+        type_info: PgTypeInfo(PgType::Timestamptz),
+        format: PgValueFormat::Text,
+        timezone_sec: None,
+    };
+    assert!(DateTime::decode(value).is_err());
+}
+
+#[test]
+fn timetz_displays_utc_offset() {
+    let value = OffsetTz {
+        time: fastdate::Time {
+            nano: 0,
+            sec: 0,
+            minute: 0,
+            hour: 0,
+        },
+        offset: 0,
+    };
+    assert_eq!(value.to_string(), "00:00:00");
+}
+
+#[test]
+fn timetz_parses_explicit_offset() {
+    let timetz: Timetz = "12:30:45+08:00".parse().unwrap();
+    assert_eq!(timetz.0.offset, 8 * 3_600);
+    assert_eq!(timetz.to_string(), "12:30:45+08:00");
 }

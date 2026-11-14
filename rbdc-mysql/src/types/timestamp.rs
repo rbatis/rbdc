@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use crate::types::decode::decode_timestamp;
 use crate::types::date::decode_date_buf;
 use crate::types::time::decode_time;
 use crate::types::{Decode, Encode};
@@ -37,7 +38,7 @@ impl Decode for Timestamp {
     fn decode(value: MySqlValueRef<'_>) -> Result<Self, Error> {
         Ok(match value.format() {
             MySqlValueFormat::Text => Self(
-                fastdate::DateTime::from_str(value.as_str()?)
+                fastdate::DateTime::from_str(&decode_timestamp(value)?)
                     .map_err(|e| Error::from(e.to_string()))?
                     .unix_timestamp_millis(),
             ),

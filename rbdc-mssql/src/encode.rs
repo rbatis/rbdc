@@ -134,19 +134,3 @@ impl Encode for Value {
         }
     }
 }
-
-#[cfg(test)]
-mod test {
-    use std::str::FromStr;
-
-    #[test]
-    fn test_from() {
-        let v = fastdate::DateTime::now();
-        println!("{}", v.display(false));
-        let n = chrono::NaiveDateTime::from_str(&v.display(false)).unwrap();
-        assert_eq!(
-            v.display(false),
-            n.to_string().replace(" ", "T").trim_end_matches("0")
-        );
-    }
-}

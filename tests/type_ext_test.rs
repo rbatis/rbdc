@@ -765,3 +765,64 @@ fn test_datetime_value_ext_is_valid_json() {
     );
     assert!(dt.to_string().contains("2023-11-14"));
 }
+
+#[test]
+fn test_datetime_json_round_trip() {
+    let dt = DateTime::from_str("2024-01-15T12:34:56Z").unwrap();
+    let value = serde_json::to_value(&dt).unwrap();
+    let decoded: DateTime = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded, dt);
+}
+
+#[test]
+fn test_datetime_json_round_trip_with_offset() {
+    let dt = DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap();
+    let value = serde_json::to_value(&dt).unwrap();
+    let decoded: DateTime = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded, dt);
+}
+
+#[test]
+fn test_datetime_json_vec_round_trip() {
+    let dt = vec![DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap()];
+    let value = serde_json::to_value(&dt).unwrap();
+    let decoded: Vec<DateTime> = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded, dt);
+}
+
+#[test]
+fn test_datetime_rbs_vec_round_trip() {
+    let dt = vec![DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap()];
+    let value = rbs::value!(&dt);
+    let decoded: Vec<DateTime> = rbs::from_value(value).unwrap();
+    assert_eq!(decoded, dt);
+}
+
+#[test]
+fn test_datetime_rbs_millis_is_utc() {
+    let dt = DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap();
+    let value = rbs::value!(&dt.unix_timestamp_millis());
+    let decoded: DateTime = rbs::from_value(value).unwrap();
+    assert_eq!(
+        decoded,
+        DateTime::from_str("2023-10-20T16:15:00.923Z").unwrap()
+    );
+}
+
+#[test]
+fn test_datetime_json_millis_is_utc() {
+    let dt = DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap();
+    let value = serde_json::to_value(dt.unix_timestamp_millis()).unwrap();
+    let decoded: DateTime = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        decoded,
+        DateTime::from_str("2023-10-20T16:15:00.923Z").unwrap()
+    );
+}
+
+#[test]
+fn test_datetime_default_format() {
+    let dt = DateTime::default();
+    assert_eq!(dt.to_string(), "1970-01-01T00:00:00Z");
+    assert_eq!(dt.format("YYYY-MM-DD/hh/mm/ss"), "1970-01-01/00/00/00");
+}

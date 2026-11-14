@@ -133,31 +133,3 @@ impl Encode for Timetz {
         Ok(IsNull::No)
     }
 }
-
-#[cfg(test)]
-mod test {
-    use crate::types::timetz::OffsetTz;
-    use fastdate::{offset_sec, Time};
-
-    #[test]
-    fn test_display() {
-        let o = OffsetTz {
-            time: Time {
-                nano: 0,
-                sec: 0,
-                minute: 0,
-                hour: 0,
-            },
-            offset: offset_sec(),
-        };
-
-        println!("{}", o);
-    }
-
-    #[test]
-    fn test_from_str_with_offset() {
-        let timetz: super::Timetz = "12:30:45+08:00".parse().unwrap();
-        assert_eq!(timetz.0.offset, 8 * 3600);
-        assert_eq!(timetz.to_string(), "12:30:45+08:00");
-    }
-}

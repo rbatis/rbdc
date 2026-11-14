@@ -123,3 +123,16 @@ fn encode_ext_errors() {
     ))
     .is_err());
 }
+
+#[test]
+fn utc_datetime_display_round_trips_through_chrono() {
+    use std::str::FromStr;
+
+    let value = fastdate::DateTime::utc();
+    let displayed = value.display(false);
+    let parsed = chrono::NaiveDateTime::from_str(&displayed).unwrap();
+    assert_eq!(
+        displayed,
+        parsed.to_string().replace(" ", "T").trim_end_matches('0')
+    );
+}

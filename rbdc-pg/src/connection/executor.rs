@@ -221,6 +221,18 @@ impl PgConnection {
             // consume messages til `ReadyForQuery` before bind and execute
             self.wait_until_ready().await?;
 
+            // PostgreSQL's binary formats for tsvector/tsquery are complex and
+            // are not directly user-facing. Use text results when either appears
+            // so decoding yields the canonical textual representation.
+            let result_format = if metadata.columns.iter().any(|column| {
+                matches!(column.type_info.0, PgType::Tsvector | PgType::Tsquery)
+            }) {
+                PgValueFormat::Text
+            } else {
+                PgValueFormat::Binary
+            };
+            let result_formats = [result_format];
+
             // bind to attach the arguments to the statement and create a portal
             self.stream.write(Bind {
                 portal: None,
@@ -228,7 +240,7 @@ impl PgConnection {
                 formats: &arguments.formats,
                 num_params: arguments.types.len() as i16,
                 params: &*arguments.buffer,
-                result_formats: &[PgValueFormat::Binary],
+                result_formats: &result_formats,
             });
 
             // executes the portal up to the passed limit
@@ -245,8 +257,8 @@ impl PgConnection {
             // termed batching might suit this.
             self.write_sync();
 
-            // prepared statements are binary
-            PgValueFormat::Binary
+            // prepared statements are binary unless text-only result types were requested
+            result_format
         } else {
             // Query will trigger a ReadyForQuery
             self.stream.write(Query(query));

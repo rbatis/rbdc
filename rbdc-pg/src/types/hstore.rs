@@ -54,7 +54,11 @@ impl From<HashMap<String, String>> for Hstore {
 
 impl From<Hstore> for Value {
     fn from(arg: Hstore) -> Self {
-        Value::Ext("Hstore", Box::new(Value::String(arg.to_string())))
+        let mut values = rbs::value::map::ValueMap::new();
+        for (key, value) in arg.0 {
+            values.insert(Value::String(key), Value::String(value));
+        }
+        Value::Ext("Hstore", Box::new(Value::Map(values)))
     }
 }
 
@@ -183,5 +187,18 @@ mod tests {
         let encoded = rbs::to_value(&value).unwrap();
         let decoded: Hstore = rbs::from_value(encoded).unwrap();
         assert_eq!(decoded, value);
+    }
+
+    #[test]
+    fn value_conversion_preserves_structured_map() {
+        let value: Value = Hstore(HashMap::from([(
+            "name".to_string(),
+            "John".to_string(),
+        )]))
+        .into();
+        assert!(matches!(
+            value,
+            Value::Ext("Hstore", inner) if matches!(*inner, Value::Map(_))
+        ));
     }
 }

@@ -47,6 +47,25 @@ impl Display for Timetz {
     }
 }
 
+impl FromStr for Timetz {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        let split = s
+            .char_indices()
+            .skip(1)
+            .find(|(_, c)| *c == '+' || *c == '-')
+            .map(|(i, _)| i)
+            .ok_or_else(|| Error::from(format!("Invalid TIMETZ value: {s}. Expected time+offset")))?;
+        let (time, raw_offset) = s.split_at(split);
+        let time = fastdate::Time::from_str(time)
+            .map_err(|e| Error::from(format!("Invalid TIMETZ time: {e}")))?;
+        let offset = parse_offset(raw_offset)?;
+        Ok(Self(OffsetTz { time, offset }))
+    }
+}
+
 impl From<Timetz> for Value {
     fn from(arg: Timetz) -> Self {
         rbs::value!(arg)
@@ -70,22 +89,7 @@ impl Decode for Timetz {
                     offset: seconds,
                 }))
             }
-            PgValueFormat::Text => {
-                let s = value.as_str()?.trim();
-                let split = s
-                    .char_indices()
-                    .skip(1)
-                    .find(|(_, c)| *c == '+' || *c == '-')
-                    .map(|(i, _)| i)
-                    .ok_or_else(|| {
-                        Error::from(format!("Invalid TIMETZ value: {s}. Expected time+offset"))
-                    })?;
-                let (time, raw_offset) = s.split_at(split);
-                let time = fastdate::Time::from_str(time)
-                    .map_err(|e| Error::from(format!("Invalid TIMETZ time: {e}")))?;
-                let offset = parse_offset(raw_offset)?;
-                Ok(Self(OffsetTz { time, offset }))
-            }
+            PgValueFormat::Text => Timetz::from_str(value.as_str()?),
         }
     }
 }
@@ -148,5 +152,12 @@ mod test {
         };
 
         println!("{}", o);
+    }
+
+    #[test]
+    fn test_from_str_with_offset() {
+        let timetz: super::Timetz = "12:30:45+08:00".parse().unwrap();
+        assert_eq!(timetz.0.offset, 8 * 3600);
+        assert_eq!(timetz.to_string(), "12:30:45+08:00");
     }
 }

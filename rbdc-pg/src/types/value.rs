@@ -536,10 +536,15 @@ impl Encode for Value {
                         tz.encode(buf)?
                     }
                     "Interval" => v.into_bytes().unwrap_or_default().encode(buf)?,
-                    "Timetz" => {
-                        Timetz(rbs::from_value(*v).map_err(|e| Error::from(e.to_string()))?)
-                            .encode(buf)?
-                    }
+                    "Timetz" => match *v {
+                        Value::String(text) => Timetz::from_str(&text)
+                            .map_err(|e| Error::from(e.to_string()))?
+                            .encode(buf)?,
+                        value => Timetz(
+                            rbs::from_value(value).map_err(|e| Error::from(e.to_string()))?,
+                        )
+                        .encode(buf)?,
+                    },
                     "Bit" => v.into_bytes().unwrap_or_default().encode(buf)?,
                     "Varbit" => v.into_bytes().unwrap_or_default().encode(buf)?,
                     "Numeric" => Decimal::from_str(v.as_str().unwrap_or_default())

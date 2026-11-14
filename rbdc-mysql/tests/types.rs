@@ -119,15 +119,19 @@ fn test_type_info_for_value_variants() {
         ),
         (
             Value::Ext("Enum", Box::new(Value::String("a".into()))),
-            ColumnType::Enum,
+            ColumnType::VarChar,
         ),
         (
             Value::Ext("Set", Box::new(Value::String("a".into()))),
-            ColumnType::Set,
+            ColumnType::VarChar,
         ),
         (
             Value::Ext("Geometry", Box::new(Value::Binary(vec![1]))),
-            ColumnType::Geometry,
+            ColumnType::Blob,
+        ),
+        (
+            Value::Ext("Bit", Box::new(Value::U64(1))),
+            ColumnType::Blob,
         ),
         (
             Value::Ext("Nope", Box::new(Value::I32(1))),

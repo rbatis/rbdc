@@ -54,10 +54,12 @@ impl TypeInfo for Value {
                     }
                     "DateTime" => MySqlTypeInfo::from_type(ColumnType::DateTime),
                     "Json" => MySqlTypeInfo::from_type(ColumnType::Json),
-                    "Enum" => MySqlTypeInfo::from_type(ColumnType::Enum),
-                    "Set" => MySqlTypeInfo::from_type(ColumnType::Set),
-                    "Geometry" => MySqlTypeInfo::from_type(ColumnType::Geometry),
-                    "Bit" => MySqlTypeInfo::from_type(ColumnType::Bit),
+                    // Connector/C binds ENUM/SET through its string path.
+                    "Enum" | "Set" => MySqlTypeInfo::from_type(ColumnType::VarChar),
+                    "Geometry" => MySqlTypeInfo::from_type(ColumnType::Blob),
+                    // Connector/C does not expose a bindable BIT parameter type;
+                    // bind the raw bytes as a binary string and let MySQL convert it.
+                    "Bit" => MySqlTypeInfo::from_type(ColumnType::Blob),
                     "Blob" | "TinyBlob" | "MediumBlob" | "LongBlob" => {
                         MySqlTypeInfo::from_type(ColumnType::Blob)
                     }

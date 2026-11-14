@@ -513,11 +513,14 @@ mod execute {
     fn bind_created_value(
         stmt: libduckdb_sys::duckdb_prepared_statement,
         idx: u64,
-        value: libduckdb_sys::duckdb_value,
+        mut value: libduckdb_sys::duckdb_value,
     ) {
         if !value.is_null() {
             unsafe {
+                // duckdb_bind_value copies the Value into BoundParameterData,
+                // so the temporary duckdb_value still has to be destroyed.
                 libduckdb_sys::duckdb_bind_value(stmt, idx, value);
+                libduckdb_sys::duckdb_destroy_value(&mut value);
             }
         }
     }

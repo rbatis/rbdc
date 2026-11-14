@@ -1,55 +1,55 @@
-# RBDC 数据类型与表字段映射规则
+# RBDC Data Type and Table Field Mapping Rules
 
-> 本文是 rbdc 驱动类型映射的权威说明。修改任何 `driver.rs`、`src/types`、`TypeInfo`、`Value` 编码/解码行为时，必须同步更新本文和对应测试。
+> This document is the authoritative reference for rbdc driver type mappings. Whenever you change the encoding/decoding behavior of any `driver.rs`, `src/types`, `TypeInfo`, or `Value`, you must update this document and the corresponding tests.
 >
-> 更新时间：2026-11-15
+> Last updated: 2026-11-15
 
-## 1. 强制规则
+## 1. Mandatory Rules
 
-1. **数组和 Map 统一按 JSON 存储**
-   - `rbs::Value::Array`、`rbs::Value::Map` 在 rbdc 中表示 JSON 数据，不表示数据库原生数组。
-   - MySQL：`JSON`
-   - PostgreSQL：`JSON`，绑定的是 JSON 参数，不是 PostgreSQL 原生数组
-   - SQL Server：JSON 文本/二进制，字段使用 `VARCHAR(MAX)` 或 `NVARCHAR(MAX)`
-   - SQLite/Turso：`TEXT`
-   - DuckDB：`VARCHAR`
-   - PostgreSQL 原生数组解码是兼容能力，不改变 `Value::Array` 的 JSON 绑定语义。
+1. **Arrays and Maps are always stored as JSON**
+   - In rbdc, `rbs::Value::Array` and `rbs::Value::Map` represent JSON data, not native database arrays.
+   - MySQL: `JSON`
+   - PostgreSQL: `JSON`; the bound parameter is JSON, not a native PostgreSQL array
+   - SQL Server: JSON text/binary; use `VARCHAR(MAX)` or `NVARCHAR(MAX)` for columns
+   - SQLite/Turso: `TEXT`
+   - DuckDB: `VARCHAR`
+   - Native PostgreSQL array decoding is a compatibility feature and does not change the JSON binding semantics of `Value::Array`.
 
-2. **同一 `rbs::Value` 变体在每个驱动中必须固定映射**
-   - 禁止根据数值大小在 `i32/i64`、`INT/BIGINT`、`INT4/INT8/NUMERIC` 之间动态切换绑定类型。
-   - 能无损承载就选择固定类型；不能承载就明确报错。
-   - 表字段类型、参数 `TypeInfo`、编码格式必须互相一致。
+2. **The mapping for each `rbs::Value` variant must be fixed in every driver**
+   - Do not dynamically switch binding types between `i32/i64`, `INT/BIGINT`, or `INT4/INT8/NUMERIC` based on numeric magnitude.
+   - Choose a fixed type when it can represent the value losslessly; fail explicitly when it cannot.
+   - Table field types, parameter `TypeInfo`, and encoding formats must be consistent with one another.
 
-3. **DDL 类型和协议绑定类型分开看**
-   - `Driver::column_type(&Value)`：建表/字段类型推荐。
-   - `TypeInfo for Value`：数据库协议参数类型，可能与 DDL 名称不同。
-   - 例如 MySQL `Enum/Set/Geometry/Bit` 的 DDL 类型和 Connector/C 可绑定的 wire type 不同。
+3. **Treat DDL types and protocol binding types separately**
+   - `Driver::column_type(&Value)`: recommended table/column type.
+   - `TypeInfo for Value`: database protocol parameter type, which may differ from the DDL name.
+   - For example, the DDL types and Connector/C-bindable wire types for MySQL `Enum/Set/Geometry/Bit` differ.
 
-4. **禁止静默错值**
-   - 整数越界不得截断。
-   - 非法时间、Decimal、UUID、BIT 不得变成 `0`、空字符串或 NULL。
-   - 未知 `Ext` 不得默认绑定 NULL；应报错，或在驱动明确支持时按文本处理。
+4. **Never silently produce incorrect values**
+   - Integer out-of-range values must not be truncated.
+   - Invalid time, Decimal, UUID, or BIT values must not become `0`, an empty string, or NULL.
+   - An unknown `Ext` must not be bound to NULL by default; it should produce an error, or be handled as text when the driver explicitly supports it.
 
-5. **扩展类型名必须稳定**
-   - 使用 PascalCase，例如 `DateTime`，禁止 `Datetime`。
-   - `Ext` 名称属于对外数据协议，重命名必须评估兼容性。
-   - `TypeInfo` 相关枚举/结构必须支持 serde 往返；基于 `rbs::Value::Ext` 的枚举通常需要自定义 `Deserialize`。
+5. **Extended type names must be stable**
+   - Use PascalCase, such as `DateTime`, not `Datetime`.
+   - `Ext` names are part of the external data protocol; renaming one requires a compatibility assessment.
+   - `TypeInfo` enums/structs must support serde round trips; enums based on `rbs::Value::Ext` usually require a custom `Deserialize` implementation.
 
-## 2. 源码中的权威入口
+## 2. Authoritative Entry Points in the Source
 
-| 内容 | 路径 |
+| Item | Path |
 |---|---|
-| MySQL | `rbdc-mysql/src/driver.rs`、`rbdc-mysql/src/types/value.rs` |
-| PostgreSQL | `rbdc-pg/src/driver.rs`、`rbdc-pg/src/types/value.rs`、`rbdc-pg/src/type_info.rs` |
-| SQL Server | `rbdc-mssql/src/driver.rs`、`rbdc-mssql/src/encode.rs`、`rbdc-mssql/src/decode.rs` |
-| SQLite | `rbdc-sqlite/src/driver.rs`、`rbdc-sqlite/src/type_info.rs`、`rbdc-sqlite/src/types/` |
-| Turso/libSQL | `rbdc-turso/src/driver.rs`、`rbdc-turso/src/value.rs`、`rbdc-turso/src/types/` |
-| DuckDB | `rbdc-duckdb/src/driver.rs`、`rbdc-duckdb/src/types/value.rs` |
-| Value/serde | `rbs/src/value/mod.rs`、`rbs/src/value_serde/` |
+| MySQL | `rbdc-mysql/src/driver.rs`, `rbdc-mysql/src/types/value.rs` |
+| PostgreSQL | `rbdc-pg/src/driver.rs`, `rbdc-pg/src/types/value.rs`, `rbdc-pg/src/type_info.rs` |
+| SQL Server | `rbdc-mssql/src/driver.rs`, `rbdc-mssql/src/encode.rs`, `rbdc-mssql/src/decode.rs` |
+| SQLite | `rbdc-sqlite/src/driver.rs`, `rbdc-sqlite/src/type_info.rs`, `rbdc-sqlite/src/types/` |
+| Turso/libSQL | `rbdc-turso/src/driver.rs`, `rbdc-turso/src/value.rs`, `rbdc-turso/src/types/` |
+| DuckDB | `rbdc-duckdb/src/driver.rs`, `rbdc-duckdb/src/types/value.rs` |
+| Value/serde | `rbs/src/value/mod.rs`, `rbs/src/value_serde/` |
 
-## 3. 基础 `Value` 映射
+## 3. Basic `Value` Mappings
 
-下表是 DDL 建表推荐类型；参数绑定必须以对应 `TypeInfo` 和编码实现为准。
+The following table lists the recommended DDL column types; parameter binding must follow the corresponding `TypeInfo` and encoding implementation.
 
 | `rbs::Value` | MySQL | PostgreSQL | SQL Server | SQLite | Turso | DuckDB |
 |---|---|---|---|---|---|---|
@@ -66,90 +66,90 @@
 | `Array` | `JSON` | `JSON` | `VARCHAR(MAX)` | `TEXT` | `TEXT` | `VARCHAR` |
 | `Map` | `JSON` | `JSON` | `VARCHAR(MAX)` | `TEXT` | `TEXT` | `VARCHAR` |
 
-### 3.1 无符号整数约束
+### 3.1 Unsigned Integer Constraints
 
-| 驱动 | 规则 |
+| Driver | Rule |
 |---|---|
-| MySQL | `U32 = INT UNSIGNED`，`U64 = BIGINT UNSIGNED`，完整范围可绑定 |
-| PostgreSQL | 无 unsigned 类型：`U32 = INT8`，`U64 = NUMERIC` |
-| SQL Server | `U32 -> i32`、`U64 -> i64`，越界直接报错 |
-| SQLite/Turso | 仅 signed 64 位 INTEGER；`U64 > i64::MAX` 直接报错 |
-| DuckDB | `U32 = UINTEGER`，`U64 = UBIGINT` |
+| MySQL | `U32 = INT UNSIGNED`, `U64 = BIGINT UNSIGNED`; the full range can be bound |
+| PostgreSQL | No unsigned types: `U32 = INT8`, `U64 = NUMERIC` |
+| SQL Server | `U32 -> i32`, `U64 -> i64`; out-of-range values produce an error |
+| SQLite/Turso | Signed 64-bit INTEGER only; `U64 > i64::MAX` produces an error |
+| DuckDB | `U32 = UINTEGER`, `U64 = UBIGINT` |
 
-禁止使用 `as i32/as i64` 做无检查转换。
+Do not use `as i32/as i64` for unchecked conversions.
 
-## 4. 扩展类型语义
+## 4. Extended Type Semantics
 
-### 4.1 时间、时间戳、Decimal、UUID
+### 4.1 Time, Timestamp, Decimal, and UUID
 
-| `Ext` | 语义 |
+| `Ext` | Semantics |
 |---|---|
-| `Date` | 日期字符串，例如 `2024-01-15` |
-| `Time` | 时间字符串；驱动按数据库格式编码/解码 |
-| `DateTime` | 带时区语义的完整日期时间或数据库 `DATETIME` 值 |
-| `Timestamp` | **Unix epoch 毫秒数（`i64`）**，不是 SQL Server `timestamp/rowversion` |
-| `Decimal` | 高精度十进制字符串 |
-| `Uuid` | UUID 字符串，按当前驱动能力转文本或原生 UUID |
-| `Json` | JSON 文本；`Value::Array/Map` 是首选结构化 JSON 入口 |
-| `Jsonb` | PostgreSQL JSONB 扩展入口 |
+| `Date` | Date string, for example `2024-01-15` |
+| `Time` | Time string; the driver encodes/decodes it according to the database format |
+| `DateTime` | A complete date and time with timezone semantics, or a database `DATETIME` value |
+| `Timestamp` | **Unix epoch milliseconds (`i64`)**, not SQL Server `timestamp/rowversion` |
+| `Decimal` | High-precision decimal string |
+| `Uuid` | UUID string; converted to text or a native UUID according to driver capabilities |
+| `Json` | JSON text; `Value::Array/Map` are the preferred structured JSON entry points |
+| `Jsonb` | PostgreSQL JSONB extension entry point |
 
-- SQL Server `DateTimeOffset` 使用独立 `Ext("DateTimeOffset")`。
-- PostgreSQL `DateTime` 固定映射为 `TIMESTAMPTZ`；`Timestamp` 映射为 `TIMESTAMP`。
-- MySQL `Timestamp` 编码前转换为 UTC 日期时间分量；避免把本地时间直接写成 epoch 数值。
+- SQL Server `DateTimeOffset` uses a separate `Ext("DateTimeOffset")`.
+- PostgreSQL `DateTime` always maps to `TIMESTAMPTZ`; `Timestamp` maps to `TIMESTAMP`.
+- Before encoding, MySQL `Timestamp` is converted to UTC date-time components; do not write local time directly as an epoch value.
 
-### 4.2 JSON 解码
+### 4.2 JSON Decoding
 
-- MySQL JSON 列解码为结构化 `Value`。
-- PostgreSQL `JSON/JSONB` 解码为结构化 `Value`。
-- SQLite 对 JSON 形状 TEXT 自动尝试解析。
-- Turso 由 `json_detect` 控制，默认关闭。
-- DuckDB VARCHAR 会尝试解析 JSON 形状文本。
-- SQL Server JSON 是普通字符串列，不做自动 JSON 类型识别。
+- MySQL JSON columns decode to structured `Value`s.
+- PostgreSQL `JSON/JSONB` decodes to structured `Value`s.
+- SQLite automatically attempts to parse TEXT that has a JSON shape.
+- Turso is controlled by `json_detect`, which is disabled by default.
+- DuckDB attempts to parse VARCHAR text that has a JSON shape.
+- SQL Server JSON is stored in ordinary string columns and does not undergo automatic JSON type detection.
 
 ## 5. MySQL
 
-### 5.1 DDL 与绑定类型
+### 5.1 DDL and Binding Types
 
-| `Ext` | DDL 类型 | 参数 wire 类型 | 说明 |
+| `Ext` | DDL Type | Parameter Wire Type | Notes |
 |---|---|---|---|
-| `Uuid` | `TEXT` | `VarChar` | UUID 文本 |
-| `Decimal` | `DECIMAL` | `NEWDECIMAL` | 严格解析 Decimal |
-| `Year` | `YEAR` | `SHORT` 两字节 | 支持数值或数字字符串 |
+| `Uuid` | `TEXT` | `VarChar` | UUID text |
+| `Decimal` | `DECIMAL` | `NEWDECIMAL` | Strict Decimal parsing |
+| `Year` | `YEAR` | Two-byte `SHORT` | Accepts a number or numeric string |
 | `Date` | `DATE` | `DATE` | MySQL binary date |
-| `Time` | `TIME` | `TIME` | 支持微秒 |
-| `Timestamp` | `TIMESTAMP` | `TIMESTAMP` | 输入 `i64` epoch millis |
-| `DateTime` | `DATETIME` | `DATETIME` | 支持微秒 |
-| `Json` | `JSON` | `JSON` | JSON 文本 |
-| `Enum` | `TEXT` | `VarChar` | Connector/C 按字符串绑定 |
-| `Set` | `TEXT` | `VarChar` | 逗号分隔字符串 |
-| `Geometry` | `GEOMETRY` | `String` | 直接写入时 payload 必须是 `4 字节小端 SRID + WKB` |
-| `Bit` | `BIT` | `BLOB` | 输入数值时转最小 big-endian 字节 |
-| `Blob/TinyBlob/MediumBlob/LongBlob` | `BLOB` | `BLOB` | 二进制 |
+| `Time` | `TIME` | `TIME` | Supports microseconds |
+| `Timestamp` | `TIMESTAMP` | `TIMESTAMP` | Input is `i64` epoch milliseconds |
+| `DateTime` | `DATETIME` | `DATETIME` | Supports microseconds |
+| `Json` | `JSON` | `JSON` | JSON text |
+| `Enum` | `TEXT` | `VarChar` | Connector/C binds it as a string |
+| `Set` | `TEXT` | `VarChar` | Comma-separated string |
+| `Geometry` | `GEOMETRY` | `String` | For direct writes, the payload must be `4-byte little-endian SRID + WKB` |
+| `Bit` | `BIT` | `BLOB` | Numeric input is converted to the shortest big-endian byte sequence |
+| `Blob/TinyBlob/MediumBlob/LongBlob` | `BLOB` | `BLOB` | Binary |
 
-### 5.2 空间类型
+### 5.2 Spatial Types
 
-直接写入 GEOMETRY 字段：
+To write directly to a GEOMETRY column:
 
 ```rust
 Value::Ext("Geometry", Box::new(Value::Binary(srid_and_wkb)))
 ```
 
-- `srid_and_wkb`：4 字节小端 SRID，后接 WKB。
-- 使用 SQL 函数时，可传纯 WKB：`ST_GeomFromWKB(?)`。
-- GEOMETRY 结果解码为 `Value::Ext("Geometry", Value::Binary(...))`。
-- 不要使用 MySQL 不接受的 wire type `0xff GEOMETRY` 绑定参数。
+- `srid_and_wkb`: a 4-byte little-endian SRID followed by WKB.
+- When using SQL functions, you can pass pure WKB: `ST_GeomFromWKB(?)`.
+- GEOMETRY results decode to `Value::Ext("Geometry", Value::Binary(...))`.
+- Do not bind parameters using MySQL's unsupported wire type `0xff GEOMETRY`.
 
 ### 5.3 BIT
 
-- `Value::Ext("Bit", U64(n))`：编码为最短 big-endian 字节序列。
-- 读取 `BIT` 结果：转换为 `Value::U64`。
-- `BIT` 参数 wire type 使用 `BLOB`，不能直接使用 MySQL `BIT` 参数类型。
+- `Value::Ext("Bit", U64(n))`: encoded as the shortest big-endian byte sequence.
+- Reading a `BIT` result converts it to `Value::U64`.
+- `BIT` parameters use the `BLOB` wire type; the MySQL `BIT` parameter type cannot be used directly.
 
 ## 6. PostgreSQL
 
-### 6.1 DDL 与参数类型
+### 6.1 DDL and Parameter Types
 
-| `Ext` | PostgreSQL 类型 |
+| `Ext` | PostgreSQL Type |
 |---|---|
 | `Uuid` | `UUID` |
 | `Decimal` / `Numeric` | `NUMERIC` |
@@ -168,158 +168,158 @@ Value::Ext("Geometry", Box::new(Value::Binary(srid_and_wkb)))
 | `Oid` | `OID` |
 | `Json` | `JSON` |
 | `Jsonb` | `JSONB` |
-| `Point/Lseg/Path/Box/Polygon/Line/Circle` | 对应几何类型 |
-| `Cidr/Inet/Macaddr/Macaddr8` | 对应网络类型 |
-| `Bit/Varbit` | 对应位串类型 |
+| `Point/Lseg/Path/Box/Polygon/Line/Circle` | Corresponding geometric type |
+| `Cidr/Inet/Macaddr/Macaddr8` | Corresponding network type |
+| `Bit/Varbit` | Corresponding bit-string type |
 | `Interval` | `INTERVAL` |
 | `Timetz` | `TIMETZ` |
-| `Int4Range/NumRange/TsRange/TstzRange/DateRange/Int8Range` | 对应 range 类型 |
+| `Int4Range/NumRange/TsRange/TstzRange/DateRange/Int8Range` | Corresponding range type |
 | `Money` | `MONEY` |
 | `Jsonpath` | `JSONPATH` |
-| `Hstore` | 扩展类型 `hstore` |
-| `TsVector` / `TsQuery` | 全文检索类型 |
+| `Hstore` | Extension type `hstore` |
+| `TsVector` / `TsQuery` | Full-text search types |
 
-### 6.2 数组规则
+### 6.2 Array Rules
 
-- `Value::Array` / `Value::Map` 固定按 JSON 参数绑定，通常对应 `JSON/JSONB`。
-- PostgreSQL 原生数组只作为“数据库返回结果”兼容解码。
-- 当前原生数组解码只支持一维数组，且下界必须为 1。
-- 不要把 `Value::Array` 当作 PostgreSQL 原生数组参数。
-- 类型层存在 `Vec<T>` 原生数组 codec，但动态 `Value` 绑定的正式语义仍是 JSON。
+- `Value::Array` / `Value::Map` are always bound as JSON parameters, usually corresponding to `JSON/JSONB`.
+- Native PostgreSQL arrays are decoded only as a compatibility feature for database results.
+- Current native array decoding supports only one-dimensional arrays, and the lower bound must be 1.
+- Do not treat `Value::Array` as a native PostgreSQL array parameter.
+- The type layer has a `Vec<T>` native array codec, but the formal semantics of dynamic `Value` binding remain JSON.
 
-### 6.3 range、enum、domain、composite、hstore
+### 6.3 range, enum, domain, composite, and hstore
 
-- range 结果使用文本结果解码为 `Value::Ext("XxxRange", Value::String(...))`。
-- 自定义 enum 解码为 `Value::String`。
-- enum 数组解码为 `Value::Array`，元素为字符串。
-- domain 通常按底层类型解码。
-- composite 结果可能为 `Value::Ext("Custom", Value::String(...))`。
-- 小型无类型自定义数组在无法解析类型 OID 时，会按通用 PostgreSQL 文本数组解析。
-- `Hstore` 输出 `Value::Ext("Hstore", Value::Map(...))`；输入支持 Map、`key=>value` 字符串或 binary。
+- Range results are decoded from text results into `Value::Ext("XxxRange", Value::String(...))`.
+- Custom enums decode to `Value::String`.
+- Enum arrays decode to `Value::Array` with string elements.
+- Domains are usually decoded according to their underlying type.
+- Composite results may be `Value::Ext("Custom", Value::String(...))`.
+- Small, untyped custom arrays are parsed as generic PostgreSQL text arrays when their type OID cannot be resolved.
+- `Hstore` outputs `Value::Ext("Hstore", Value::Map(...))`; input supports a Map, a `key=>value` string, or binary.
 
-### 6.4 OID 内部规则
+### 6.4 Internal OID Rules
 
-内部查询 `pg_type/pg_range/pg_enum` 必须使用：
+Internal queries against `pg_type/pg_range/pg_enum` must use:
 
 ```rust
 Value::Ext("Oid", Box::new(Value::U32(oid)))
 ```
 
-不能使用 `oid.0.into()`，因为 `U32` 的公开绑定规则是 `INT8`，与 PostgreSQL `oid` 比较会产生类型错误。
+Do not use `oid.0.into()`, because the public binding rule for `U32` is `INT8`, which causes a type error when compared with PostgreSQL `oid`.
 
-### 6.5 文本结果格式
+### 6.5 Text Result Format
 
-以下类型会请求 PostgreSQL 文本结果，避免暴露不可解析协议二进制：
+The following types request text results from PostgreSQL to avoid exposing unparsable protocol binary data:
 
 - `tsvector`
 - `tsquery`
 - range
 - enum/composite
-- hstore 及 hstore 数组
-- range/custom 数组
+- hstore and hstore arrays
+- range/custom arrays
 
-普通标量和内置数组继续使用 binary 结果格式。
+Ordinary scalars and built-in arrays continue to use the binary result format.
 
 ## 7. SQL Server
 
-| `Ext` | DDL 类型 | 绑定/说明 |
+| `Ext` | DDL Type | Binding/Notes |
 |---|---|---|
 | `Date` | `DATE` | `chrono::NaiveDate` |
 | `DateTime` | `DATETIME2` | `chrono::NaiveDateTime` |
 | `Time` | `TIME` | `chrono::NaiveTime` |
 | `DateTimeOffset` | `DATETIMEOFFSET` | `chrono::DateTime<FixedOffset>` |
 | `Decimal` | `DECIMAL` | `BigDecimal` |
-| `Timestamp` | `BIGINT` | epoch millis，不是 ROWVERSION |
-| `Uuid` | `UNIQUEIDENTIFIER` | 非法 UUID 报错 |
-| `Json/Jsonb` | `NVARCHAR(MAX)` | JSON 文本 |
-| `Xml` | `XML` | XML 文本 |
-| `Geometry` | `GEOMETRY` | WKB 字节 |
-| `Geography` | `GEOGRAPHY` | WKB 字节 |
+| `Timestamp` | `BIGINT` | Epoch milliseconds, not ROWVERSION |
+| `Uuid` | `UNIQUEIDENTIFIER` | Invalid UUIDs produce an error |
+| `Json/Jsonb` | `NVARCHAR(MAX)` | JSON text |
+| `Xml` | `XML` | XML text |
+| `Geometry` | `GEOMETRY` | WKB bytes |
+| `Geography` | `GEOGRAPHY` | WKB bytes |
 
-### 空间类型绑定
+### Spatial Type Binding
 
-SQL Server 推荐通过函数绑定 WKB：
+SQL Server recommends binding WKB through functions:
 
 ```sql
 geometry::STGeomFromWKB(@P1, 4326)
 geography::STGeomFromWKB(@P1, 4326)
 ```
 
-`Value::Ext("Geometry"/"Geography", Value::Binary(wkb))` 绑定为 `VARBINARY`。不要假定 SQL Server 内部 CLR 空间序列化格式与 WKB 相同。
+`Value::Ext("Geometry"/"Geography", Value::Binary(wkb))` binds as `VARBINARY`. Do not assume that SQL Server's internal CLR spatial serialization format is the same as WKB.
 
 ## 8. SQLite
 
-SQLite 使用动态存储类型；`column_type` 是声明类型建议，实际解码按存储类别进行。
+SQLite uses dynamic storage types; `column_type` is the recommended declared type, while actual decoding is based on the storage class.
 
-| `Ext` | DDL 类型 | 存储/解码 |
+| `Ext` | DDL Type | Storage/Decoding |
 |---|---|---|
-| `Date` | `TEXT` | 文本 |
-| `DateTime` | `TEXT` | 文本 |
-| `Time` | `TEXT` | 文本 |
-| `Timestamp` | `INTEGER` | epoch millis `i64` |
-| `Decimal` | `NUMERIC` | 文本表示，解码为字符串 |
-| `Json` | `TEXT` | JSON 文本 |
-| `Uuid` | `TEXT` | UUID 文本 |
+| `Date` | `TEXT` | Text |
+| `DateTime` | `TEXT` | Text |
+| `Time` | `TEXT` | Text |
+| `Timestamp` | `INTEGER` | epoch milliseconds as `i64` |
+| `Decimal` | `NUMERIC` | Text representation, decoded as a string |
+| `Json` | `TEXT` | JSON text |
+| `Uuid` | `TEXT` | UUID text |
 
-规则：
+Rules:
 
-- `Array/Map` → JSON TEXT。
-- 实际 INTEGER → `Value::I64`。
-- 实际 REAL → `Value::F64`。
-- 实际 TEXT → `Value::String`；JSON 形状文本会自动尝试解析为结构化 Value。
-- 实际 BLOB → `Value::Binary`。
-- `U64 > i64::MAX` 编码报错。
-- 未知 `Ext` 不得绑定成 NULL。
+- `Array/Map` -> JSON TEXT.
+- Actual INTEGER -> `Value::I64`.
+- Actual REAL -> `Value::F64`.
+- Actual TEXT -> `Value::String`; text with a JSON shape is automatically parsed into a structured Value.
+- Actual BLOB -> `Value::Binary`.
+- Encoding reports an error when `U64 > i64::MAX`.
+- Unknown `Ext` values must not be bound as NULL.
 
 ## 9. Turso/libSQL
 
-Turso 基于 libSQL，规则与 SQLite 接近，但 JSON 检测默认关闭。
+Turso is based on libSQL and has rules similar to SQLite, but JSON detection is disabled by default.
 
-| `Ext` | DDL 类型 | 存储/解码 |
+| `Ext` | DDL Type | Storage/Decoding |
 |---|---|---|
-| `Date/DateTime/Time` | `TEXT` | 文本 |
-| `Timestamp` | `INTEGER` | epoch millis `i64` |
-| `Decimal` | `TEXT` | 文本 |
-| `Json` | `TEXT` | 原样 JSON 文本 |
-| `Uuid` | `TEXT` | UUID 文本 |
+| `Date/DateTime/Time` | `TEXT` | Text |
+| `Timestamp` | `INTEGER` | epoch milliseconds as `i64` |
+| `Decimal` | `TEXT` | Text |
+| `Json` | `TEXT` | JSON text as-is |
+| `Uuid` | `TEXT` | UUID text |
 
-规则：
+Rules:
 
-- `Array/Map` → JSON TEXT。
-- `Ext("Json", String)` → TEXT，不加额外引号。
-- `Ext("Json", Binary)` → BLOB；普通 JSON 推荐 String 或 Array/Map。
-- `json_detect=true` 时 JSON 形状 TEXT 解码为结构化 Value；默认关闭。
-- `U64 > i64::MAX` 直接报错。
-- 本地内存库和本地文件库均属于本地模式，不需要 Docker。
+- `Array/Map` -> JSON TEXT.
+- `Ext("Json", String)` -> TEXT without adding extra quotes.
+- `Ext("Json", Binary)` -> BLOB; String or Array/Map is recommended for ordinary JSON.
+- When `json_detect=true`, TEXT with a JSON shape is decoded into a structured Value; this is disabled by default.
+- `U64 > i64::MAX` produces an error.
+- Both local in-memory and local file databases use local mode and do not require Docker.
 
 ## 10. DuckDB
 
-| `Ext` | DDL 类型 | 绑定/解码 |
+| `Ext` | DDL Type | Binding/Decoding |
 |---|---|---|
 | `Date` | `DATE` | `Value::Ext("Date", String)` |
-| `DateTime` | `TIMESTAMP` | 根据参数类型绑定 timestamp/timestamptz |
-| `Time` | `TIME` | 时间 |
-| `Timestamp` | `BIGINT` | epoch millis |
-| `Decimal` | `DECIMAL` | 十进制字符串 |
-| `Json` | `VARCHAR` | JSON 文本 |
-| `Uuid` | `UUID` | 32 位十六进制 UUID 转 `u128` |
-| `Bit` | `BIT` | DuckDB padding bitstring 格式 |
-| `Enum` | 数据库 enum | 按 enum dictionary index 绑定 |
+| `DateTime` | `TIMESTAMP` | Binds timestamp/timestamptz according to the parameter type |
+| `Time` | `TIME` | Time |
+| `Timestamp` | `BIGINT` | epoch milliseconds |
+| `Decimal` | `DECIMAL` | Decimal string |
+| `Json` | `VARCHAR` | JSON text |
+| `Uuid` | `UUID` | 32-character hexadecimal UUID converted to `u128` |
+| `Bit` | `BIT` | DuckDB padding bitstring format |
+| `Enum` | Database enum | Bound by enum dictionary index |
 | `HugeInt` | `HUGEINT` | `i128` |
 | `UHugeInt` | `UHUGEINT` | `u128` |
 
-规则：
+Rules:
 
-- `Array/Map` → JSON VARCHAR。
-- UUID 结果解码为 `Value::Ext("Uuid", String)`。
-- BIT 结果解码为 `Value::Ext("Bit", String)`，例如 `"101"`。
-- `TIMESTAMPTZ` 解码为 `Value::Ext("DateTime", String)`。
-- `Ext("TimestampTz")` 是兼容入口，内部使用 `DateTime`。
-- DuckDB 的 LIST/STRUCT/MAP/ARRAY/UNION 解码受 C API 版本影响；可能得到结构化 Value、字符串或 NULL，不能承诺跨版本完全一致。
+- `Array/Map` -> JSON VARCHAR.
+- UUID results decode to `Value::Ext("Uuid", String)`.
+- BIT results decode to `Value::Ext("Bit", String)`, for example `"101"`.
+- `TIMESTAMPTZ` decodes to `Value::Ext("DateTime", String)`.
+- `Ext("TimestampTz")` is a compatibility entry point and uses `DateTime` internally.
+- DuckDB LIST/STRUCT/MAP/ARRAY/UNION decoding depends on the C API version; it may produce a structured Value, a string, or NULL, and full consistency across versions cannot be guaranteed.
 
-## 11. 结果解码关键映射
+## 11. Key Result Decoding Mappings
 
-| 数据库结果 | RBDC Value |
+| Database Result | RBDC Value |
 |---|---|
 | MySQL unsigned TINY/SHORT/INT | `U32` |
 | MySQL unsigned BIGINT | `U64` |
@@ -329,7 +329,7 @@ Turso 基于 libSQL，规则与 SQLite 接近，但 JSON 检测默认关闭。
 | PostgreSQL INT4 | `I32` |
 | PostgreSQL INT8 | `I64` |
 | PostgreSQL OID | `Ext("Oid", U32)` |
-| PostgreSQL JSON/JSONB | 结构化 Value |
+| PostgreSQL JSON/JSONB | Structured Value |
 | PostgreSQL range | `Ext("XxxRange", String)` |
 | PostgreSQL enum | `String` |
 | PostgreSQL hstore | `Ext("Hstore", Map)` |
@@ -338,43 +338,43 @@ Turso 基于 libSQL，规则与 SQLite 接近，但 JSON 检测默认关闭。
 | SQL Server DATETIME/DATETIME2/DATETIMEOFFSET | `Ext("DateTime", String)` |
 | SQLite/Turso INTEGER | `I64` |
 | SQLite/Turso REAL | `F64` |
-| SQLite/Turso TEXT | `String` 或 JSON 结构 |
+| SQLite/Turso TEXT | `String` or a structured JSON value |
 | SQLite/Turso BLOB | `Binary` |
 
-## 12. 修改类型映射的检查清单
+## 12. Checklist for Changing Type Mappings
 
-1. 查数据库官方协议/驱动源码，确认 wire type、字节序、长度前缀和格式。
-2. 先确定固定的 `Value -> SQL` 映射；禁止按数值大小改变目标 SQL 类型。
-3. 同步修改：
+1. Consult the official database protocol/driver source to confirm the wire type, byte order, length prefix, and format.
+2. First define a fixed `Value -> SQL` mapping; do not change the target SQL type based on numeric magnitude.
+3. Update all of the following together:
    - `Driver::column_type`
    - `TypeInfo for Value`
    - `Encode`
    - `Decode`
-   - `Ext` 分支
-   - serde `Deserialize`（如需要）
-4. 加测试：
-   - 最小值、最大值、越界错误
+   - `Ext` branches
+   - serde `Deserialize` (if required)
+4. Add tests:
+   - Minimum and maximum values, and out-of-range errors
    - NULL
-   - 空值/空数组/空字符串
-   - 实际数据库往返
-   - `TypeInfo` serde roundtrip
-5. Docker/本地真实数据库验证：
-   - MySQL、PostgreSQL、SQL Server：Docker
-   - SQLite、Turso、DuckDB：本地库直接测试
-6. 更新 `docs/types.md`。
-7. 修改受影响 crate 的 `Cargo.toml` 第三位版本号。
-8. 全量运行 `cargo test --workspace -- --test-threads=1`。
-9. 临时 `example` 测试代码必须回滚后再提交。
+   - Empty values/empty arrays/empty strings
+   - Round trips against a real database
+   - `TypeInfo` serde round trip
+5. Verify against real databases using Docker or local instances:
+   - MySQL, PostgreSQL, SQL Server: Docker
+   - SQLite, Turso, DuckDB: test directly against local databases
+6. Update `docs/types.md`.
+7. Increment the third version component in the `Cargo.toml` of each affected crate.
+8. Run the full suite: `cargo test --workspace -- --test-threads=1`.
+9. Temporary `example` test code must be reverted before committing.
 
-## 13. 不可重复的历史错误
+## 13. Historical Mistakes That Must Not Be Repeated
 
-- 不得把 `Datetime` 作为规范名称，统一使用 `DateTime`。
-- 不得让同一 `U32/U64` 根据值大小在 `INT4/INT8/NUMERIC` 间漂移。
-- 不得将 `u64` 越界静默降级为字符串。
-- 不得把非法 Decimal/Year/UUID/Timestamp 静默写成 0/空串/NULL。
-- 不得让未知 `Ext` 静默绑定 NULL。
-- 不得用 `oid.0.into()` 处理 PostgreSQL OID 参数。
-- 不得把 `Value::Array/Map` 改为数据库原生数组绑定；它们必须保持 JSON 语义。
-- 不得把 MySQL GEOMETRY 参数声明为不可绑定的 wire type。
-- 不得把 SQL Server WKB 当作内部 CLR 空间序列化格式。
-- 不得只改绑定而漏掉解码、DDL、serde 或测试。
+- Do not use `Datetime` as the canonical name; always use `DateTime`.
+- Do not let the same `U32/U64` drift among `INT4/INT8/NUMERIC` based on value magnitude.
+- Do not silently downgrade an out-of-range `u64` to a string.
+- Do not silently write invalid Decimal/Year/UUID/Timestamp values as 0, an empty string, or NULL.
+- Do not silently bind an unknown `Ext` as NULL.
+- Do not use `oid.0.into()` to handle PostgreSQL OID parameters.
+- Do not change `Value::Array/Map` to native database array binding; they must retain JSON semantics.
+- Do not declare MySQL GEOMETRY parameters using an unbindable wire type.
+- Do not treat SQL Server WKB as the internal CLR spatial serialization format.
+- Do not change only the binding and omit decoding, DDL, serde, or tests.

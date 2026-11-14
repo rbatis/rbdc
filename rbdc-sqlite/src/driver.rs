@@ -63,9 +63,9 @@ impl Driver for SqliteDriver {
                 "Time" => "TEXT",
                 "Timestamp" => "INTEGER",
                 "Decimal" => "NUMERIC",
-                "Json" => "BLOB",
+                "Json" => "TEXT",
                 "Uuid" => "TEXT",
-                _ => "NULL",
+                _ => "TEXT",
             },
         }
         .to_string()

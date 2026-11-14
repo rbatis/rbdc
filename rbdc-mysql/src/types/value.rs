@@ -61,7 +61,7 @@ impl TypeInfo for Value {
                     "Blob" | "TinyBlob" | "MediumBlob" | "LongBlob" => {
                         MySqlTypeInfo::from_type(ColumnType::Blob)
                     }
-                    _ => MySqlTypeInfo::null(),
+                    _ => MySqlTypeInfo::from_type(ColumnType::VarChar),
                 }
             }
         }
@@ -115,15 +115,22 @@ impl Encode for Value {
             Value::Ext(ext_type, v) => {
                 match ext_type {
                     "Uuid" => {
-                        //uuid -> string
-                        Uuid(v.into_string().unwrap_or_default()).encode(buf)
+                        let text = v
+                            .into_string()
+                            .ok_or_else(|| Error::from("invalid Uuid value"))?;
+                        Uuid(text).encode(buf)
                     }
                     //decimal = 12345678
-                    "Decimal" => Decimal::from_str(v.as_str().unwrap_or_default())
-                        .unwrap_or_default()
-                        .encode(buf),
+                    "Decimal" => {
+                        let text = v
+                            .into_string()
+                            .ok_or_else(|| Error::from("invalid Decimal value"))?;
+                        Decimal::from_str(&text)
+                            .map_err(|e| Error::from(e.to_string()))?
+                            .encode(buf)
+                    }
                     //year = "1993"
-                    "Year" => Year(v.as_u64().unwrap_or_default() as u16).encode(buf),
+                    "Year" => Year(parse_year(&v)?).encode(buf),
                     //Date = "1993-02-06"
                     "Date" => Date(
                         fastdate::Date::from_str(&v.into_string().unwrap_or_default())
@@ -137,26 +144,110 @@ impl Encode for Value {
                     )
                     .encode(buf),
                     //RFC3339 = "2006-01-02 15:04:05.999999"
-                    "Timestamp" => Timestamp(v.as_i64().unwrap_or_default()).encode(buf),
+                    "Timestamp" => Timestamp(parse_i64(&v, "Timestamp")?).encode(buf),
                     "DateTime" => DateTime(
-                        fastdate::DateTime::from_str(&v.into_string().unwrap_or_default())
-                            .map_err(|e| Error::from(e.to_string()))?,
+                        fastdate::DateTime::from_str(
+                            &v.into_string()
+                                .ok_or_else(|| Error::from("invalid DateTime value"))?,
+                        )
+                        .map_err(|e| Error::from(e.to_string()))?,
                     )
                     .encode(buf),
                     "Json" => {
-                        let json_str = v.into_string().unwrap_or_default();
+                        let json_str = match *v {
+                            Value::String(text) => text,
+                            Value::Binary(bytes) => String::from_utf8(bytes).map_err(|e| {
+                                Error::from(format!("invalid Json UTF-8: {e}"))
+                            })?,
+                            other => other.to_string(),
+                        };
                         Json(json_str).encode(buf)
                     }
-                    "Enum" => Enum(v.into_string().unwrap_or_default()).encode(buf),
-                    "Set" => Set(v.into_string().unwrap_or_default()).encode(buf),
+                    "Enum" => Enum(
+                        v.into_string()
+                            .ok_or_else(|| Error::from("invalid Enum value"))?,
+                    )
+                    .encode(buf),
+                    "Set" => Set(
+                        v.into_string()
+                            .ok_or_else(|| Error::from("invalid Set value"))?,
+                    )
+                    .encode(buf),
+                    "Geometry" => {
+                        let bytes = match *v {
+                            Value::Binary(bytes) => bytes,
+                            _ => return Err(Error::from("invalid Geometry value")),
+                        };
+                        buf.put_bytes_lenenc(bytes);
+                        Ok(0)
+                    }
+                    "Bit" => encode_bit(v, buf),
                     _ => {
-                        buf.put_bytes_lenenc(v.into_bytes().unwrap_or_default());
+                        let bytes = v.into_bytes().unwrap_or_default();
+                        buf.put_bytes_lenenc(bytes);
                         Ok(0)
                     }
                 }
             }
         }
     }
+}
+
+fn parse_year(value: &Value) -> Result<u16, Error> {
+    match value {
+        Value::I32(v) => u16::try_from(*v)
+            .map_err(|_| Error::from(format!("invalid Year value: {v}"))),
+        Value::I64(v) => u16::try_from(*v)
+            .map_err(|_| Error::from(format!("invalid Year value: {v}"))),
+        Value::U32(v) => u16::try_from(*v)
+            .map_err(|_| Error::from(format!("invalid Year value: {v}"))),
+        Value::U64(v) => u16::try_from(*v)
+            .map_err(|_| Error::from(format!("invalid Year value: {v}"))),
+        Value::String(v) => v
+            .parse::<u16>()
+            .map_err(|e| Error::from(format!("invalid Year value {v:?}: {e}"))),
+        other => Err(Error::from(format!("invalid Year value: {other:?}"))),
+    }
+}
+
+fn parse_i64(value: &Value, type_name: &str) -> Result<i64, Error> {
+    match value {
+        Value::I32(v) => Ok(*v as i64),
+        Value::I64(v) => Ok(*v),
+        Value::U32(v) => Ok(*v as i64),
+        Value::U64(v) => i64::try_from(*v)
+            .map_err(|_| Error::from(format!("{type_name} value {v} exceeds i64 range"))),
+        Value::String(v) => v
+            .parse::<i64>()
+            .map_err(|e| Error::from(format!("invalid {type_name} value {v:?}: {e}"))),
+        other => Err(Error::from(format!("invalid {type_name} value: {other:?}"))),
+    }
+}
+
+fn encode_bit(value: Box<Value>, buf: &mut Vec<u8>) -> Result<usize, Error> {
+    let bits = match *value {
+        Value::U64(v) => v,
+        Value::U32(v) => v as u64,
+        Value::I64(v) => u64::try_from(v)
+            .map_err(|_| Error::from("invalid negative Bit value"))?,
+        Value::I32(v) => u64::try_from(v)
+            .map_err(|_| Error::from("invalid negative Bit value"))?,
+        Value::String(v) => v
+            .parse::<u64>()
+            .map_err(|e| Error::from(format!("invalid Bit value {v:?}: {e}")))?,
+        Value::Binary(bytes) => {
+            buf.put_bytes_lenenc(bytes);
+            return Ok(0);
+        }
+        other => return Err(Error::from(format!("invalid Bit value: {other:?}"))),
+    };
+    let bytes = bits.to_be_bytes();
+    let first = bytes
+        .iter()
+        .position(|byte| *byte != 0)
+        .unwrap_or(bytes.len() - 1);
+    buf.put_bytes_lenenc(bytes[first..].to_vec());
+    Ok(0)
 }
 
 impl Decode for Value {

@@ -28,11 +28,15 @@ impl Encode for Value {
                 Ok(())
             }
             Value::U32(v) => {
-                q.bind(v as i32);
+                q.bind(i32::try_from(v).map_err(|_| {
+                    Error::from(format!("u32 value {v} exceeds SQL Server INT range"))
+                })?);
                 Ok(())
             }
             Value::U64(v) => {
-                q.bind(v as i64);
+                q.bind(i64::try_from(v).map_err(|_| {
+                    Error::from(format!("u64 value {v} exceeds SQL Server BIGINT range"))
+                })?);
                 Ok(())
             }
             Value::F32(v) => {
@@ -98,7 +102,10 @@ impl Encode for Value {
                         Ok(())
                     }
                     "Timestamp" => {
-                        q.bind(v.as_i64().unwrap_or_default());
+                        q.bind(
+                            v.as_i64()
+                                .ok_or_else(|| Error::from("invalid Timestamp value"))?,
+                        );
                         Ok(())
                     }
                     "Uuid" => {

@@ -810,6 +810,25 @@ fn array_encode_codec() {
     assert_eq!(&encoded[32..36], &2i32.to_be_bytes());
 }
 
+
+#[test]
+fn unsigned_values_do_not_wrap_in_postgres_types() {
+    assert_eq!(
+        encode(Value::U32(i32::MAX as u32 + 1)),
+        (i32::MAX as i64 + 1).to_be_bytes().to_vec()
+    );
+    let encoded = encode(Value::U64(i64::MAX as u64 + 1));
+    assert_eq!(
+        BigDecimal::decode(binary_ref(&encoded, PgType::Numeric)).unwrap(),
+        BigDecimal::from(i64::MAX as u64 + 1)
+    );
+
+    assert!(u32::decode(binary_ref(&(u32::MAX as u64 + 1).to_be_bytes(), PgType::Int8)).is_err());
+    assert!(i32::decode(binary_ref(&(i32::MAX as i64 + 1).to_be_bytes(), PgType::Int8)).is_err());
+    assert!(u16::decode(binary_ref(&(u16::MAX as u32 + 1).to_be_bytes(), PgType::Int4)).is_err());
+    assert!(i16::decode(binary_ref(&(i16::MAX as i32 + 1).to_be_bytes(), PgType::Int4)).is_err());
+}
+
 #[test]
 fn value_type_info_matches_driver_types() {
     let cases = [
@@ -818,7 +837,11 @@ fn value_type_info_matches_driver_types() {
         (Value::I32(1), PgTypeInfo(PgType::Int4)),
         (Value::I64(1), PgTypeInfo(PgType::Int8)),
         (Value::U32(1), PgTypeInfo(PgType::Int4)),
+        (Value::U32(i32::MAX as u32), PgTypeInfo(PgType::Int4)),
+        (Value::U32(i32::MAX as u32 + 1), PgTypeInfo(PgType::Int8)),
         (Value::U64(1), PgTypeInfo(PgType::Int8)),
+        (Value::U64(i64::MAX as u64), PgTypeInfo(PgType::Int8)),
+        (Value::U64(i64::MAX as u64 + 1), PgTypeInfo(PgType::Numeric)),
         (Value::F32(1.0), PgTypeInfo(PgType::Float4)),
         (Value::F64(1.0), PgTypeInfo(PgType::Float8)),
         (Value::String("x".into()), PgTypeInfo(PgType::Varchar)),

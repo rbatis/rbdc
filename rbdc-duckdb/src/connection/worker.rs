@@ -1,5 +1,6 @@
 use std::ffi::{CStr, CString};
 use std::ptr;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -457,13 +458,37 @@ mod execute {
                 }
             }
             DuckDbArgumentValue::UHugeInt(v) => {
-                if let Ok(cstr) = CString::new(v.to_string()) {
-                    let mut value = unsafe { libduckdb_sys::duckdb_create_varchar(cstr.as_ptr()) };
-                    unsafe {
-                        libduckdb_sys::duckdb_bind_value(stmt, idx, value);
-                        libduckdb_sys::duckdb_destroy_value(&mut value);
-                    }
-                }
+                let value = unsafe {
+                    libduckdb_sys::duckdb_create_uhugeint(libduckdb_sys::duckdb_uhugeint {
+                        lower: *v as u64,
+                        upper: (*v >> 64) as u64,
+                    })
+                };
+                bind_created_value(stmt, idx, value);
+            }
+            DuckDbArgumentValue::Uuid(v) => {
+                let value = unsafe {
+                    libduckdb_sys::duckdb_create_uuid(libduckdb_sys::duckdb_uhugeint {
+                        lower: *v as u64,
+                        upper: (*v >> 64) as u64,
+                    })
+                };
+                bind_created_value(stmt, idx, value);
+            }
+            DuckDbArgumentValue::Bit(v) => {
+                let value = unsafe {
+                    libduckdb_sys::duckdb_create_bit(libduckdb_sys::duckdb_bit {
+                        data: v.as_ptr() as *mut u8,
+                        size: v.len() as u64,
+                    })
+                };
+                bind_created_value(stmt, idx, value);
+            }
+            DuckDbArgumentValue::DateTime(v) => {
+                bind_datetime_value(stmt, idx, v);
+            }
+            DuckDbArgumentValue::Enum(v) => {
+                bind_enum_value(stmt, idx, v);
             }
             DuckDbArgumentValue::Float(v) => unsafe {
                 libduckdb_sys::duckdb_bind_float(stmt, idx, *v);
@@ -472,13 +497,7 @@ mod execute {
                 libduckdb_sys::duckdb_bind_double(stmt, idx, *v);
             },
             DuckDbArgumentValue::Text(v) => {
-                if let Ok(cstr) = CString::new(v.as_str()) {
-                    let mut value = unsafe { libduckdb_sys::duckdb_create_varchar(cstr.as_ptr()) };
-                    unsafe {
-                        libduckdb_sys::duckdb_bind_value(stmt, idx, value);
-                        libduckdb_sys::duckdb_destroy_value(&mut value);
-                    }
-                }
+                bind_text_value(stmt, idx, v);
             }
             DuckDbArgumentValue::Blob(v) => unsafe {
                 libduckdb_sys::duckdb_bind_blob(
@@ -489,5 +508,101 @@ mod execute {
                 );
             },
         }
+    }
+
+    fn bind_created_value(
+        stmt: libduckdb_sys::duckdb_prepared_statement,
+        idx: u64,
+        value: libduckdb_sys::duckdb_value,
+    ) {
+        if !value.is_null() {
+            unsafe {
+                libduckdb_sys::duckdb_bind_value(stmt, idx, value);
+            }
+        }
+    }
+
+    fn bind_text_value(
+        stmt: libduckdb_sys::duckdb_prepared_statement,
+        idx: u64,
+        text: &str,
+    ) {
+        if let Ok(cstr) = CString::new(text) {
+            let value = unsafe { libduckdb_sys::duckdb_create_varchar(cstr.as_ptr()) };
+            bind_created_value(stmt, idx, value);
+        }
+    }
+
+    fn bind_datetime_value(
+        stmt: libduckdb_sys::duckdb_prepared_statement,
+        idx: u64,
+        text: &str,
+    ) {
+        let param_type = unsafe { libduckdb_sys::duckdb_param_type(stmt, idx) };
+        let value = if let Ok(parsed) = fastdate::DateTime::from_str(text) {
+            let timestamp = libduckdb_sys::duckdb_timestamp {
+                micros: parsed.unix_timestamp_micros(),
+            };
+            match param_type {
+                libduckdb_sys::DUCKDB_TYPE_DUCKDB_TYPE_TIMESTAMP_TZ => unsafe {
+                    libduckdb_sys::duckdb_create_timestamp_tz(timestamp)
+                },
+                libduckdb_sys::DUCKDB_TYPE_DUCKDB_TYPE_TIMESTAMP => unsafe {
+                    libduckdb_sys::duckdb_create_timestamp(timestamp)
+                },
+                _ => std::ptr::null_mut(),
+            }
+        } else {
+            std::ptr::null_mut()
+        };
+        if value.is_null() {
+            bind_text_value(stmt, idx, text);
+        } else {
+            bind_created_value(stmt, idx, value);
+        }
+    }
+
+    fn bind_enum_value(
+        stmt: libduckdb_sys::duckdb_prepared_statement,
+        idx: u64,
+        value: &str,
+    ) {
+        let mut logical_type = unsafe { libduckdb_sys::duckdb_param_logical_type(stmt, idx) };
+        if logical_type.is_null() {
+            bind_text_value(stmt, idx, value);
+            return;
+        }
+        if unsafe { libduckdb_sys::duckdb_get_type_id(logical_type) }
+            != libduckdb_sys::DUCKDB_TYPE_DUCKDB_TYPE_ENUM
+        {
+            unsafe { libduckdb_sys::duckdb_destroy_logical_type(&mut logical_type) };
+            bind_text_value(stmt, idx, value);
+            return;
+        }
+
+        let count = unsafe { libduckdb_sys::duckdb_enum_dictionary_size(logical_type) };
+        let mut enum_index = None;
+        for i in 0..count {
+            let ptr = unsafe { libduckdb_sys::duckdb_enum_dictionary_value(logical_type, i as u64) };
+            if ptr.is_null() {
+                continue;
+            }
+            let candidate = unsafe { CStr::from_ptr(ptr) }
+                .to_string_lossy()
+                .into_owned();
+            unsafe { libduckdb_sys::duckdb_free(ptr as *mut std::ffi::c_void) };
+            if candidate == value {
+                enum_index = Some(i as u64);
+                break;
+            }
+        }
+
+        if let Some(index) = enum_index {
+            let value = unsafe { libduckdb_sys::duckdb_create_enum_value(logical_type, index) };
+            bind_created_value(stmt, idx, value);
+        } else {
+            bind_text_value(stmt, idx, value);
+        }
+        unsafe { libduckdb_sys::duckdb_destroy_logical_type(&mut logical_type) };
     }
 }

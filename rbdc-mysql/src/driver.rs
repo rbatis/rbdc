@@ -66,7 +66,9 @@ impl Driver for MysqlDriver {
                 "Json" => "JSON",
                 "Enum" => "TEXT",
                 "Set" => "TEXT",
-                _ => "NULL",
+                "Geometry" => "GEOMETRY",
+                "Bit" => "BIT",
+                _ => "TEXT",
             },
         }
         .to_string()

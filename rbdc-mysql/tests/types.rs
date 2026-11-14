@@ -131,7 +131,7 @@ fn test_type_info_for_value_variants() {
         ),
         (
             Value::Ext("Nope", Box::new(Value::I32(1))),
-            ColumnType::Null,
+            ColumnType::VarChar,
         ),
     ];
     for (value, expected) in cases {
@@ -437,11 +437,10 @@ fn test_value_encode_ext_types() {
         encode(Value::Ext("Uuid", Box::new(Value::String("abc".into())))),
         (3, vec![3, b'a', b'b', b'c'])
     );
-    // Non-string UUIDs become the empty string.
-    assert_eq!(
-        encode(Value::Ext("Uuid", Box::new(Value::I32(1)))),
-        (0, vec![0])
-    );
+    // Non-string UUIDs are rejected.
+    assert!(Value::Ext("Uuid", Box::new(Value::I32(1)))
+        .encode(&mut Vec::new())
+        .is_err());
 
     let (n, buf) = encode(Value::Ext(
         "Decimal",
@@ -449,22 +448,22 @@ fn test_value_encode_ext_types() {
     ));
     assert_eq!(n, 5);
     assert_eq!(buf, b"\x0512.34".to_vec());
-    // Invalid decimals fall back to the zero decimal.
-    let (_, buf) = encode(Value::Ext(
-        "Decimal",
-        Box::new(Value::String("nope".into())),
-    ));
-    assert!(!buf.is_empty());
+    // Invalid decimals are rejected instead of becoming zero.
+    assert!(Value::Ext("Decimal", Box::new(Value::String("nope".into())))
+        .encode(&mut Vec::new())
+        .is_err());
 
     assert_eq!(
         encode(Value::Ext("Year", Box::new(Value::U64(2024)))),
         (2, vec![0xE8, 0x07])
     );
-    // Non-numeric years fall back to zero.
     assert_eq!(
-        encode(Value::Ext("Year", Box::new(Value::String("x".into())))),
-        (2, vec![0, 0])
+        encode(Value::Ext("Year", Box::new(Value::String("2024".into())))),
+        (2, vec![0xE8, 0x07])
     );
+    assert!(Value::Ext("Year", Box::new(Value::String("x".into())))
+        .encode(&mut Vec::new())
+        .is_err());
 
     let (_, buf) = encode(Value::Ext(
         "Date",
@@ -481,6 +480,9 @@ fn test_value_encode_ext_types() {
 
     let (_, buf) = encode(Value::Ext("Timestamp", Box::new(Value::U64(0))));
     assert!(!buf.is_empty());
+    assert!(Value::Ext("Timestamp", Box::new(Value::String("not-a-number".into())))
+        .encode(&mut Vec::new())
+        .is_err());
 
     let (_, buf) = encode(Value::Ext(
         "DateTime",
@@ -501,6 +503,14 @@ fn test_value_encode_ext_types() {
     assert_eq!(
         encode(Value::Ext("Set", Box::new(Value::String("a,b".into())))),
         (3, vec![3, b'a', b',', b'b'])
+    );
+    assert_eq!(
+        encode(Value::Ext("Bit", Box::new(Value::U64(0x0102)))),
+        (0, vec![2, 0x01, 0x02])
+    );
+    assert_eq!(
+        encode(Value::Ext("Geometry", Box::new(Value::Binary(vec![1, 2])))),
+        (0, vec![2, 1, 2])
     );
     assert_eq!(
         encode(Value::Ext("Custom", Box::new(Value::String("xy".into())))),

@@ -266,10 +266,31 @@ fn test_value_encode_variants() {
         assert!(matches!(is_null, IsNull::No));
     }
 
-    // Unknown extension values encode as SQL NULL.
-    let (args, is_null) = encode(Value::Ext("Unknown", Box::new(Value::Null)));
+    let mut args = Vec::new();
+    assert!(Value::U32(u32::MAX).encode(&mut args).is_ok());
+    assert!(matches!(args.as_slice(), [SqliteArgumentValue::Int64(v)] if *v == u32::MAX as i64));
+
+    let mut args = Vec::new();
+    assert!(Value::U64(u64::MAX).encode(&mut args).is_err());
     assert!(args.is_empty());
-    assert!(matches!(is_null, IsNull::Yes));
+
+    let mut args = Vec::new();
+    assert!(Value::Ext("Timestamp", Box::new(Value::String("not-a-number".into())))
+        .encode(&mut args)
+        .is_err());
+    assert!(args.is_empty());
+
+    let mut args = Vec::new();
+    assert!(Value::Ext("Unknown", Box::new(Value::Null))
+        .encode(&mut args)
+        .is_err());
+    assert!(args.is_empty());
+
+    let mut args = Vec::new();
+    Value::Ext("Json", Box::new(Value::String("{\"a\":1}".into())))
+        .encode(&mut args)
+        .unwrap();
+    assert!(matches!(args.as_slice(), [SqliteArgumentValue::Text(v)] if v == "{\"a\":1}"));
 }
 
 #[test]
@@ -351,15 +372,18 @@ fn test_value_type_info_and_is_json_string() {
     );
     assert_eq!(
         Value::Ext("Json", Box::new(Value::Null)).type_info().name(),
-        "BLOB"
+        "TEXT"
     );
     assert_eq!(
         Value::Ext("Uuid", Box::new(Value::Null)).type_info().name(),
         "TEXT"
     );
-    assert!(Value::Ext("Unknown", Box::new(Value::Null))
-        .type_info()
-        .is_null());
+    assert_eq!(
+        Value::Ext("Unknown", Box::new(Value::Null))
+            .type_info()
+            .name(),
+        "TEXT"
+    );
 }
 
 #[test]

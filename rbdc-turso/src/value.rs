@@ -204,7 +204,9 @@ pub fn value_to_libsql(v: &Value) -> Result<libsql::Value, rbdc::Error> {
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| val.to_string()),
             )),
-            "Timestamp" => Ok(libsql::Value::Integer(val.as_i64().unwrap_or_default())),
+            "Timestamp" => Ok(libsql::Value::Integer(val.as_i64().ok_or_else(
+                || rbdc::Error::from("invalid Timestamp value"),
+            )?)),
             "Json" => match val.as_ref() {
                 Value::Binary(b) => Ok(libsql::Value::Blob(b.clone())),
                 _ => Ok(libsql::Value::Blob(val.to_string().into_bytes())),
@@ -417,12 +419,11 @@ mod tests {
         let ts = value_to_libsql(&Value::Ext("Timestamp", Box::new(Value::I64(123)))).unwrap();
         assert!(matches!(ts, libsql::Value::Integer(123)));
 
-        let ts_default = value_to_libsql(&Value::Ext(
+        assert!(value_to_libsql(&Value::Ext(
             "Timestamp",
             Box::new(Value::String("x".into())),
         ))
-        .unwrap();
-        assert!(matches!(ts_default, libsql::Value::Integer(0)));
+        .is_err());
 
         let json_binary = value_to_libsql(&Value::Ext(
             "Json",

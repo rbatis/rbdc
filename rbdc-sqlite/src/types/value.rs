@@ -66,11 +66,16 @@ impl Encode for Value {
                 Ok(IsNull::No)
             }
             Value::U32(v) => {
-                (v as i32).encode(args)?;
+                (v as i64).encode(args)?;
                 Ok(IsNull::No)
             }
             Value::U64(v) => {
-                (v as i64).encode(args)?;
+                let value: i64 = v.try_into().map_err(|_| {
+                    Error::from(format!(
+                        "u64 value {v} exceeds SQLite's signed INTEGER range"
+                    ))
+                })?;
+                value.encode(args)?;
                 Ok(IsNull::No)
             }
             Value::F32(v) => {
@@ -100,35 +105,31 @@ impl Encode for Value {
                 Ok(IsNull::No)
             }
             Value::Ext(t, v) => match t {
-                "Date" => {
-                    v.into_string().unwrap_or_default().encode(args)?;
-                    Ok(IsNull::No)
-                }
-                "DateTime" => {
-                    v.into_string().unwrap_or_default().encode(args)?;
-                    Ok(IsNull::No)
-                }
-                "Time" => {
-                    v.into_string().unwrap_or_default().encode(args)?;
+                "Date" | "DateTime" | "Time" | "Decimal" | "Uuid" => {
+                    v.into_string()
+                        .ok_or_else(|| Error::from(format!("invalid {t} value")))?
+                        .encode(args)?;
                     Ok(IsNull::No)
                 }
                 "Timestamp" => {
-                    v.as_i64().unwrap_or_default().encode(args)?;
-                    Ok(IsNull::No)
-                }
-                "Decimal" => {
-                    v.into_string().unwrap_or_default().encode(args)?;
+                    v.as_i64()
+                        .ok_or_else(|| Error::from("invalid Timestamp value"))?
+                        .encode(args)?;
                     Ok(IsNull::No)
                 }
                 "Json" => {
-                    v.into_bytes().unwrap_or_default().encode(args)?;
+                    let text = match *v {
+                        Value::String(text) => text,
+                        Value::Binary(bytes) => String::from_utf8(bytes)
+                            .map_err(|e| Error::from(format!("invalid Json UTF-8: {e}")))?,
+                        other => other.to_string(),
+                    };
+                    text.encode(args)?;
                     Ok(IsNull::No)
                 }
-                "Uuid" => {
-                    v.into_string().unwrap_or_default().encode(args)?;
-                    Ok(IsNull::No)
-                }
-                _ => Ok(IsNull::Yes),
+                other => Err(Error::from(format!(
+                    "unsupported SQLite extension value type: {other}"
+                ))),
             },
         }
     }

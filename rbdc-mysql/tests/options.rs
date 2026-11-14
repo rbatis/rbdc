@@ -249,7 +249,7 @@ fn test_driver_column_type() {
         (Value::Ext("Json", Box::new(Value::Null)), "JSON"),
         (Value::Ext("Enum", Box::new(Value::Null)), "TEXT"),
         (Value::Ext("Set", Box::new(Value::Null)), "TEXT"),
-        (Value::Ext("Other", Box::new(Value::Null)), "NULL"),
+        (Value::Ext("Other", Box::new(Value::Null)), "TEXT"),
     ];
     for (value, expected) in cases {
         assert_eq!(driver.column_type(&value), expected, "{value:?}");

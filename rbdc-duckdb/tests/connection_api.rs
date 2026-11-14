@@ -221,6 +221,74 @@ async fn test_bind_ext_params() {
 }
 
 #[tokio::test]
+async fn test_bind_typed_uuid() {
+    let mut conn = create_conn().await;
+    let values = query_row(
+            &mut conn,
+            "SELECT CAST(? AS UUID)",
+            vec![Value::Ext(
+                "Uuid",
+                Box::new(Value::String("550e8400-e29b-41d4-a716-446655440000".into())),
+            )]
+        )
+        .await;
+    assert!(matches!(
+        &values[0],
+        Value::Ext("Uuid", value)
+            if **value == Value::String("550e8400-e29b-41d4-a716-446655440000".into())
+    ), "unexpected UUID: {:?}", values[0]);
+}
+
+#[tokio::test]
+async fn test_bind_typed_bit() {
+    let mut conn = create_conn().await;
+    let values = query_row(
+            &mut conn,
+            "SELECT CAST(? AS BIT)",
+            vec![Value::Ext("Bit", Box::new(Value::String("101".into())))]
+        )
+        .await;
+    assert!(matches!(
+        &values[0],
+        Value::Ext("Bit", value) if **value == Value::String("101".into())
+    ), "unexpected BIT: {:?}", values[0]);
+}
+
+#[tokio::test]
+async fn test_bind_typed_timestamptz() {
+    let mut conn = create_conn().await;
+    assert!(matches!(
+        &query_row(
+            &mut conn,
+            "SELECT CAST(? AS TIMESTAMPTZ)",
+            vec![Value::Ext(
+                "DateTime",
+                Box::new(Value::String("2024-01-15 12:30:45+00".into())),
+            )]
+        )
+        .await[0],
+        Value::Ext("DateTime", _)
+    ));
+}
+
+#[tokio::test]
+async fn test_bind_typed_enum() {
+    let mut conn = create_conn().await;
+    conn.exec("CREATE TYPE test_mood AS ENUM ('happy', 'sad')", vec![])
+        .await
+        .expect("create enum");
+    assert_eq!(
+        query_row(
+            &mut conn,
+            "SELECT CAST(? AS test_mood)",
+            vec![Value::Ext("Enum", Box::new(Value::String("happy".into())))]
+        )
+        .await,
+        vec![Value::String("happy".into())]
+    );
+}
+
+#[tokio::test]
 async fn test_unbound_param_errors() {
     let mut conn = create_conn().await;
 

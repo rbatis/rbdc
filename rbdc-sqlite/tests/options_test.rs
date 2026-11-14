@@ -502,13 +502,13 @@ fn test_driver_column_type() {
         ),
         (
             Value::Ext("Json", Box::new(Value::String("{}".into()))),
-            "BLOB",
+            "TEXT",
         ),
         (
             Value::Ext("Uuid", Box::new(Value::String("abc".into()))),
             "TEXT",
         ),
-        (Value::Ext("Unknown", Box::new(Value::Null)), "NULL"),
+        (Value::Ext("Unknown", Box::new(Value::Null)), "TEXT"),
     ];
 
     for (value, expected) in cases {

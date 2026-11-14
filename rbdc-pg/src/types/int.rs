@@ -22,7 +22,8 @@ impl Decode for u32 {
             PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
                 if bytes.len() == 8 {
-                    BigEndian::read_u64(bytes) as u32
+                    u32::try_from(BigEndian::read_u64(bytes))
+                        .map_err(|e| Error::from(e.to_string()))?
                 } else if bytes.len() == 4 {
                     BigEndian::read_u32(bytes)
                 } else {
@@ -40,9 +41,11 @@ impl Decode for u16 {
             PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
                 if bytes.len() == 8 {
-                    BigEndian::read_u64(bytes) as u16
+                    u16::try_from(BigEndian::read_u64(bytes))
+                        .map_err(|e| Error::from(e.to_string()))?
                 } else if bytes.len() == 4 {
-                    BigEndian::read_u32(bytes) as u16
+                    u16::try_from(BigEndian::read_u32(bytes))
+                        .map_err(|e| Error::from(e.to_string()))?
                 } else if bytes.len() == 2 {
                     BigEndian::read_u16(bytes)
                 } else {
@@ -76,7 +79,8 @@ impl Decode for i32 {
             PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
                 if bytes.len() == 8 {
-                    BigEndian::read_i64(bytes) as i32
+                    i32::try_from(BigEndian::read_i64(bytes))
+                        .map_err(|e| Error::from(e.to_string()))?
                 } else if bytes.len() == 4 {
                     BigEndian::read_i32(bytes)
                 } else {
@@ -94,9 +98,11 @@ impl Decode for i16 {
             PgValueFormat::Binary => {
                 let bytes = value.as_bytes()?;
                 if bytes.len() == 8 {
-                    BigEndian::read_i64(bytes) as i16
+                    i16::try_from(BigEndian::read_i64(bytes))
+                        .map_err(|e| Error::from(e.to_string()))?
                 } else if bytes.len() == 4 {
-                    BigEndian::read_i32(bytes) as i16
+                    i16::try_from(BigEndian::read_i32(bytes))
+                        .map_err(|e| Error::from(e.to_string()))?
                 } else if bytes.len() == 2 {
                     BigEndian::read_i16(bytes)
                 } else {

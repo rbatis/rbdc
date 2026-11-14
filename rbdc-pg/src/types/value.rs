@@ -29,8 +29,10 @@ impl TypeInfo for Value {
             Value::Bool(_) => PgTypeInfo::BOOL,
             Value::I32(_) => PgTypeInfo::INT4,
             Value::I64(_) => PgTypeInfo::INT8,
-            Value::U32(_) => PgTypeInfo::INT4,
-            Value::U64(_) => PgTypeInfo::INT8,
+            Value::U32(v) if *v <= i32::MAX as u32 => PgTypeInfo::INT4,
+            Value::U32(_) => PgTypeInfo::INT8,
+            Value::U64(v) if *v <= i64::MAX as u64 => PgTypeInfo::INT8,
+            Value::U64(_) => PgTypeInfo::NUMERIC,
             Value::F32(_) => PgTypeInfo::FLOAT4,
             Value::F64(_) => PgTypeInfo::FLOAT8,
             Value::String(_) => PgTypeInfo::VARCHAR,
@@ -462,8 +464,14 @@ impl Encode for Value {
             Value::Bool(v) => v.encode(buf)?,
             Value::I32(v) => v.encode(buf)?,
             Value::I64(v) => v.encode(buf)?,
-            Value::U32(v) => v.encode(buf)?,
-            Value::U64(v) => v.encode(buf)?,
+            Value::U32(v) if v <= i32::MAX as u32 => (v as i32).encode(buf)?,
+            Value::U32(v) => (v as i64).encode(buf)?,
+            Value::U64(v) if v <= i64::MAX as u64 => (v as i64).encode(buf)?,
+            Value::U64(v) => {
+                let decimal = bigdecimal::BigDecimal::from(v);
+                crate::types::numeric::PgNumeric::try_from(&decimal)?.encode(buf);
+                IsNull::No
+            }
             Value::F32(v) => v.encode(buf)?,
             Value::F64(v) => v.encode(buf)?,
             Value::String(v) => {

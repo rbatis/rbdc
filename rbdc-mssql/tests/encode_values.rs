@@ -17,6 +17,8 @@ fn encode_scalar_values() {
     assert!(encode(Value::I64(-2)).is_ok());
     assert!(encode(Value::U32(3)).is_ok());
     assert!(encode(Value::U64(4)).is_ok());
+    assert!(encode(Value::U32(u32::MAX)).is_err());
+    assert!(encode(Value::U64(u64::MAX)).is_err());
     assert!(encode(Value::F32(1.5)).is_ok());
     assert!(encode(Value::F64(2.5)).is_ok());
     assert!(encode(Value::String("hello".to_string())).is_ok());
@@ -77,13 +79,6 @@ fn encode_ext_values() {
 
 #[test]
 fn encode_ext_fallbacks_do_not_error() {
-    // `as_i64` on a non-numeric timestamp falls back to the default value.
-    assert!(encode(Value::Ext(
-        "Timestamp",
-        Box::new(Value::String("not-a-number".into()))
-    ))
-    .is_ok());
-
     // Invalid UUID strings are rejected instead of silently binding nil.
     assert!(encode(Value::Ext(
         "Uuid",
@@ -91,8 +86,13 @@ fn encode_ext_fallbacks_do_not_error() {
     ))
     .is_err());
 
-    // Missing string payloads use the default empty string.
-    assert!(encode(Value::Ext("Timestamp", Box::new(Value::Null))).is_ok());
+    // Missing/non-numeric timestamp payloads are rejected instead of becoming 0.
+    assert!(encode(Value::Ext("Timestamp", Box::new(Value::Null))).is_err());
+    assert!(encode(Value::Ext(
+        "Timestamp",
+        Box::new(Value::String("not-a-number".into()))
+    ))
+    .is_err());
 }
 
 #[test]

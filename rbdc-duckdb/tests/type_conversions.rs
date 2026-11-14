@@ -85,12 +85,34 @@ fn test_encode_ext_variants() {
         ("Time", Value::String("10:00:00".into()), "10:00:00"),
         ("Decimal", Value::String("1.23".into()), "1.23"),
         ("Json", Value::String("{}".into()), "{}"),
-        ("Uuid", Value::String("abc".into()), "abc"),
+        (
+            "Uuid",
+            Value::String("550e8400-e29b-41d4-a716-446655440000".into()),
+            "550e8400-e29b-41d4-a716-446655440000",
+        ),
     ] {
         let (args, null) = encode(Value::Ext(name, Box::new(inner)));
         assert!(matches!(null, IsNull::No));
-        assert_text(&args, expected);
+        if name == "DateTime" {
+            assert!(matches!(
+                args.as_slice(),
+                [DuckDbArgumentValue::DateTime(value)] if value == expected
+            ));
+        } else if name == "Uuid" {
+            assert!(matches!(
+                args.as_slice(),
+                [DuckDbArgumentValue::Uuid(_)]
+            ));
+        } else {
+            assert_text(&args, expected);
+        }
     }
+
+    let mut invalid_uuid_args = Vec::new();
+    assert!(Value::Ext("Uuid", Box::new(Value::String("abc".into())))
+        .encode(&mut invalid_uuid_args)
+        .is_err());
+    assert!(invalid_uuid_args.is_empty());
 
     let huge = i128::MAX.to_string();
     let (args, _) = encode(Value::Ext(
@@ -194,6 +216,7 @@ fn test_value_to_param_all_variants() {
     ] {
         match value_to_param(Value::Ext(name, Box::new(inner))) {
             DuckDbArgumentValue::Text(s) => assert_eq!(s, expected),
+            DuckDbArgumentValue::DateTime(s) => assert_eq!(s, expected),
             DuckDbArgumentValue::HugeInt(v) => assert_eq!(v.to_string(), expected),
             DuckDbArgumentValue::UHugeInt(v) => assert_eq!(v.to_string(), expected),
             other => panic!("unexpected {other:?}"),

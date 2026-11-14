@@ -134,7 +134,7 @@ impl Type for Value {
             Value::Bool(_) => SqliteTypeInfo(DataType::Bool),
             Value::I32(_) => SqliteTypeInfo(DataType::Int),
             Value::I64(_) => SqliteTypeInfo(DataType::Int64),
-            Value::U32(_) => SqliteTypeInfo(DataType::Int),
+            Value::U32(_) => SqliteTypeInfo(DataType::Int64),
             Value::U64(_) => SqliteTypeInfo(DataType::Int64),
             Value::F32(_) => SqliteTypeInfo(DataType::Float),
             Value::F64(_) => SqliteTypeInfo(DataType::Float),
@@ -148,9 +148,9 @@ impl Type for Value {
                 "Time" => SqliteTypeInfo(DataType::Text),
                 "Timestamp" => SqliteTypeInfo(DataType::Int64),
                 "Decimal" => SqliteTypeInfo(DataType::Numeric),
-                "Json" => SqliteTypeInfo(DataType::Blob),
+                "Json" => SqliteTypeInfo(DataType::Text),
                 "Uuid" => SqliteTypeInfo(DataType::Text),
-                _ => SqliteTypeInfo(DataType::Null),
+                _ => SqliteTypeInfo(DataType::Text),
             },
         }
     }

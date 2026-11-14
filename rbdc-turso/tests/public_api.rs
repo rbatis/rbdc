@@ -297,15 +297,12 @@ fn value_to_libsql_covers_ext_and_collections() {
         value_to_libsql(&Value::Ext("Timestamp", Box::new(Value::I64(77)))).unwrap(),
         libsql::Value::Integer(77)
     ));
-    // Non-integer timestamp payload defaults to 0.
-    assert!(matches!(
-        value_to_libsql(&Value::Ext(
-            "Timestamp",
-            Box::new(Value::String("x".into()))
-        ))
-        .unwrap(),
-        libsql::Value::Integer(0)
-    ));
+    // Non-integer timestamp payload is rejected instead of becoming 0.
+    assert!(value_to_libsql(&Value::Ext(
+        "Timestamp",
+        Box::new(Value::String("x".into()))
+    ))
+    .is_err());
 
     assert!(matches!(
         value_to_libsql(&Value::Ext("Json", Box::new(Value::Binary(vec![1, 2])))).unwrap(),

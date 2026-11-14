@@ -814,8 +814,8 @@ fn array_encode_codec() {
 #[test]
 fn unsigned_values_do_not_wrap_in_postgres_types() {
     assert_eq!(
-        encode(Value::U32(i32::MAX as u32 + 1)),
-        (i32::MAX as i64 + 1).to_be_bytes().to_vec()
+        encode(Value::U32(u32::MAX)),
+        (u32::MAX as i64).to_be_bytes().to_vec()
     );
     let encoded = encode(Value::U64(i64::MAX as u64 + 1));
     assert_eq!(
@@ -836,12 +836,10 @@ fn value_type_info_matches_driver_types() {
         (Value::Bool(true), PgTypeInfo(PgType::Bool)),
         (Value::I32(1), PgTypeInfo(PgType::Int4)),
         (Value::I64(1), PgTypeInfo(PgType::Int8)),
-        (Value::U32(1), PgTypeInfo(PgType::Int4)),
-        (Value::U32(i32::MAX as u32), PgTypeInfo(PgType::Int4)),
-        (Value::U32(i32::MAX as u32 + 1), PgTypeInfo(PgType::Int8)),
-        (Value::U64(1), PgTypeInfo(PgType::Int8)),
-        (Value::U64(i64::MAX as u64), PgTypeInfo(PgType::Int8)),
-        (Value::U64(i64::MAX as u64 + 1), PgTypeInfo(PgType::Numeric)),
+        (Value::U32(1), PgTypeInfo(PgType::Int8)),
+        (Value::U32(u32::MAX), PgTypeInfo(PgType::Int8)),
+        (Value::U64(1), PgTypeInfo(PgType::Numeric)),
+        (Value::U64(u64::MAX), PgTypeInfo(PgType::Numeric)),
         (Value::F32(1.0), PgTypeInfo(PgType::Float4)),
         (Value::F64(1.0), PgTypeInfo(PgType::Float8)),
         (Value::String("x".into()), PgTypeInfo(PgType::Varchar)),

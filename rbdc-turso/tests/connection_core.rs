@@ -1,3 +1,9 @@
+// libsql 0.9 segfaults inside its bundled SQLite when this binary runs under
+// LLVM coverage instrumentation on Linux. The same tests run normally through
+// `cargo test --workspace`; the other Turso tests still contribute coverage.
+#![allow(unexpected_cfgs)]
+#![cfg(not(tarpaulin))]
+
 //! Integration tests for the Turso adapter connection lifecycle.
 //!
 //! These tests verify the `rbdc::db::Connection` trait implementation against
